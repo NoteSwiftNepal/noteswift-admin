@@ -92,7 +92,7 @@ const moduleContentSchema = new Schema<IModuleContent>({
   isActive: { type: Boolean, default: true }
 }, { _id: false });
 
-const subjectContentSchema = new Schema<ISubjectContent>({
+let subjectContentSchema = new Schema<ISubjectContent>({
   courseId: { 
     type: Schema.Types.ObjectId, 
     ref: 'Course', 

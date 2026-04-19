@@ -7,7 +7,7 @@ export interface IAuditLog {
   userName: string; // Display name of the user
   userEmail?: string; // Email of the user
   action: string; // Action performed (e.g., 'login', 'course_created', 'user_deleted')
-  category: 'authentication' | 'user_management' | 'course_content' | 'enrollment' | 'payment' | 'communication' | 'system';
+  category: 'authentication' | 'user_management' | 'course_content' | 'enrollment' | 'payment' | 'communication' | 'system' | 'archive';
   resourceType?: string; // Type of resource affected (e.g., 'course', 'user', 'payment')
   resourceId?: string; // ID of the affected resource
   resourceName?: string; // Display name of the affected resource

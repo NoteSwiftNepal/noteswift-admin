@@ -344,7 +344,7 @@ export default function SubjectEditorPage() {
           if (response.ok) {
             const data = await response.json();
             if (data.success && data.result?.subjectContent) {
-              const subjectContent = data.result.subjectContent;
+              let subjectContent = data.result.subjectContent;
 
               // Only update description, don't touch modules (content is managed separately)
               await fetch(API_ENDPOINTS.SUBJECT_CONTENT.UPDATE(subjectContent._id), {

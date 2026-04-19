@@ -17,6 +17,7 @@ import {
   BotMessageSquare,
   Receipt,
   Smartphone,
+  Archive,
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -79,6 +80,7 @@ const links = [
   },
   { href: "/dashboard/revenue", label: "Revenue", icon: CreditCard },
   { href: "/dashboard/orders-payments", label: "Orders & Payments", icon: Receipt },
+  { href: "/dashboard/archives", label: "Archives", icon: Archive },
   { href: "/dashboard/audit-log", label: "Audit Log", icon: ShieldCheck },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
   { href: "/dashboard/about", label: "About", icon: Info },
@@ -133,12 +135,12 @@ export function DashboardNav() {
                     startLoading();
                   }
                 }}
-               className={cn(
-  "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-  ((link as any).children && pathname.startsWith(`${link.href}/`)) || pathname === link.href
-    ? "bg-primary text-primary-foreground"
-    : "hover:bg-blue-100 text-gray-700 hover:text-blue-600"
-)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+                  ((link as any).children && pathname.startsWith(`${link.href}/`)) || pathname === link.href
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-blue-100 text-gray-700 hover:text-blue-600"
+                )}
 
               >
                 <link.icon className="w-5 h-5" />

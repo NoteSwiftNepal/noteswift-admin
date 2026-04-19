@@ -42,7 +42,7 @@ interface AuditLog {
   userName: string;
   userEmail?: string;
   action: string;
-  category: 'authentication' | 'user_management' | 'course_content' | 'enrollment' | 'payment' | 'communication' | 'system';
+  category: 'authentication' | 'user_management' | 'course_content' | 'enrollment' | 'payment' | 'communication' | 'system' | 'archive';
   resourceType?: string;
   resourceId?: string;
   resourceName?: string;
