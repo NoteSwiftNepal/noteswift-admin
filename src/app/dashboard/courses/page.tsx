@@ -662,16 +662,13 @@ export default function CoursesManagementPage() {
       newErrors.icon = 'Please select a valid icon from the list';
     }
 
-    // Validate modules for pro/free courses
+    // Validate subjects - name is required, but chapters are optional
     if ((formData.type === 'pro' || formData.type === 'free') && formData.subjects) {
       formData.subjects.forEach((subject, subjectIndex) => {
-        if (!subject.name.trim()) newErrors[`subject_${subjectIndex}_name`] = `Subject ${subjectIndex + 1} name is required`;
-        if (subject.modules) {
-          subject.modules.forEach((module, moduleIndex) => {
-            if (!module.name.trim()) newErrors[`subject_${subjectIndex}_module_${moduleIndex}_name`] = `Module ${moduleIndex + 1} in ${subject.name} name is required`;
-            if (!module.description.trim()) newErrors[`subject_${subjectIndex}_module_${moduleIndex}_description`] = `Module ${moduleIndex + 1} in ${subject.name} description is required`;
-          });
+        if (!subject.name.trim()) {
+          newErrors[`subject_${subjectIndex}_name`] = `Subject ${subjectIndex + 1} name is required`;
         }
+        // Chapters are now optional - no validation needed for modules
       });
     }
 
@@ -742,7 +739,7 @@ export default function CoursesManagementPage() {
                       <BookOpen className="h-6 w-6 text-primary" />
                       <CardTitle className="text-3xl font-bold text-gray-900">Courses Management</CardTitle>
                   </div>
-          <p className="text-gray-600 mt-2">Manage courses, subjects, and modules</p>
+          <p className="text-gray-600 mt-2">Manage courses, subjects, and chapters</p>
         </div>
         </div>
 

@@ -1175,14 +1175,14 @@ export default function CourseEditorPage() {
                     <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                     <p className="text-lg font-medium mb-2">Content Locked</p>
                     <p className="text-sm mb-4">
-                      Subjects and modules are locked after publishing to maintain data integrity.
+                      Subjects and chapters are locked after publishing to maintain data integrity.
                     </p>
                     <Button
                       onClick={() => router.push(`/dashboard/courses/${courseId}/subjects`)}
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
                       <BookOpen className="w-4 h-4 mr-2" />
-                      Edit Subjects & Modules
+                      Edit Subjects & Chapters
                     </Button>
                   </div>
                 ) : (
@@ -1233,7 +1233,7 @@ export default function CourseEditorPage() {
                             </div>
 
                             <div className="space-y-2">
-                              <Label>Modules</Label>
+                              <Label>Chapters</Label>
                               {subject.modules?.map((module, moduleIndex) => (
                                 <div key={moduleIndex} className="pl-4 border-gray-200 space-y-2 p-3 bg-gray-50 rounded">
                                   <div className="flex items-center gap-2 mb-2">
@@ -1245,7 +1245,7 @@ export default function CourseEditorPage() {
                                     >
                                       {expandedSections.courseContentSubjects[subjectIndex]?.modules?.[moduleIndex] !== false ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                     </Button>
-                                    <span className="text-sm font-medium">Module {moduleIndex + 1}</span>
+                                    <span className="text-sm font-medium">Chapter {moduleIndex + 1}</span>
                                   </div>
 
                                   {expandedSections.courseContentSubjects[subjectIndex]?.modules?.[moduleIndex] !== false && (
@@ -1258,7 +1258,7 @@ export default function CourseEditorPage() {
                                             newModules[moduleIndex] = { ...newModules[moduleIndex], name: e.target.value };
                                             updateArrayItem('subjects', subjectIndex, { ...subject, modules: newModules });
                                           }}
-                                          placeholder="Module name"
+                                          placeholder="Chapter name"
                                           className="flex-1"
                                         />
                                         <Input
@@ -1289,7 +1289,7 @@ export default function CourseEditorPage() {
                                           newModules[moduleIndex] = { ...newModules[moduleIndex], description: e.target.value };
                                           updateArrayItem('subjects', subjectIndex, { ...subject, modules: newModules });
                                         }}
-                                        placeholder="Module description"
+                                        placeholder="Chapter description"
                                         rows={2}
                                       />
                                     </>
@@ -1306,7 +1306,7 @@ export default function CourseEditorPage() {
                                 className="ml-4"
                               >
                                 <Plus className="w-4 h-4 mr-1" />
-                                Add Module
+                                Add Chapter
                               </Button>
                             </div>
                           </>

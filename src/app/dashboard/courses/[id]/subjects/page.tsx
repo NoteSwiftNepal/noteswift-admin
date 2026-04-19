@@ -643,7 +643,7 @@ export default function SubjectEditorPage() {
                         className="flex items-center gap-2"
                       >
                         <Plus className="w-4 h-4" />
-                        Add Module
+                        Add Chapter
                       </Button>
                     </div>
                   </div>
@@ -662,7 +662,7 @@ export default function SubjectEditorPage() {
                               >
                                 {expandedSections.subjects[subjectIndex]?.moduleItems?.[moduleIndex] !== false ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                               </Button>
-                              <h4 className="font-medium">Module {moduleIndex + 1}</h4>
+                              <h4 className="font-medium">Chapter {moduleIndex + 1}</h4>
                             </div>
                             <Button
                               variant="outline"
