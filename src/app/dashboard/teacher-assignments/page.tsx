@@ -9,12 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { 
-  BookOpen, 
-  Users, 
-  Plus, 
-  Trash2, 
-  UserCheck, 
+import {
+  BookOpen,
+  Users,
+  Plus,
+  Trash2,
+  UserCheck,
   Search,
   ChevronDown,
   ChevronUp,
@@ -77,7 +77,7 @@ export default function TeacherAssignmentsPage() {
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [isBulkAssignDialogOpen, setIsBulkAssignDialogOpen] = useState(false);
   // Support multiple course-subject pairs for cross-course assignment
-  const [selectedCourseSubjects, setSelectedCourseSubjects] = useState<Array<{courseId: string, subjectName: string}>>([]);
+  const [selectedCourseSubjects, setSelectedCourseSubjects] = useState<Array<{ courseId: string, subjectName: string }>>([]);
   const [assignmentNotes, setAssignmentNotes] = useState("");
   const [expandedTeachers, setExpandedTeachers] = useState<Set<string>>(new Set());
   const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
@@ -103,8 +103,8 @@ export default function TeacherAssignmentsPage() {
       setCourses(coursesData);
     } catch (err: any) {
       console.error('❌ Failed to load data:', err);
-      toast({ 
-        title: 'Error', 
+      toast({
+        title: 'Error',
         description: err.message || 'Failed to load data',
         variant: 'destructive'
       });
@@ -117,7 +117,7 @@ export default function TeacherAssignmentsPage() {
     try {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
       const { fetchApprovedTeachers } = await import('@/lib/api/adminTeachers');
-      
+
       // Fetch approved teachers using existing API function
       console.log('Fetching approved teachers...');
       const teachersList = await fetchApprovedTeachers();
@@ -132,13 +132,13 @@ export default function TeacherAssignmentsPage() {
           cache: 'no-store'
         }
       );
-      
+
       if (!assignmentsRes.ok) {
         const errorText = await assignmentsRes.text();
         console.error('Failed to fetch assignments:', assignmentsRes.status, errorText);
         throw new Error('Failed to fetch assignments');
       }
-      
+
       const assignmentsJson = await assignmentsRes.json();
       console.log('Assignments API response:', assignmentsJson);
       const allAssignments = assignmentsJson.data?.assignments || [];
@@ -146,9 +146,12 @@ export default function TeacherAssignmentsPage() {
 
       // Group assignments by teacher
       const teachersWithAssignments = teachersList.map((teacher) => {
+        // Line 149-152, replace with:
         const teacherAssignments = allAssignments.filter(
-          (assignment: Assignment) => 
-            assignment.teacherId._id === teacher._id && assignment.isActive
+          (assignment: Assignment) =>
+            assignment.teacherId &&
+            assignment.teacherId._id === teacher._id &&
+            assignment.isActive
         );
         return {
           _id: teacher._id,
@@ -219,17 +222,17 @@ export default function TeacherAssignmentsPage() {
       }
 
       const data = await res.json();
-      
+
       const successCount = data.data.success.length;
       const failedCount = data.data.failed.length;
-      
+
       if (successCount > 0) {
         toast({
           title: 'Success',
           description: `${successCount} subject${successCount !== 1 ? 's' : ''} assigned successfully${failedCount > 0 ? ` (${failedCount} skipped - already assigned)` : ''}`
         });
       }
-      
+
       if (failedCount > 0 && successCount === 0) {
         toast({
           title: 'Warning',
@@ -387,7 +390,7 @@ export default function TeacherAssignmentsPage() {
       <div className="space-y-4">
         {filteredTeachers.map((teacher) => {
           const isExpanded = expandedTeachers.has(teacher._id);
-          
+
           return (
             <Card key={teacher._id}>
               <CardHeader className="cursor-pointer hover:bg-muted/50" onClick={() => toggleTeacherExpansion(teacher._id)}>
@@ -517,7 +520,7 @@ export default function TeacherAssignmentsPage() {
               <p className="text-sm text-muted-foreground mb-3">
                 Expand courses and select subjects to assign. You can select from multiple courses.
               </p>
-              
+
               <div className="space-y-2">
                 {courses.map((course) => {
                   const isExpanded = expandedCourses.has(course._id);
@@ -525,7 +528,7 @@ export default function TeacherAssignmentsPage() {
                   const selectedFromThisCourse = selectedCourseSubjects.filter(
                     cs => cs.courseId === course._id
                   ).length;
-                  
+
                   return (
                     <div key={course._id} className="border rounded-lg">
                       <div
@@ -570,7 +573,7 @@ export default function TeacherAssignmentsPage() {
                               cs => cs.courseId === course._id && cs.subjectName === subject
                             );
                             const uniqueId = `${course._id}-${subject}`;
-                            
+
                             return (
                               <div key={uniqueId} className="flex items-center space-x-2 pl-6">
                                 <Checkbox
@@ -637,8 +640,8 @@ export default function TeacherAssignmentsPage() {
           </div>
 
           <DialogFooter className="border-t pt-4 mt-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setIsBulkAssignDialogOpen(false);
                 setSelectedCourseSubjects([]);
@@ -648,7 +651,7 @@ export default function TeacherAssignmentsPage() {
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleAssignSubject}
               disabled={selectedCourseSubjects.length === 0}
             >

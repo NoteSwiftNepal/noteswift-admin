@@ -42,9 +42,6 @@ interface Course {
   duration?: string;
   rating?: number;
   enrolledCount?: number;
-  skills?: string[];
-  features?: string[];
-  learningPoints?: string[];
   offeredBy?: string;
   courseOverview?: string;
   syllabus?: {
@@ -59,7 +56,6 @@ interface Course {
   icon?: string;
   thumbnail?: string;
   isFeatured?: boolean;
-  keyFeatures?: string[];
 }
 
 // This is now a full page, not just a box/modal. Route: /dashboard/courses/editor
@@ -93,9 +89,6 @@ export default function CourseEditorPage() {
       duration: '',
       rating: 0,
       enrolledCount: 0,
-      skills: [],
-      features: [],
-      learningPoints: [],
       offeredBy: '',
       courseOverview: '',
       syllabus: [],
@@ -103,7 +96,6 @@ export default function CourseEditorPage() {
       icon: 'school',
       thumbnail: '',
       isFeatured: typeParam === 'featured',
-      keyFeatures: [],
     };
   });
 
@@ -112,17 +104,13 @@ export default function CourseEditorPage() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [expandedSections, setExpandedSections] = useState({
+  const     [expandedSections, setExpandedSections] = useState({
     basicInfo: true,
-    keyFeatures: true,
-    learningPoints: true,
-    skills: true,
-    features: true,
     courseContent: true,
     faq: true,
     courseContentSubjects: {} as { [key: number]: { expanded: boolean; modules: { [key: number]: boolean } } }
   });
-  const [isGeneratingAI, setIsGeneratingAI] = useState<string | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState<string | null>(null); // Keep for FAQ generation
 
   // Load existing course data if editing
   useEffect(() => {
@@ -146,18 +134,6 @@ export default function CourseEditorPage() {
       loadCourse();
     }
   }, [courseId]);
-
-  // Predefined key features options
-  const availableKeyFeatures = [
-    { id: 'mobile-friendly', icon: 'phone-iphone', title: 'Mobile Friendly', subtitle: 'Complete the course entirely on mobile.' },
-    { id: 'online', icon: 'all-inclusive', title: '100% Online', subtitle: 'Learn at your own pace with flexible access.' },
-    { id: 'flexible-schedule', icon: 'update', title: 'Flexible Schedule', subtitle: 'Adapt study sessions to your routine.' },
-    { id: 'time-saving', icon: 'hourglass-empty', title: 'Time Saving', subtitle: 'Time efficient learning modules.' },
-    { id: 'beginner-friendly', icon: 'bar-chart', title: 'Beginner-Friendly', subtitle: 'No prior experience required.' },
-    { id: 'certified', icon: 'verified', title: 'Certified', subtitle: 'Receive a certificate upon completion.' },
-    { id: 'lifetime-access', icon: 'all-inclusive', title: 'Lifetime Access', subtitle: 'Access content anytime, anywhere.' },
-    { id: 'expert-instructors', icon: 'school', title: 'Expert Instructors', subtitle: 'Learn from industry professionals.' },
-  ];
 
   const updateFormData = (field: keyof Course, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -227,82 +203,6 @@ export default function CourseEditorPage() {
         }
       }
     }));
-  };
-
-  const generateAIContent = async (type: 'learningPoints' | 'skills' | 'features' | 'faq') => {
-    if (!formData.title || !formData.description) {
-      toast({
-        title: "Missing Information",
-        description: "Please enter course title and description first",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsGeneratingAI(type);
-
-    try {
-      // This is a placeholder for AI generation - in a real implementation,
-      // you would call an AI service here
-      const prompt = `Based on the course "${formData.title}" with description: "${formData.description}", generate ${type === 'learningPoints' ? 'learning points' : type === 'skills' ? 'skills that will be mastered' : type === 'features' ? 'package features' : 'frequently asked questions'}.`;
-
-      // Simulate AI call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Mock AI responses based on type
-      let generatedContent: any[] = [];
-
-      switch (type) {
-        case 'learningPoints':
-          generatedContent = [
-            "Comprehensive video lectures with expert instructors",
-            "Interactive quizzes and assignments",
-            "Downloadable study materials and resources",
-            "24/7 access to course content",
-            "Certificate of completion"
-          ];
-          break;
-        case 'skills':
-          generatedContent = ["Problem Solving", "Critical Thinking", "Subject Mastery", "Practical Application"];
-          break;
-        case 'features':
-          generatedContent = [
-            "Lifetime access to all course materials",
-            "Mobile and desktop compatibility",
-            "Regular content updates",
-            "Community forum access",
-            "Progress tracking and certificates"
-          ];
-          break;
-        case 'faq':
-          generatedContent = [
-            { question: "How long do I have access to the course?", answer: "You have lifetime access to all course materials." },
-            { question: "Is there a certificate upon completion?", answer: "Yes, you will receive a certificate after completing all modules." },
-            { question: "Can I access the course on mobile devices?", answer: "Yes, the course is fully compatible with mobile and tablet devices." }
-          ];
-          break;
-      }
-
-      if (type === 'faq') {
-        updateFormData(type, [...(formData[type] || []), ...generatedContent]);
-      } else {
-        updateFormData(type, [...(formData[type] || []), ...generatedContent]);
-      }
-
-      toast({
-        title: "AI Content Generated",
-        description: `Successfully generated ${generatedContent.length} ${type === 'learningPoints' ? 'learning points' : type === 'skills' ? 'skills' : type === 'features' ? 'features' : 'FAQ items'}`,
-      });
-    } catch (error) {
-      console.error('AI generation error:', error);
-      toast({
-        title: "Generation Failed",
-        description: "Failed to generate content. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGeneratingAI(null);
-    }
   };
 
   const handleImageUpload = async (file: File) => {
@@ -447,8 +347,8 @@ export default function CourseEditorPage() {
       // Client-side validation for required fields
       if (!formData.title.trim()) {
         toast({
-          title: "Validation Error",
-          description: "Course title is required",
+          title: "Missing Course Title",
+          description: "Course title must be at least 3 characters",
           variant: "destructive",
         });
         return;
@@ -456,8 +356,8 @@ export default function CourseEditorPage() {
 
       if (!formData.description.trim()) {
         toast({
-          title: "Validation Error",
-          description: "Course description is required",
+          title: "Missing Course Description",
+          description: "Please provide a course description",
           variant: "destructive",
         });
         return;
@@ -465,8 +365,8 @@ export default function CourseEditorPage() {
 
       if (!formData.type) {
         toast({
-          title: "Validation Error",
-          description: "Course type is required",
+          title: "Missing Course Type",
+          description: "Please select a course type (Free, Pro, etc.)",
           variant: "destructive",
         });
         return;
@@ -474,11 +374,55 @@ export default function CourseEditorPage() {
 
       if (!formData.program) {
         toast({
-          title: "Validation Error",
-          description: "Program is required",
+          title: "Missing Program",
+          description: "Please select a program (SEE, +2, Bachelor, etc.)",
           variant: "destructive",
         });
         return;
+      }
+
+      // Validate at least one subject with one chapter
+      if (!formData.subjects || formData.subjects.length === 0) {
+        toast({
+          title: "No Subjects Added",
+          description: "At least one subject with one chapter is required",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validate each subject has a name and at least one chapter with name
+      for (let i = 0; i < formData.subjects.length; i++) {
+        const subject = formData.subjects[i];
+        if (!subject.name || !subject.name.trim()) {
+          toast({
+            title: "Missing Subject Name",
+            description: `Please add a name for Subject ${i + 1}`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (!subject.modules || subject.modules.length === 0) {
+          toast({
+            title: "No Chapters in Subject",
+            description: `Subject "${subject.name}" needs at least one chapter`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        for (let j = 0; j < subject.modules.length; j++) {
+          const module = subject.modules[j];
+          if (!module.name || !module.name.trim()) {
+            toast({
+              title: "Missing Chapter Name",
+              description: `Please add a name for Chapter ${j + 1} in ${subject.name}`,
+              variant: "destructive",
+            });
+            return;
+          }
+        }
       }
 
       const courseData = { ...formData, status: 'Draft' };
@@ -518,8 +462,8 @@ export default function CourseEditorPage() {
       // Client-side validation for required fields
       if (!formData.title.trim()) {
         toast({
-          title: "Validation Error",
-          description: "Course title is required",
+          title: "Missing Course Title",
+          description: "Course title must be at least 3 characters",
           variant: "destructive",
         });
         return;
@@ -527,8 +471,8 @@ export default function CourseEditorPage() {
 
       if (!formData.description.trim()) {
         toast({
-          title: "Validation Error",
-          description: "Course description is required",
+          title: "Missing Course Description",
+          description: "Please provide a course description",
           variant: "destructive",
         });
         return;
@@ -536,8 +480,8 @@ export default function CourseEditorPage() {
 
       if (!formData.type) {
         toast({
-          title: "Validation Error",
-          description: "Course type is required",
+          title: "Missing Course Type",
+          description: "Please select a course type (Free, Pro, etc.)",
           variant: "destructive",
         });
         return;
@@ -545,11 +489,65 @@ export default function CourseEditorPage() {
 
       if (!formData.program) {
         toast({
-          title: "Validation Error",
-          description: "Program is required",
+          title: "Missing Program",
+          description: "Please select a program (SEE, +2, Bachelor, etc.)",
           variant: "destructive",
         });
         return;
+      }
+
+      // Validate price for Pro courses
+      if (formData.type === 'pro' && (!formData.price || formData.price <= 0)) {
+        toast({
+          title: "Missing Price",
+          description: "Price is required for Pro courses",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validate at least one subject with one chapter
+      if (!formData.subjects || formData.subjects.length === 0) {
+        toast({
+          title: "No Subjects Added",
+          description: "At least one subject with one chapter is required",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validate each subject has a name and at least one chapter with name
+      for (let i = 0; i < formData.subjects.length; i++) {
+        const subject = formData.subjects[i];
+        if (!subject.name || !subject.name.trim()) {
+          toast({
+            title: "Missing Subject Name",
+            description: `Please add a name for Subject ${i + 1}`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (!subject.modules || subject.modules.length === 0) {
+          toast({
+            title: "No Chapters in Subject",
+            description: `Subject "${subject.name}" needs at least one chapter`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        for (let j = 0; j < subject.modules.length; j++) {
+          const module = subject.modules[j];
+          if (!module.name || !module.name.trim()) {
+            toast({
+              title: "Missing Chapter Name",
+              description: `Please add a name for Chapter ${j + 1} in ${subject.name}`,
+              variant: "destructive",
+            });
+            return;
+          }
+        }
       }
 
       const courseData = { ...formData, status: 'Published' };
@@ -860,291 +858,7 @@ export default function CourseEditorPage() {
               </CardContent>
               )}
             </Card>
-
-            {/* Key Features Selection */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Star className="w-5 h-5" />
-                    Key Features
-                  </CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleSection('keyFeatures')}
-                    className="flex items-center gap-2"
-                  >
-                    {expandedSections.keyFeatures ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    {expandedSections.keyFeatures ? 'Collapse' : 'Expand'}
-                  </Button>
-                </div>
-                <p className="text-sm text-gray-600">Select which features to highlight for this course</p>
-              </CardHeader>
-              {expandedSections.keyFeatures && (
-                <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {availableKeyFeatures.map((feature) => {
-                    const isSelected = formData.keyFeatures?.includes(feature.id) || false;
-                    return (
-                      <div
-                        key={feature.id}
-                        className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                          isSelected
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => {
-                          const currentFeatures = formData.keyFeatures || [];
-                          if (isSelected) {
-                            updateFormData('keyFeatures', currentFeatures.filter(id => id !== feature.id));
-                          } else {
-                            updateFormData('keyFeatures', [...currentFeatures, feature.id]);
-                          }
-                        }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
-                            isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
-                          }`}>
-                            {isSelected && <div className="w-2 h-2 bg-white rounded-full" />}
-                          </div>
-                          <div className="flex-1">
-                            <h4 className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
-                              {feature.title}
-                            </h4>
-                            <p className={`text-sm mt-1 ${isSelected ? 'text-blue-700' : 'text-gray-600'}`}>
-                              {feature.subtitle}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-              )}
-            </Card>
-
-            {/* Learning Points */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Award className="w-5 h-5" />
-                    What's Included
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleSection('learningPoints')}
-                      className="flex items-center gap-2"
-                    >
-                      {expandedSections.learningPoints ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      {expandedSections.learningPoints ? 'Collapse' : 'Expand'}
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              {expandedSections.learningPoints && (
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600">Include this section in the course</p>
-                    <input
-                      type="checkbox"
-                      checked={formData.learningPoints && formData.learningPoints.length > 0}
-                      onChange={(e) => {
-                        if (!e.target.checked) {
-                          updateFormData('learningPoints', []);
-                        } else {
-                          updateFormData('learningPoints', ['']);
-                        }
-                      }}
-                      className="rounded"
-                    />
-                  </div>
-
-                  {formData.learningPoints && formData.learningPoints.length > 0 && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-600">Generate content with AI</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => generateAIContent('learningPoints')}
-                          disabled={isGeneratingAI === 'learningPoints'}
-                          className="flex items-center gap-2"
-                        >
-                          <Sparkles className="w-4 h-4" />
-                          {isGeneratingAI === 'learningPoints' ? 'Generating...' : 'Generate with AI'}
-                        </Button>
-                      </div>
-
-                      {formData.learningPoints.map((point, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <Input
-                            value={point}
-                            onChange={(e) => updateArrayItem('learningPoints', index, e.target.value)}
-                            placeholder="Learning point"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => removeFromArray('learningPoints', index)}
-                          >
-                            <Minus className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        variant="outline"
-                        onClick={() => addToArray('learningPoints', '')}
-                        className="flex items-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add Learning Point
-                      </Button>
-                    </>
-                  )}
-                </CardContent>
-              )}
-            </Card>
-
-            {/* Skills */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Skills You Will Master</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleSection('skills')}
-                    className="flex items-center gap-2"
-                  >
-                    {expandedSections.skills ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    {expandedSections.skills ? 'Collapse' : 'Expand'}
-                  </Button>
-                </div>
-              </CardHeader>
-              {expandedSections.skills && (
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600">Generate skills with AI</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => generateAIContent('skills')}
-                      disabled={isGeneratingAI === 'skills'}
-                      className="flex items-center gap-2"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      {isGeneratingAI === 'skills' ? 'Generating...' : 'Generate with AI'}
-                    </Button>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {formData.skills?.map((skill, index) => (
-                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                        {skill}
-                        <X
-                          className="w-3 h-3 cursor-pointer"
-                          onClick={() => removeFromArray('skills', index)}
-                        />
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Add a skill"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          const value = (e.target as HTMLInputElement).value.trim();
-                          if (value) {
-                            addToArray('skills', value);
-                            (e.target as HTMLInputElement).value = '';
-                          }
-                        }
-                      }}
-                    />
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const input = document.querySelector('input[placeholder="Add a skill"]') as HTMLInputElement;
-                        const value = input?.value.trim();
-                        if (value) {
-                          addToArray('skills', value);
-                          input.value = '';
-                        }
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-
-            {/* Features */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>All Package Features</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleSection('features')}
-                    className="flex items-center gap-2"
-                  >
-                    {expandedSections.features ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    {expandedSections.features ? 'Collapse' : 'Expand'}
-                  </Button>
-                </div>
-              </CardHeader>
-              {expandedSections.features && (
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600">Generate features with AI</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => generateAIContent('features')}
-                      disabled={isGeneratingAI === 'features'}
-                      className="flex items-center gap-2"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      {isGeneratingAI === 'features' ? 'Generating...' : 'Generate with AI'}
-                    </Button>
-                  </div>
-
-                  {formData.features?.map((feature, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <Input
-                        value={feature}
-                        onChange={(e) => updateArrayItem('features', index, e.target.value)}
-                        placeholder="Package feature"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeFromArray('features', index)}
-                      >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    variant="outline"
-                    onClick={() => addToArray('features', '')}
-                    className="flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Feature
-                  </Button>
-                </CardContent>
-              )}
-            </Card>
-
+            
             {/* Course Content */}
             <Card>
               <CardHeader>
@@ -1345,20 +1059,6 @@ export default function CourseEditorPage() {
               </CardHeader>
               {expandedSections.faq && (
                 <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600">Generate FAQ with AI</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => generateAIContent('faq')}
-                      disabled={isGeneratingAI === 'faq'}
-                      className="flex items-center gap-2"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      {isGeneratingAI === 'faq' ? 'Generating...' : 'Generate with AI'}
-                    </Button>
-                  </div>
-
                   {formData.faq?.map((faq, index) => (
                     <div key={index} className="border rounded-lg p-4 space-y-4">
                       <div className="flex items-center justify-between">
@@ -1479,78 +1179,9 @@ export default function CourseEditorPage() {
                         <p className="text-gray-700">
                           {formData.courseOverview || 'Course overview will appear here...'}
                         </p>
-                      </div>
+                       </div>
 
-                      {/* Key Features */}
-                      {formData.keyFeatures && formData.keyFeatures.length > 0 && (
-                        <div>
-                          <h3 className="text-lg font-bold mb-4">Key Features</h3>
-                          <div className="space-y-4">
-                            {formData.keyFeatures.map((featureId) => {
-                              const feature = availableKeyFeatures.find(f => f.id === featureId);
-                              return feature ? (
-                                <div key={feature.id} className="flex items-start gap-3">
-                                  <div className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center mt-0.5">
-                                    <div className="w-2 h-2 bg-white rounded-full" />
-                                  </div>
-                                  <div>
-                                    <h4 className="font-semibold text-gray-900">{feature.title}</h4>
-                                    <p className="text-gray-600 text-sm">{feature.subtitle}</p>
-                                  </div>
-                                </div>
-                              ) : null;
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* What's Included */}
-                      {formData.learningPoints && formData.learningPoints.length > 0 && (
-                        <div>
-                          <h3 className="text-lg font-bold mb-4">What's Included</h3>
-                          <div className="space-y-2">
-                            {formData.learningPoints.map((point, index) => (
-                              <div key={index} className="flex items-start gap-2">
-                                <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
-                                  <div className="w-2 h-2 bg-white rounded-full" />
-                                </div>
-                                <p className="text-gray-700">{point}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Skills */}
-                      {formData.skills && formData.skills.length > 0 && (
-                        <div>
-                          <h3 className="text-lg font-bold mb-3">Skills You Will Master</h3>
-                          <div className="flex flex-wrap gap-2">
-                            {formData.skills.map((skill, index) => (
-                              <Badge key={index} variant="secondary">{skill}</Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* All Package Features */}
-                      {formData.features && formData.features.length > 0 && (
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                          <h3 className="text-lg font-bold mb-4">All Package Features</h3>
-                          <div className="space-y-2">
-                            {formData.features.map((feature, index) => (
-                              <div key={index} className="flex items-start gap-2">
-                                <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
-                                  <div className="w-2 h-2 bg-white rounded-full" />
-                                </div>
-                                <p className="text-gray-700">{feature}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Course Content */}
+                       {/* Course Content */}
                       {formData.subjects && formData.subjects.length > 0 && (
                         <div>
                           <div className="flex items-center justify-between mb-4">

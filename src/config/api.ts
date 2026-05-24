@@ -90,6 +90,15 @@ export const API_ENDPOINTS = {
     SETTINGS: `${API_BASE_URL}/api/admin/homepage-settings`,
   },
 
+  // ==================== PROMO BANNERS ====================
+  PROMO_BANNERS: {
+    LIST: `${API_BASE_URL}/api/admin/promo-banners`,
+    GET: (id: string) => `${API_BASE_URL}/api/admin/promo-banners/${id}`,
+    CREATE: `${API_BASE_URL}/api/admin/promo-banners`,
+    UPDATE: (id: string) => `${API_BASE_URL}/api/admin/promo-banners/${id}`,
+    DELETE: (id: string) => `${API_BASE_URL}/api/admin/promo-banners/${id}`,
+  },
+
   // ==================== REVENUE ====================
   REVENUE: {
     OVERVIEW: `${API_BASE_URL}/api/admin/revenue/overview`,

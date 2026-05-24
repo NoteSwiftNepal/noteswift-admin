@@ -232,7 +232,7 @@ export default function TeacherDetailPage() {
           </CardContent>
         </Card>
         {/* Personal Information */}
-        <Card>
+        <Card >
           <CardHeader>
             <CardTitle>Personal Information</CardTitle>
           </CardHeader>

@@ -18,6 +18,7 @@ import {
   Receipt,
   Smartphone,
   Archive,
+  Image,
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -61,6 +62,7 @@ const links = [
   },
   { href: "/dashboard/recommendations", label: "Course Recommendations", icon: BotMessageSquare },
   { href: "/dashboard/app-block", label: "App Block", icon: Smartphone },
+  { href: "/dashboard/promo-banners", label: "Promo Banners", icon: Image },
   {
     href: "/dashboard/users",
     label: "Users",

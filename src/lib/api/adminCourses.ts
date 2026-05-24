@@ -38,9 +38,6 @@ export type CourseData = {
   duration?: string;
   rating?: number;
   enrolledCount?: number;
-  skills?: string[];
-  features?: string[];
-  learningPoints?: string[];
   offeredBy?: string;
   courseOverview?: string;
   syllabus?: {
@@ -55,7 +52,6 @@ export type CourseData = {
   icon?: string;
   thumbnail?: string;
   isFeatured?: boolean;
-  keyFeatures?: string[];
 };
 
 export async function createCourse(courseData: CourseData): Promise<CourseData> {

@@ -21,9 +21,6 @@ export interface ICourse {
   duration?: string;
   rating?: number;
   enrolledCount?: number;
-  skills?: string[];
-  features?: string[];
-  learningPoints?: string[];
   offeredBy?: string; // teacher name
   courseOverview?: string;
   syllabus?: {
@@ -38,7 +35,6 @@ export interface ICourse {
   icon?: string;
   thumbnail?: string; // Cloudinary image URL
   isFeatured?: boolean;
-  keyFeatures?: string[];  // Added missing keyFeatures field
   // AI-powered recommendation metadata
   recommendationData?: {
     targetGrades?: string[];
@@ -60,7 +56,7 @@ const courseSchema = new Schema<ICourse>({
     description: { type: String },  // Added missing description field
     modules: [{
       name: { type: String, required: true },
-      description: { type: String, required: true },
+      description: { type: String },  // Made optional - not required
       duration: { type: String }
     }]
   }],
@@ -72,15 +68,12 @@ const courseSchema = new Schema<ICourse>({
   duration: { type: String },
   rating: { type: Number },
   enrolledCount: { type: Number, default: 0 },
-  skills: { type: [String], default: [] },
-  features: { type: [String], default: [] },
-  learningPoints: { type: [String], default: [] },
   offeredBy: { type: String },
   courseOverview: { type: String },
   syllabus: [{
     moduleNumber: { type: Number, required: true },
     title: { type: String, required: true },
-    description: { type: String, required: true }
+    description: { type: String }
   }],
   faq: [{
     question: { type: String, required: true },
@@ -89,7 +82,7 @@ const courseSchema = new Schema<ICourse>({
   icon: { type: String },
   thumbnail: { type: String }, // Cloudinary image URL
   isFeatured: { type: Boolean, default: false },
-  keyFeatures: { type: [String], default: [] },  // Added missing keyFeatures field
+  // keyFeatures removed - UI section no longer exists
   // AI-powered recommendation metadata
   recommendationData: {
     targetGrades: { type: [String], default: [] },

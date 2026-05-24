@@ -1,12 +1,5 @@
 import mongoose, { Schema, models, Model } from 'mongoose';
 
-export interface IAssignedCourse {
-  courseId: string;
-  courseName: string;
-  subject: string;
-  assignedAt: Date;
-}
-
 export interface ITeacher extends mongoose.Document {
   email: string;
   firstName?: string;
@@ -15,15 +8,8 @@ export interface ITeacher extends mongoose.Document {
   status?: string;
   approvalStatus?: string;
   subjects?: any[];
-  assignedCourses?: IAssignedCourse[];
+  assignedCourses?: mongoose.Types.ObjectId[]; // Now stores only courseId ObjectIds
 }
-
-const assignedCourseSchema = new Schema<IAssignedCourse>({
-  courseId: { type: String, required: true },
-  courseName: { type: String, required: true },
-  subject: { type: String, required: true },
-  assignedAt: { type: Date, default: Date.now },
-}, { _id: false });
 
 const teacherSchema = new Schema<ITeacher>({
   email: { type: String, required: true, lowercase: true, trim: true },
@@ -32,7 +18,7 @@ const teacherSchema = new Schema<ITeacher>({
   status: { type: String },
   approvalStatus: { type: String },
   subjects: { type: Array, default: [] },
-  assignedCourses: { type: [assignedCourseSchema], default: [] },
+  assignedCourses: [{ type: Schema.Types.ObjectId, ref: 'Course' }], // Array of course ObjectIds
 }, { timestamps: true });
 
 const Teacher: Model<ITeacher> = models.Teacher || mongoose.model<ITeacher>('Teacher', teacherSchema, 'teachers');

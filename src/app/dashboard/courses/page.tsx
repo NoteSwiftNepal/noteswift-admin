@@ -38,9 +38,6 @@ interface Course {
   duration?: string;
   rating?: number;
   enrolledCount?: number;
-  skills?: string[];
-  features?: string[];
-  learningPoints?: string[];
   offeredBy?: string;
   courseOverview?: string;
   syllabus?: {
@@ -136,9 +133,6 @@ export default function CoursesManagementPage() {
     duration: '',
     rating: 0,
     enrolledCount: 0,
-    skills: [],
-    features: [],
-    learningPoints: [],
     offeredBy: '',
     courseOverview: '',
     syllabus: [],
@@ -422,15 +416,12 @@ export default function CoursesManagementPage() {
       subjects: [{ name: '', modules: [] }],
       tags: [],
       status: 'Draft',
-  type: 'pro',
+      type: 'pro',
       price: 0,
       program: '',
       duration: '',
       rating: 0,
       enrolledCount: 0,
-      skills: [],
-      features: [],
-      learningPoints: [],
       offeredBy: '',
       courseOverview: '',
       syllabus: [],
@@ -676,12 +667,6 @@ export default function CoursesManagementPage() {
     if (formData.skills?.some(skill => !skill.trim())) {
       newErrors.skills = 'All skills must have content';
     }
-    if (formData.features?.some(feature => !feature.trim())) {
-      newErrors.features = 'All features must have content';
-    }
-    if (formData.learningPoints?.some(point => !point.trim())) {
-      newErrors.learningPoints = 'All learning points must have content';
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -767,10 +752,6 @@ export default function CoursesManagementPage() {
             {/* Create Button - Only show for pro/free tabs, not homepage or enrollments */}
             {activeTab !== 'homepage' && activeTab !== 'enrollments' && (
               <div className="flex justify-end">
-                <Button onClick={() => router.push('/dashboard/courses/new')}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Course
-                </Button>
               </div>
             )}
 
