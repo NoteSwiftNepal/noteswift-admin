@@ -10,8 +10,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Minus, Save, X, User, BookOpen, PlayCircle, FileText, Users, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
-import { getCourse, updateCourse } from '@/lib/api/adminCourses';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Plus, Minus, Pencil, Save, X, User, BookOpen, PlayCircle, FileText, Users, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { getCourse, updateCourse, updateChapter } from '@/lib/api/adminCourses';
 import { fetchApprovedTeachers } from '@/lib/api/adminTeachers';
 import { toast } from '@/hooks/use-toast';
 import { API_ENDPOINTS } from '@/config/api';
@@ -70,6 +78,14 @@ export default function SubjectEditorPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingChapter, setEditingChapter] = useState<{
+    subjectIndex: number;
+    moduleIndex: number;
+    name: string;
+    description: string;
+    duration: string;
+  } | null>(null);
+  const [isSavingChapter, setIsSavingChapter] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [expandedSections, setExpandedSections] = useState<{
@@ -250,6 +266,54 @@ export default function SubjectEditorPage() {
       updatedSubjects[subjectIndex] = { ...updatedSubjects[subjectIndex], modules };
       return { ...prevCourse, subjects: updatedSubjects };
     });
+  };
+
+  const openEditChapter = (subjectIndex: number, moduleIndex: number) => {
+    const module = course?.subjects?.[subjectIndex]?.modules?.[moduleIndex];
+    if (!module) return;
+    setEditingChapter({
+      subjectIndex,
+      moduleIndex,
+      name: module.name,
+      description: module.description || '',
+      duration: module.duration || '',
+    });
+  };
+
+  const handleSaveChapter = async () => {
+    if (!editingChapter || !course?._id) return;
+    const { subjectIndex, moduleIndex, name, description, duration } = editingChapter;
+    const subject = course.subjects?.[subjectIndex];
+    const module = subject?.modules?.[moduleIndex];
+    if (!subject?._id || !module?._id) return;
+
+    if (!name.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Chapter name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsSavingChapter(true);
+      await updateChapter(course._id, subject._id, module._id, { name, description, duration });
+      updateModule(subjectIndex, moduleIndex, { name, description, duration });
+      toast({
+        title: "Success",
+        description: "Chapter updated successfully!",
+      });
+      setEditingChapter(null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to update chapter: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingChapter(false);
+    }
   };
 
   const toggleStatsSection = () => {
@@ -664,14 +728,25 @@ export default function SubjectEditorPage() {
                               </Button>
                               <h4 className="font-medium">Chapter {moduleIndex + 1}</h4>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeModule(subjectIndex, moduleIndex)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Minus className="w-4 h-4" />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              {module._id && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openEditChapter(subjectIndex, moduleIndex)}
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeModule(subjectIndex, moduleIndex)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Minus className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
 
                           {expandedSections.subjects[subjectIndex]?.moduleItems?.[moduleIndex] !== false && (
@@ -752,6 +827,58 @@ export default function SubjectEditorPage() {
           </Card>
         </div>
       </div>
+
+      {/* Edit Chapter Dialog */}
+      <Dialog open={!!editingChapter} onOpenChange={(open) => !open && setEditingChapter(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Chapter</DialogTitle>
+            <DialogDescription>
+              Update this chapter&apos;s details. Changes are saved immediately.
+            </DialogDescription>
+          </DialogHeader>
+          {editingChapter && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-chapter-name">Chapter Name *</Label>
+                <Input
+                  id="edit-chapter-name"
+                  value={editingChapter.name}
+                  onChange={(e) => setEditingChapter({ ...editingChapter, name: e.target.value })}
+                  placeholder="Chapter name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-chapter-duration">Duration</Label>
+                <Input
+                  id="edit-chapter-duration"
+                  value={editingChapter.duration}
+                  onChange={(e) => setEditingChapter({ ...editingChapter, duration: e.target.value })}
+                  placeholder="e.g., 2 hours"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-chapter-description">Description</Label>
+                <Textarea
+                  id="edit-chapter-description"
+                  value={editingChapter.description}
+                  onChange={(e) => setEditingChapter({ ...editingChapter, description: e.target.value })}
+                  placeholder="Chapter description"
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingChapter(null)} disabled={isSavingChapter}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveChapter} disabled={isSavingChapter}>
+              {isSavingChapter ? 'Saving...' : 'Save Chapter'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

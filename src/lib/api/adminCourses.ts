@@ -80,6 +80,33 @@ export async function updateCourse(id: string, courseData: Partial<CourseData>):
   return json.result.course;
 }
 
+export type ChapterData = {
+  name: string;
+  description: string;
+  duration?: string;
+};
+
+export async function updateChapter(
+  courseId: string,
+  subjectId: string,
+  moduleId: string,
+  chapterData: ChapterData
+): Promise<CourseData> {
+  const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+  const res = await fetch(
+    API_ENDPOINTS.COURSES.UPDATE_CHAPTER(courseId, subjectId, moduleId),
+    createFetchOptions('PUT', chapterData)
+  );
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to update chapter');
+  }
+
+  const json = await res.json();
+  return json.result.course;
+}
+
 export async function getCourse(id: string): Promise<CourseData> {
   const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
   const res = await fetch(API_ENDPOINTS.COURSES.GET(id), createFetchOptions('GET'));
