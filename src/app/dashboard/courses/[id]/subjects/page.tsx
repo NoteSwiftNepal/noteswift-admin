@@ -18,8 +18,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Minus, Pencil, Save, X, User, BookOpen, PlayCircle, FileText, Users, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
-import { getCourse, updateCourse, updateChapter } from '@/lib/api/adminCourses';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Plus, Minus, Pencil, Trash2, Save, X, User, BookOpen, PlayCircle, FileText, Users, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { getCourse, updateCourse, updateChapter, deleteChapter } from '@/lib/api/adminCourses';
 import { fetchApprovedTeachers } from '@/lib/api/adminTeachers';
 import { toast } from '@/hooks/use-toast';
 import { API_ENDPOINTS } from '@/config/api';
@@ -86,6 +96,12 @@ export default function SubjectEditorPage() {
     duration: string;
   } | null>(null);
   const [isSavingChapter, setIsSavingChapter] = useState(false);
+  const [deleteChapterTarget, setDeleteChapterTarget] = useState<{
+    subjectIndex: number;
+    moduleIndex: number;
+    name: string;
+  } | null>(null);
+  const [isDeletingChapter, setIsDeletingChapter] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [expandedSections, setExpandedSections] = useState<{
@@ -313,6 +329,43 @@ export default function SubjectEditorPage() {
       });
     } finally {
       setIsSavingChapter(false);
+    }
+  };
+
+  const openDeleteChapter = (subjectIndex: number, moduleIndex: number) => {
+    const module = course?.subjects?.[subjectIndex]?.modules?.[moduleIndex];
+    if (!module) return;
+    setDeleteChapterTarget({ subjectIndex, moduleIndex, name: module.name || `Chapter ${moduleIndex + 1}` });
+  };
+
+  const handleDeleteChapter = async () => {
+    if (!deleteChapterTarget || !course?._id) return;
+    const { subjectIndex, moduleIndex } = deleteChapterTarget;
+    const subject = course.subjects?.[subjectIndex];
+    const module = subject?.modules?.[moduleIndex];
+
+    try {
+      setIsDeletingChapter(true);
+
+      // Only hit the backend if the chapter was actually persisted there
+      if (subject?._id && module?._id) {
+        await deleteChapter(course._id, subject._id, module._id);
+      }
+
+      removeModule(subjectIndex, moduleIndex);
+      toast({
+        title: "Success",
+        description: "Chapter deleted successfully!",
+      });
+      setDeleteChapterTarget(null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to delete chapter: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingChapter(false);
     }
   };
 
@@ -741,10 +794,10 @@ export default function SubjectEditorPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => removeModule(subjectIndex, moduleIndex)}
+                                onClick={() => openDeleteChapter(subjectIndex, moduleIndex)}
                                 className="text-red-600 hover:text-red-700"
                               >
-                                <Minus className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
                           </div>
@@ -879,6 +932,30 @@ export default function SubjectEditorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Chapter Confirmation */}
+      <AlertDialog open={!!deleteChapterTarget} onOpenChange={(open) => !open && setDeleteChapterTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Chapter</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{deleteChapterTarget?.name}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteChapterTarget(null)} disabled={isDeletingChapter}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteChapter}
+              disabled={isDeletingChapter}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeletingChapter ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

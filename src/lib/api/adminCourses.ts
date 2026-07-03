@@ -107,6 +107,26 @@ export async function updateChapter(
   return json.result.course;
 }
 
+export async function deleteChapter(
+  courseId: string,
+  subjectId: string,
+  moduleId: string
+): Promise<CourseData> {
+  const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+  const res = await fetch(
+    API_ENDPOINTS.COURSES.DELETE_CHAPTER(courseId, subjectId, moduleId),
+    createFetchOptions('DELETE')
+  );
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to delete chapter');
+  }
+
+  const json = await res.json();
+  return json.result.course;
+}
+
 export async function getCourse(id: string): Promise<CourseData> {
   const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
   const res = await fetch(API_ENDPOINTS.COURSES.GET(id), createFetchOptions('GET'));

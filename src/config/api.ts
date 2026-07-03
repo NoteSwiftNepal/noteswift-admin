@@ -52,6 +52,8 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `${API_BASE_URL}/api/admin/courses/${id}`,
     UPDATE_CHAPTER: (courseId: string, subjectId: string, moduleId: string) =>
       `${API_BASE_URL}/api/admin/courses/${courseId}/subjects/${subjectId}/modules/${moduleId}`,
+    DELETE_CHAPTER: (courseId: string, subjectId: string, moduleId: string) =>
+      `${API_BASE_URL}/api/admin/courses/${courseId}/subjects/${subjectId}/modules/${moduleId}`,
   },
 
   // ==================== NOTIFICATIONS ====================
