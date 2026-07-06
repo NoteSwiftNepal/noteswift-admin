@@ -13,9 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, Minus, Eye, Save, X, Star, BookOpen, PlayCircle, Award, Upload, Lock, Clock, Users, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
-import { createCourse, updateCourse, getCourse } from '@/lib/api/adminCourses';
+import { createCourse, updateCourse, getCourse, uploadCourseThumbnail } from '@/lib/api/adminCourses';
 import { toast } from '@/hooks/use-toast';
-import { v2 as cloudinary } from 'cloudinary';
 
 interface Module {
   name: string;
@@ -64,16 +63,6 @@ export default function CourseEditorPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const courseId = params.id as string;
-
-  // Debug environment variables
-  useEffect(() => {
-    console.log('Environment check:', {
-      cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-      uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET,
-      hasCloudName: !!process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-      hasUploadPreset: !!process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
-    });
-  }, []);
 
   const [formData, setFormData] = useState<Course>(() => {
     const typeParam = searchParams?.get('type') as 'featured' | 'pro' | 'free' | 'recommended' | 'upcoming' | null;
@@ -208,28 +197,6 @@ export default function CourseEditorPage() {
   const handleImageUpload = async (file: File) => {
     if (!file) return;
 
-    // Check environment variables
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-    if (!cloudName) {
-      toast({
-        title: "Configuration Error",
-        description: "Cloudinary cloud name is not configured",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!uploadPreset) {
-      toast({
-        title: "Configuration Error",
-        description: "Cloudinary upload preset is not configured. Please create 'noteswift_courses' preset in Cloudinary dashboard or update .env to use existing 'ml_default' preset.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     // Validate file type
     if (!file.type.startsWith('image/')) {
       toast({
@@ -253,76 +220,8 @@ export default function CourseEditorPage() {
     setIsUploading(true);
 
     try {
-      console.log('Starting image upload...', {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        cloudName,
-        uploadPreset
-      });
-
-      // Upload to Cloudinary using direct API
-      const formDataUpload = new FormData();
-      formDataUpload.append('file', file);
-      formDataUpload.append('upload_preset', uploadPreset);
-      formDataUpload.append('folder', 'noteswift/course-thumbnails');
-
-      console.log('Sending request to Cloudinary...');
-
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-        {
-          method: 'POST',
-          body: formDataUpload,
-        }
-      );
-
-      // Try the configured preset first, fallback to ml_default if it fails
-      let currentPreset = uploadPreset;
-      let uploadResponse = response;
-
-      if (!response.ok && uploadPreset === 'noteswift_courses') {
-        console.log('Primary preset failed, trying fallback preset: ml_default');
-        formDataUpload.set('upload_preset', 'ml_default');
-        currentPreset = 'ml_default';
-
-        uploadResponse = await fetch(
-          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-          {
-            method: 'POST',
-            body: formDataUpload,
-          }
-        );
-      }
-
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        console.error('Cloudinary upload failed:', {
-          status: uploadResponse.status,
-          statusText: uploadResponse.statusText,
-          responseBody: errorText,
-          cloudName,
-          uploadPreset: currentPreset
-        });
-
-        let errorMessage = `Upload failed (${uploadResponse.status}): ${uploadResponse.statusText}`;
-        try {
-          const errorData = JSON.parse(errorText);
-          if (errorData.error?.message) {
-            errorMessage = errorData.error.message;
-          }
-        } catch (e) {
-          // If not JSON, use the raw text
-          if (errorText) {
-            errorMessage = errorText;
-          }
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      const data = await uploadResponse.json();
-      updateFormData('thumbnail', data.secure_url);
+      const thumbnailUrl = await uploadCourseThumbnail(courseId, file);
+      updateFormData('thumbnail', thumbnailUrl);
 
       toast({
         title: "Success",

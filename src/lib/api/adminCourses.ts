@@ -127,6 +127,55 @@ export async function deleteChapter(
   return json.result.course;
 }
 
+export async function deleteSubject(
+  courseId: string,
+  subjectId: string
+): Promise<CourseData> {
+  const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+  const res = await fetch(
+    API_ENDPOINTS.COURSES.DELETE_SUBJECT(courseId, subjectId),
+    createFetchOptions('DELETE')
+  );
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to delete subject');
+  }
+
+  const json = await res.json();
+  return json.result.course;
+}
+
+export async function uploadCourseThumbnail(courseId: string, file: File): Promise<string> {
+  const { API_ENDPOINTS } = await import('@/config/api');
+
+  const formData = new FormData();
+  formData.append('thumbnail', file);
+
+  const headers: Record<string, string> = {};
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('adminToken');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  const res = await fetch(API_ENDPOINTS.COURSES.UPLOAD_THUMBNAIL(courseId), {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to upload thumbnail');
+  }
+
+  const json = await res.json();
+  return json.result.thumbnail;
+}
+
 export async function getCourse(id: string): Promise<CourseData> {
   const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
   const res = await fetch(API_ENDPOINTS.COURSES.GET(id), createFetchOptions('GET'));

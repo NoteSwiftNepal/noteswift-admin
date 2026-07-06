@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Image, Plus, Pencil, Trash2, Eye, Loader2 } from "lucide-react";
+import { Image, Plus, Pencil, Trash2, Eye, Loader2, X } from "lucide-react";
 
 interface PromoBanner {
   _id: string;
@@ -54,6 +54,7 @@ export default function PromoBannersPage() {
   const [banners, setBanners] = useState<PromoBanner[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Form state
   const [editingBanner, setEditingBanner] = useState<PromoBanner | null>(null);
@@ -91,6 +92,51 @@ export default function PromoBannersPage() {
     fetchBanners();
   }, []);
 
+  const handleImageUpload = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid File Type", description: "Please select an image file.", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File Too Large", description: "Please select an image smaller than 2MB.", variant: "destructive" });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const { API_ENDPOINTS } = await import("@/config/api");
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem("adminToken");
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(API_ENDPOINTS.PROMO_BANNERS.UPLOAD_IMAGE, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setImage(data.result.image);
+        toast({ title: "Success", description: "Image uploaded successfully!" });
+      } else {
+        toast({ title: "Upload Failed", description: data.error || "Failed to upload image.", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Upload Failed", description: "Failed to upload image.", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const resetForm = () => {
     setTitle("");
     setSubtitle("");
@@ -122,7 +168,7 @@ export default function PromoBannersPage() {
 
   const handleSubmit = async () => {
     if (!title.trim() || !image.trim()) {
-      toast({ title: "Error", description: "Title and Image URL are required.", variant: "destructive" });
+      toast({ title: "Error", description: "Title and banner image are required.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -375,15 +421,45 @@ export default function PromoBannersPage() {
             </div>
 
             <div>
-              <Label htmlFor="image">Image URL *</Label>
-              <Input
-                id="image"
-                value={image}
-                onChange={(e) => setImage(e.target.value)}
-                placeholder="https://example.com/banner.jpg"
-              />
+              <Label htmlFor="image">Banner Image *</Label>
+              <div className="space-y-3">
+                {image && (
+                  <div className="relative w-full max-w-xs">
+                    <img
+                      src={image}
+                      alt="Banner preview"
+                      className="w-full h-32 object-cover rounded-lg border"
+                    />
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={() => setImage("")}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="image"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        handleImageUpload(file);
+                      }
+                    }}
+                    disabled={isUploading}
+                    className="flex-1"
+                  />
+                  {isUploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </div>
+              </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Recommended: 800×400px (2:1). Use direct image URLs (JPG/PNG).
+                Recommended: 800×400px (2:1). JPG or PNG, max 2MB.
               </p>
             </div>
 
@@ -441,7 +517,7 @@ export default function PromoBannersPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || isUploading}>
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingBanner ? "Update" : "Create"}
             </Button>

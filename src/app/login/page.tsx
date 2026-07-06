@@ -27,25 +27,37 @@ export default function LoginPage() {
     try {
       // Call Express backend for authentication
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      
+
       // Step 1: Authenticate with backend (validates credentials and sends OTP)
-      // Use AUTH.LOGIN for regular admins (super_admin, admin)
-      const loginResponse = await fetch(
+      // Try the regular admin endpoint first (super_admin, admin)
+      let loginResponse = await fetch(
         API_ENDPOINTS.AUTH.LOGIN,
         createFetchOptions('POST', { email: username, password })
       );
+      let loginData = await loginResponse.json();
+      let flow: 'regular' | 'system_admin' = 'regular';
 
-      const loginData = await loginResponse.json();
+      // System admin accounts are rejected by the regular endpoint - transparently
+      // retry against the system admin endpoint so /login works for every admin role.
+      if (!loginResponse.ok && loginData.error?.toLowerCase().includes('system admin')) {
+        loginResponse = await fetch(
+          API_ENDPOINTS.ADMIN_AUTH.LOGIN,
+          createFetchOptions('POST', { email: username, password })
+        );
+        loginData = await loginResponse.json();
+        flow = 'system_admin';
+      }
 
       if (loginResponse.ok && loginData.requiresOtp) {
-        // Store email and password for OTP verification
+        // Store email, password, and which flow to use for OTP verification
         localStorage.setItem('adminLoginEmail', username);
         localStorage.setItem('adminLoginPassword', password);
+        localStorage.setItem('adminLoginFlow', flow);
         localStorage.setItem("isPasswordVerified", "true");
-        
+
         toast({
           title: "Code Sent",
-          description: loginData.message || "A one-time code has been sent to your email.",
+          description: loginData.message || "A one-time code has been sent to your registered mobile number.",
         });
         router.push("/login/otp");
       } else if (loginResponse.ok && loginData.token) {

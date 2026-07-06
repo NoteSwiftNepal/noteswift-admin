@@ -54,6 +54,9 @@ export const API_ENDPOINTS = {
       `${API_BASE_URL}/api/admin/courses/${courseId}/subjects/${subjectId}/modules/${moduleId}`,
     DELETE_CHAPTER: (courseId: string, subjectId: string, moduleId: string) =>
       `${API_BASE_URL}/api/admin/courses/${courseId}/subjects/${subjectId}/modules/${moduleId}`,
+    DELETE_SUBJECT: (courseId: string, subjectId: string) =>
+      `${API_BASE_URL}/api/admin/courses/${courseId}/subjects/${subjectId}`,
+    UPLOAD_THUMBNAIL: (courseId: string) => `${API_BASE_URL}/api/admin/courses/${courseId}/thumbnail`,
   },
 
   // ==================== NOTIFICATIONS ====================
@@ -101,6 +104,7 @@ export const API_ENDPOINTS = {
     CREATE: `${API_BASE_URL}/api/admin/promo-banners`,
     UPDATE: (id: string) => `${API_BASE_URL}/api/admin/promo-banners/${id}`,
     DELETE: (id: string) => `${API_BASE_URL}/api/admin/promo-banners/${id}`,
+    UPLOAD_IMAGE: `${API_BASE_URL}/api/admin/promo-banners/upload-image`,
   },
 
   // ==================== REVENUE ====================

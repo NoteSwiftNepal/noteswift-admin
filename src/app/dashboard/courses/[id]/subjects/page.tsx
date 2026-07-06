@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Plus, Minus, Pencil, Trash2, Save, X, User, BookOpen, PlayCircle, FileText, Users, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
-import { getCourse, updateCourse, updateChapter, deleteChapter } from '@/lib/api/adminCourses';
+import { getCourse, updateCourse, updateChapter, deleteChapter, deleteSubject as deleteSubjectApi } from '@/lib/api/adminCourses';
 import { fetchApprovedTeachers } from '@/lib/api/adminTeachers';
 import { toast } from '@/hooks/use-toast';
 import { API_ENDPOINTS } from '@/config/api';
@@ -102,6 +102,11 @@ export default function SubjectEditorPage() {
     name: string;
   } | null>(null);
   const [isDeletingChapter, setIsDeletingChapter] = useState(false);
+  const [deleteSubjectTarget, setDeleteSubjectTarget] = useState<{
+    subjectIndex: number;
+    name: string;
+  } | null>(null);
+  const [isDeletingSubject, setIsDeletingSubject] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [expandedSections, setExpandedSections] = useState<{
@@ -261,6 +266,45 @@ export default function SubjectEditorPage() {
       const updatedSubjects = prevCourse.subjects.filter((_, i) => i !== subjectIndex);
       return { ...prevCourse, subjects: updatedSubjects };
     });
+  };
+
+  const openDeleteSubject = (subjectIndex: number) => {
+    const subject = course?.subjects?.[subjectIndex];
+    if (!subject) return;
+    setDeleteSubjectTarget({ subjectIndex, name: subject.name || `Subject ${subjectIndex + 1}` });
+  };
+
+  const handleDeleteSubject = async () => {
+    if (!deleteSubjectTarget || !course?._id) return;
+    const { subjectIndex } = deleteSubjectTarget;
+    const subject = course.subjects?.[subjectIndex];
+
+    try {
+      setIsDeletingSubject(true);
+
+      // Only hit the backend if the subject was actually persisted there —
+      // a subject deleted immediately here is gone for good, unlike the old
+      // behavior where "delete" only removed it from local state and the
+      // next whole-course save silently restored it.
+      if (subject?._id) {
+        await deleteSubjectApi(course._id, subject._id);
+      }
+
+      removeSubject(subjectIndex);
+      toast({
+        title: "Success",
+        description: "Subject deleted successfully!",
+      });
+      setDeleteSubjectTarget(null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to delete subject: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingSubject(false);
+    }
   };
 
   const addModule = (subjectIndex: number) => {
@@ -659,7 +703,7 @@ export default function SubjectEditorPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => removeSubject(subjectIndex)}
+                    onClick={() => openDeleteSubject(subjectIndex)}
                     className="text-red-600 hover:text-red-700"
                   >
                     <Minus className="w-4 h-4" />
@@ -952,6 +996,30 @@ export default function SubjectEditorPage() {
               className="bg-red-600 hover:bg-red-700"
             >
               {isDeletingChapter ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Subject Confirmation */}
+      <AlertDialog open={!!deleteSubjectTarget} onOpenChange={(open) => !open && setDeleteSubjectTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Subject</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{deleteSubjectTarget?.name}&quot;? All chapters and content under it will be permanently removed. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteSubjectTarget(null)} disabled={isDeletingSubject}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSubject}
+              disabled={isDeletingSubject}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeletingSubject ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

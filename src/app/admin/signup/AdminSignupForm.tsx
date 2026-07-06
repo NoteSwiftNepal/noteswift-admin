@@ -154,7 +154,7 @@ export function AdminSignupForm() {
             <p className="text-muted-foreground mb-4">
               This invitation link is invalid or has expired.
             </p>
-            <Button onClick={() => router.push('/admin/login')}>
+            <Button onClick={() => router.push('/login')}>
               Go to Login
             </Button>
           </CardContent>

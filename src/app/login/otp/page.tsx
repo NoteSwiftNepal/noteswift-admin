@@ -43,12 +43,14 @@ export default function OtpPage() {
     setIsLoading(true);
 
     try {
-      // Call Express backend to verify OTP for regular admins
+      // Call Express backend to verify OTP - endpoint depends on which login flow was used
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      
+      const flow = localStorage.getItem('adminLoginFlow') || 'regular';
+      const isSystemAdmin = flow === 'system_admin';
+
       const response = await fetch(
-        API_ENDPOINTS.AUTH.VERIFY_OTP,
-        createFetchOptions('POST', { email, password, otp })
+        isSystemAdmin ? API_ENDPOINTS.ADMIN_AUTH.VERIFY_OTP : API_ENDPOINTS.AUTH.VERIFY_OTP,
+        createFetchOptions('POST', isSystemAdmin ? { email, otp } : { email, password, otp })
       );
 
       const data = await response.json();
@@ -56,7 +58,7 @@ export default function OtpPage() {
       if (response.ok && data.token) {
         // Store the token in both localStorage and cookie
         localStorage.setItem('adminToken', data.token);
-        
+
         // Set cookie for middleware to detect
         document.cookie = `admin_token=${data.token}; path=/; max-age=86400; samesite=lax`;
 
@@ -69,6 +71,7 @@ export default function OtpPage() {
         localStorage.removeItem("isPasswordVerified");
         localStorage.removeItem("adminLoginEmail");
         localStorage.removeItem("adminLoginPassword");
+        localStorage.removeItem("adminLoginFlow");
 
         toast({
           title: "Authentication Successful",
@@ -102,11 +105,12 @@ export default function OtpPage() {
     setIsResending(true);
     
     try {
-      // Call Express backend to resend OTP for regular admins
+      // Call Express backend to resend OTP - endpoint depends on which login flow was used
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      
+      const flow = localStorage.getItem('adminLoginFlow') || 'regular';
+
       const response = await fetch(
-        API_ENDPOINTS.AUTH.LOGIN,
+        flow === 'system_admin' ? API_ENDPOINTS.ADMIN_AUTH.LOGIN : API_ENDPOINTS.AUTH.LOGIN,
         createFetchOptions('POST', { email, password })
       );
 
@@ -148,7 +152,7 @@ export default function OtpPage() {
     />
           </div>
           <CardTitle className="text-3xl font-bold font-headline">Enter Verification Code</CardTitle>
-          <CardDescription>A 6-digit code was sent to the secret email address.</CardDescription>
+          <CardDescription>A 6-digit code has been sent to your registered mobile number.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
