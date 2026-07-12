@@ -488,44 +488,10 @@ export default function SubjectEditorPage() {
         return;
       }
 
-      // Save to Course collection
+      // Save to Course collection — the sole source of truth for subject
+      // description now (see ARCHITECTURE.md §5); this already persists
+      // every subject's description, so no separate sync step is needed.
       await updateCourse(courseId, course);
-
-      // Also update SubjectContent collection for each subject
-      for (const subject of course.subjects || []) {
-        try {
-          // Check if SubjectContent exists for this subject
-          const response = await fetch(`${API_ENDPOINTS.SUBJECT_CONTENT.GET}?courseId=${courseId}&subjectName=${encodeURIComponent(subject.name)}`, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.result?.subjectContent) {
-              let subjectContent = data.result.subjectContent;
-
-              // Only update description, don't touch modules (content is managed separately)
-              await fetch(API_ENDPOINTS.SUBJECT_CONTENT.UPDATE(subjectContent._id), {
-                method: 'PUT',
-                headers: {
-                  'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  description: subject.description
-                  // Don't update modules - content URLs are managed by teachers
-                })
-              });
-            }
-          }
-        } catch (error) {
-          console.error(`Error updating SubjectContent for subject ${subject.name}:`, error);
-          // Continue with other subjects even if one fails
-        }
-      }
 
       toast({
         title: "Success",

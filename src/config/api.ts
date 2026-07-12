@@ -166,12 +166,6 @@ export const API_ENDPOINTS = {
     },
   },
 
-  // ==================== SUBJECT CONTENT ====================
-  SUBJECT_CONTENT: {
-    GET: `${API_BASE_URL}/api/admin/subject-content`,
-    UPDATE: (id: string) => `${API_BASE_URL}/api/admin/subject-content/${id}`,
-  },
-
   // ==================== REPORTS ====================
   REPORTS: {
     OVERVIEW: `${API_BASE_URL}/api/admin/reports/overview`,
