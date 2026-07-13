@@ -184,13 +184,10 @@ export const API_ENDPOINTS = {
   // ==================== ARCHIVES ====================
   ARCHIVES: {
     STATS: `${API_BASE_URL}/api/admin/archives/stats`,
-    SUBJECTS: `${API_BASE_URL}/api/admin/archives/subjects`,
     LIVE_CLASSES: `${API_BASE_URL}/api/admin/archives/live-classes`,
     TEACHER_ASSIGNMENTS: `${API_BASE_URL}/api/admin/archives/teacher-assignments`,
-    RESTORE_SUBJECT: (id: string) => `${API_BASE_URL}/api/admin/archives/subjects/${id}/restore`,
     RESTORE_LIVE_CLASS: (id: string) => `${API_BASE_URL}/api/admin/archives/live-classes/${id}/restore`,
     RESTORE_TEACHER_ASSIGNMENT: (id: string) => `${API_BASE_URL}/api/admin/archives/teacher-assignments/${id}/restore`,
-    PERMANENT_DELETE_SUBJECT: (id: string) => `${API_BASE_URL}/api/admin/archives/subjects/${id}/permanent-delete`,
     PERMANENT_DELETE_LIVE_CLASS: (id: string) => `${API_BASE_URL}/api/admin/archives/live-classes/${id}/permanent-delete`,
     PERMANENT_DELETE_TEACHER_ASSIGNMENT: (id: string) => `${API_BASE_URL}/api/admin/archives/teacher-assignments/${id}/permanent-delete`,
   },

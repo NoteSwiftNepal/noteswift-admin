@@ -11,17 +11,15 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Archive, 
-  RotateCcw, 
-  Trash2, 
-  Eye, 
-  Search, 
-  Calendar, 
-  User, 
-  BookOpen, 
-  Video, 
-  Users, 
+import {
+  RotateCcw,
+  Trash2,
+  Eye,
+  Search,
+  Calendar,
+  User,
+  Video,
+  Users,
   Package,
   AlertTriangle,
   Loader2,
@@ -35,7 +33,6 @@ import {
 } from 'lucide-react';
 
 interface ArchiveStats {
-  archivedSubjects: number;
   archivedLiveClasses: number;
   archivedAssignments: number;
 }
@@ -66,13 +63,11 @@ export default function ArchivesPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ArchiveStats | null>(null);
-  const [activeTab, setActiveTab] = useState('subjects');
-  
-  const [subjects, setSubjects] = useState<ArchivedItem[]>([]);
+  const [activeTab, setActiveTab] = useState('classes');
+
   const [liveClasses, setLiveClasses] = useState<ArchivedItem[]>([]);
   const [assignments, setAssignments] = useState<ArchivedItem[]>([]);
-  
-  const [subjectsPagination, setSubjectsPagination] = useState<PaginationInfo>({ page: 1, limit: 10, total: 0, pages: 0 });
+
   const [classesPagination, setClassesPagination] = useState<PaginationInfo>({ page: 1, limit: 10, total: 0, pages: 0 });
   const [assignmentsPagination, setAssignmentsPagination] = useState<PaginationInfo>({ page: 1, limit: 10, total: 0, pages: 0 });
   
@@ -100,26 +95,6 @@ export default function ArchivesPage() {
       console.error('Error fetching archive stats:', error);
     }
   }, []);
-
-  const fetchSubjects = useCallback(async (page = 1) => {
-    try {
-      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '10',
-      });
-      if (searchQuery) params.append('search', searchQuery);
-      
-      const res = await fetch(`${API_ENDPOINTS.ARCHIVES.SUBJECTS}?${params}`, createFetchOptions('GET'));
-      const json = await res.json();
-      if (json.success) {
-        setSubjects(json.data);
-        setSubjectsPagination(json.pagination);
-      }
-    } catch (error) {
-      console.error('Error fetching archived subjects:', error);
-    }
-  }, [searchQuery]);
 
   const fetchLiveClasses = useCallback(async (page = 1) => {
     try {
@@ -165,32 +140,27 @@ export default function ArchivesPage() {
     setLoading(true);
     await Promise.all([
       fetchStats(),
-      fetchSubjects(subjectsPagination.page),
       fetchLiveClasses(classesPagination.page),
       fetchAssignments(assignmentsPagination.page),
     ]);
     setLoading(false);
-  }, [fetchStats, fetchSubjects, fetchLiveClasses, fetchAssignments, subjectsPagination.page, classesPagination.page, assignmentsPagination.page]);
+  }, [fetchStats, fetchLiveClasses, fetchAssignments, classesPagination.page, assignmentsPagination.page]);
 
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'subjects') {
-      fetchSubjects(subjectsPagination.page);
-    } else if (activeTab === 'classes') {
+    if (activeTab === 'classes') {
       fetchLiveClasses(classesPagination.page);
     } else if (activeTab === 'assignments') {
       fetchAssignments(assignmentsPagination.page);
     }
-  }, [activeTab, subjectsPagination.page, classesPagination.page, assignmentsPagination.page, fetchSubjects, fetchLiveClasses, fetchAssignments]);
+  }, [activeTab, classesPagination.page, assignmentsPagination.page, fetchLiveClasses, fetchAssignments]);
 
   const handleSearch = () => {
     setSearchQuery(searchInput);
-    if (activeTab === 'subjects') {
-      setSubjectsPagination(p => ({ ...p, page: 1 }));
-    } else if (activeTab === 'classes') {
+    if (activeTab === 'classes') {
       setClassesPagination(p => ({ ...p, page: 1 }));
     } else if (activeTab === 'assignments') {
       setAssignmentsPagination(p => ({ ...p, page: 1 }));
@@ -200,19 +170,17 @@ export default function ArchivesPage() {
   const handleResetFilters = () => {
     setSearchInput('');
     setSearchQuery('');
-    setSubjectsPagination(p => ({ ...p, page: 1 }));
     setClassesPagination(p => ({ ...p, page: 1 }));
     setAssignmentsPagination(p => ({ ...p, page: 1 }));
   };
 
-  const handleRestore = async (id: string, type: 'subject' | 'liveClass' | 'assignment') => {
+  const handleRestore = async (id: string, type: 'liveClass' | 'assignment') => {
     setRestoring(id);
     try {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      let endpoint;
-      if (type === 'subject') endpoint = API_ENDPOINTS.ARCHIVES.RESTORE_SUBJECT(id);
-      else if (type === 'liveClass') endpoint = API_ENDPOINTS.ARCHIVES.RESTORE_LIVE_CLASS(id);
-      else endpoint = API_ENDPOINTS.ARCHIVES.RESTORE_TEACHER_ASSIGNMENT(id);
+      const endpoint = type === 'liveClass'
+        ? API_ENDPOINTS.ARCHIVES.RESTORE_LIVE_CLASS(id)
+        : API_ENDPOINTS.ARCHIVES.RESTORE_TEACHER_ASSIGNMENT(id);
 
       const res = await fetch(endpoint, createFetchOptions('POST'));
       const json = await res.json();
@@ -232,7 +200,7 @@ export default function ArchivesPage() {
     }
   };
 
-  const handlePermanentDelete = async (id: string, type: 'subject' | 'liveClass' | 'assignment') => {
+  const handlePermanentDelete = async (id: string, type: 'liveClass' | 'assignment') => {
     if (deleteConfirmation !== 'DELETE') {
       toast({ title: 'Error', description: 'Please type DELETE to confirm' });
       return;
@@ -241,10 +209,9 @@ export default function ArchivesPage() {
     setDeleting(id);
     try {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      let endpoint;
-      if (type === 'subject') endpoint = API_ENDPOINTS.ARCHIVES.PERMANENT_DELETE_SUBJECT(id);
-      else if (type === 'liveClass') endpoint = API_ENDPOINTS.ARCHIVES.PERMANENT_DELETE_LIVE_CLASS(id);
-      else endpoint = API_ENDPOINTS.ARCHIVES.PERMANENT_DELETE_TEACHER_ASSIGNMENT(id);
+      const endpoint = type === 'liveClass'
+        ? API_ENDPOINTS.ARCHIVES.PERMANENT_DELETE_LIVE_CLASS(id)
+        : API_ENDPOINTS.ARCHIVES.PERMANENT_DELETE_TEACHER_ASSIGNMENT(id);
 
       const res = await fetch(endpoint, createFetchOptions('POST', { confirmation: 'DELETE' }));
       const json = await res.json();
@@ -282,13 +249,11 @@ export default function ArchivesPage() {
   };
 
   const getCurrentPagination = () => {
-    if (activeTab === 'subjects') return subjectsPagination;
     if (activeTab === 'classes') return classesPagination;
     return assignmentsPagination;
   };
 
   const getCurrentData = () => {
-    if (activeTab === 'subjects') return subjects;
     if (activeTab === 'classes') return liveClasses;
     return assignments;
   };
@@ -336,18 +301,7 @@ export default function ArchivesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Archived Subjects</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.archivedSubjects || 0}</div>
-            <p className="text-xs text-muted-foreground">Soft-deleted subjects</p>
-          </CardContent>
-        </Card>
-        
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Archived Classes</CardTitle>
@@ -358,7 +312,7 @@ export default function ArchivesPage() {
             <p className="text-xs text-muted-foreground">Soft-deleted live classes</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Teacher Assignments</CardTitle>
@@ -369,7 +323,7 @@ export default function ArchivesPage() {
             <p className="text-xs text-muted-foreground">Archived assignments</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Archived</CardTitle>
@@ -377,7 +331,7 @@ export default function ArchivesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(stats?.archivedSubjects || 0) + (stats?.archivedLiveClasses || 0) + (stats?.archivedAssignments || 0)}
+              {(stats?.archivedLiveClasses || 0) + (stats?.archivedAssignments || 0)}
             </div>
             <p className="text-xs text-muted-foreground">Items in archive</p>
           </CardContent>
@@ -418,11 +372,6 @@ export default function ArchivesPage() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="flex items-center justify-between">
               <TabsList>
-                <TabsTrigger value="subjects" className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4" />
-                  Subjects
-                  <Badge variant="secondary" className="ml-1">{stats?.archivedSubjects || 0}</Badge>
-                </TabsTrigger>
                 <TabsTrigger value="classes" className="flex items-center gap-2">
                   <Video className="h-4 w-4" />
                   Live Classes
@@ -440,120 +389,6 @@ export default function ArchivesPage() {
         
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsContent value="subjects" className="m-0">
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : subjects.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Archive className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No archived subjects</h3>
-                  <p className="text-muted-foreground max-w-md">
-                    Subjects that have been deleted will appear here. You can restore them or permanently delete them.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Subject Name</TableHead>
-                        <TableHead>Course</TableHead>
-                        <TableHead>Teacher</TableHead>
-                        <TableHead>Deleted At</TableHead>
-                        <TableHead>Deleted By</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {subjects.map((item) => (
-                        <TableRow key={item._id}>
-                          <TableCell className="font-medium">{item.subjectName}</TableCell>
-                          <TableCell>{item.courseName}</TableCell>
-                          <TableCell>{item.teacherName}</TableCell>
-                          <TableCell>{formatDate(item.deletedAt)}</TableCell>
-                          <TableCell>
-                            {item.deletedBy ? (
-                              <Badge variant="outline">Admin</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openViewDialog(item)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openRestoreDialog(item)}
-                                disabled={restoring === item._id}
-                              >
-                                {restoring === item._id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <RotateCcw className="h-4 w-4" />
-                                )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openPermanentDeleteDialog(item)}
-                                disabled={deleting === item._id}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                {deleting === item._id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  
-                  {/* Pagination */}
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-muted-foreground">
-                      Showing {((subjectsPagination.page - 1) * subjectsPagination.limit) + 1} to{' '}
-                      {Math.min(subjectsPagination.page * subjectsPagination.limit, subjectsPagination.total)} of{' '}
-                      {subjectsPagination.total} results
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSubjectsPagination(p => ({ ...p, page: p.page - 1 }))}
-                        disabled={subjectsPagination.page <= 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <span className="text-sm">
-                        Page {subjectsPagination.page} of {subjectsPagination.pages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSubjectsPagination(p => ({ ...p, page: p.page + 1 }))}
-                        disabled={subjectsPagination.page >= subjectsPagination.pages}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </TabsContent>
-            
             <TabsContent value="classes" className="m-0">
               {loading ? (
                 <div className="flex items-center justify-center py-8">
@@ -863,7 +698,7 @@ export default function ArchivesPage() {
             <Button
               onClick={() => {
                 if (selectedItem) {
-                  const type = activeTab === 'subjects' ? 'subject' : activeTab === 'classes' ? 'liveClass' : 'assignment';
+                  const type = activeTab === 'classes' ? 'liveClass' : 'assignment';
                   handleRestore(selectedItem._id, type);
                 }
               }}
@@ -928,7 +763,7 @@ export default function ArchivesPage() {
               variant="destructive"
               onClick={() => {
                 if (selectedItem) {
-                  const type = activeTab === 'subjects' ? 'subject' : activeTab === 'classes' ? 'liveClass' : 'assignment';
+                  const type = activeTab === 'classes' ? 'liveClass' : 'assignment';
                   handlePermanentDelete(selectedItem._id, type);
                 }
               }}
