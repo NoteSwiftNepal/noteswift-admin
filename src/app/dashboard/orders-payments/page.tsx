@@ -180,6 +180,7 @@ export default function OrdersPaymentsPage() {
         paymentMethod: formData.paymentMethod,
         amount: formData.amount,
         notes: formData.notes,
+        schoolId: formData.schoolId,
       };
 
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
@@ -450,6 +451,7 @@ export default function OrdersPaymentsPage() {
                   <TableRow>
                     <TableHead>Code</TableHead>
                     <TableHead>Course</TableHead>
+                    <TableHead>School</TableHead>
                     <TableHead>Issued To</TableHead>
                     <TableHead>Issued By</TableHead>
                     <TableHead>Status</TableHead>
@@ -460,7 +462,7 @@ export default function OrdersPaymentsPage() {
                 <TableBody>
                   {codesLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
+                      <TableCell colSpan={8} className="text-center py-8">
                         <div className="flex items-center justify-center">
                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
                           Loading codes...
@@ -469,7 +471,7 @@ export default function OrdersPaymentsPage() {
                     </TableRow>
                   ) : codes.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No unlock codes found
                       </TableCell>
                     </TableRow>
@@ -483,6 +485,13 @@ export default function OrdersPaymentsPage() {
                           {courseMap[code.courseId]
                             ? `${courseMap[code.courseId]} (${code.courseId})`
                             : code.courseId}
+                        </TableCell>
+                        <TableCell>
+                          {code.schoolId?.shortCode ? (
+                            <Badge variant="outline" className="font-mono">{code.schoolId.shortCode}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell>{code.issuedTo}</TableCell>
                         <TableCell>

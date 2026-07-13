@@ -17,7 +17,11 @@ interface Admin {
   lastLogin?: string;
 }
 
-export function AdminList() {
+interface AdminListProps {
+  schoolId?: string;
+}
+
+export function AdminList({ schoolId }: AdminListProps = {}) {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -25,12 +29,16 @@ export function AdminList() {
 
   useEffect(() => {
     fetchAdmins();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolId]);
 
   const fetchAdmins = async () => {
     try {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      const response = await fetch(API_ENDPOINTS.ADMINS.LIST, createFetchOptions('GET'));
+      const url = schoolId
+        ? `${API_ENDPOINTS.ADMINS.LIST}?schoolId=${schoolId}`
+        : API_ENDPOINTS.ADMINS.LIST;
+      const response = await fetch(url, createFetchOptions('GET'));
       const data = await response.json();
       setAdmins(data.admins || []);
     } catch (error) {

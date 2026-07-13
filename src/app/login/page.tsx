@@ -18,6 +18,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [needsPhoneSetup, setNeedsPhoneSetup] = useState(false);
+  const [phoneSetupToken, setPhoneSetupToken] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +51,14 @@ export default function LoginPage() {
         flow = 'system_admin';
       }
 
-      if (loginResponse.ok && loginData.requiresOtp) {
+      if (loginResponse.ok && loginData.needsPhoneSetup) {
+        setPhoneSetupToken(loginData.phoneSetupToken);
+        setNeedsPhoneSetup(true);
+        toast({
+          title: "Add your phone number",
+          description: loginData.message || "No phone number is on file for this account yet.",
+        });
+      } else if (loginResponse.ok && loginData.requiresOtp) {
         // Store email, password, and which flow to use for OTP verification
         localStorage.setItem('adminLoginEmail', username);
         localStorage.setItem('adminLoginPassword', password);
@@ -86,6 +96,91 @@ export default function LoginPage() {
     }
   };
 
+  const handlePhoneSetupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!/^\d{7,15}$/.test(phoneNumber.trim())) {
+      setError("Enter a valid phone number (digits only, 7-15 characters).");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(
+        API_ENDPOINTS.AUTH.SETUP_PHONE,
+        createFetchOptions('POST', { token: phoneSetupToken, phone_number: phoneNumber.trim() })
+      );
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast({
+          title: "Phone number saved",
+          description: "Please log in again to continue.",
+        });
+        setNeedsPhoneSetup(false);
+        setPhoneSetupToken("");
+        setPhoneNumber("");
+        setPassword("");
+      } else {
+        setError(data.error || "Failed to save phone number.");
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: data.error || "Failed to save phone number.",
+        });
+      }
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (needsPhoneSetup) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-secondary p-4">
+        <Card className="w-full max-w-md shadow-2xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold font-headline">Add Your Phone Number</CardTitle>
+            <CardDescription>
+              Your account doesn't have a phone number on file yet. We use it to send a login verification code.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handlePhoneSetupSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="phoneNumber">Phone Number</Label>
+                <Input
+                  id="phoneNumber"
+                  type="tel"
+                  placeholder="98XXXXXXXX"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button type="submit" className="w-full font-semibold text-base py-6" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save and Continue
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => { setNeedsPhoneSetup(false); setPhoneSetupToken(""); setError(""); }}
+              >
+                Back to Login
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-secondary p-4">

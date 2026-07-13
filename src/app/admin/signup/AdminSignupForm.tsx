@@ -11,6 +11,7 @@ import { Loader2, Shield, CheckCircle } from "lucide-react";
 
 export function AdminSignupForm() {
   const [name, setName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -74,10 +75,19 @@ export function AdminSignupForm() {
       return;
     }
 
-    if (password.length < 8) {
+    if (!/^\d{7,15}$/.test(phoneNumber.trim())) {
       toast({
         title: "Error",
-        description: "Password must be at least 8 characters long.",
+        description: "Enter a valid phone number (digits only, 7-15 characters).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!/^(?=.*[A-Za-z])(?=.*\d).{10,}$/.test(password)) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 10 characters long and include both letters and numbers.",
         variant: "destructive",
       });
       return;
@@ -101,6 +111,7 @@ export function AdminSignupForm() {
         createFetchOptions('POST', {
           token,
           name: name.trim(),
+          phone_number: phoneNumber.trim(),
           password,
         })
       );
@@ -112,7 +123,7 @@ export function AdminSignupForm() {
           title: "Success",
           description: "Account created successfully! You can now log in.",
         });
-        router.push('/login');
+        router.push(data.role === 'system_admin' ? '/admin/login' : '/login');
       } else {
         toast({
           title: "Error",
@@ -197,6 +208,21 @@ export function AdminSignupForm() {
             </div>
 
             <div>
+              <Label htmlFor="phoneNumber">Phone Number</Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                placeholder="98XXXXXXXX"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                required
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Used to send you a login verification code
+              </p>
+            </div>
+
+            <div>
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
@@ -207,7 +233,7 @@ export function AdminSignupForm() {
                 required
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Must be at least 8 characters long
+                At least 10 characters, including letters and numbers
               </p>
             </div>
 

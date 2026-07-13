@@ -19,6 +19,7 @@ import {
   Smartphone,
   Archive,
   Image,
+  School,
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -51,6 +52,11 @@ const links = [
       { href: "/dashboard/teacher-management?tab=pending", label: "Pending Teachers" },
       { href: "/dashboard/teacher-assignments", label: "Subject Assignments" },
     ]
+  },
+  {
+    href: "/dashboard/school-management",
+    label: "School Management",
+    icon: School,
   },
   {
     href: "/dashboard/courses",

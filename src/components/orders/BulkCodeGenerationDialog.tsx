@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,14 @@ interface Course {
   _id: string;
   title: string;
 }
+
+interface SchoolOption {
+  _id: string;
+  name: string;
+  shortCode: string;
+}
+
+const NO_SCHOOL = "none";
 
 interface BulkCodeGenerationDialogProps {
   open: boolean;
@@ -36,11 +44,34 @@ export function BulkCodeGenerationDialog({
     paymentMethod: "",
     amount: "",
     notes: "",
+    school: NO_SCHOOL,
   });
+  const [schools, setSchools] = useState<SchoolOption[]>([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      setSchoolsLoading(true);
+      try {
+        const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+        const response = await fetch(API_ENDPOINTS.SCHOOLS.DROPDOWN, createFetchOptions('GET'));
+        const data = await response.json();
+        setSchools(data.data?.schools || []);
+      } catch (error) {
+        console.error('Error fetching schools:', error);
+      } finally {
+        setSchoolsLoading(false);
+      }
+    })();
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(formData);
+    await onSubmit({
+      ...formData,
+      schoolId: formData.school !== NO_SCHOOL ? formData.school : undefined,
+    });
     // Reset form
     setFormData({
       organizationName: "",
@@ -49,6 +80,7 @@ export function BulkCodeGenerationDialog({
       paymentMethod: "",
       amount: "",
       notes: "",
+      school: NO_SCHOOL,
     });
   };
 
@@ -99,6 +131,34 @@ export function BulkCodeGenerationDialog({
                 )}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="school">School (optional)</Label>
+            <Select value={formData.school} onValueChange={(value) => setFormData({ ...formData, school: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="No school (global code)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SCHOOL}>No school (global code)</SelectItem>
+                {schoolsLoading ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    Loading schools...
+                  </div>
+                ) : (
+                  schools.map((school) => (
+                    <SelectItem key={school._id} value={school._id}>
+                      {school.name} ({school.shortCode})
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground mt-1">
+              {formData.school !== NO_SCHOOL
+                ? "Generated codes will be prefixed with this school's short code and will link redeeming students to it."
+                : "Codes will be generated without a school prefix and won't link students to any school."}
+            </p>
           </div>
 
           <div>

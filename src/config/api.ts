@@ -18,6 +18,7 @@ export const API_ENDPOINTS = {
     SESSION: `${API_BASE_URL}/api/admin/auth/session`,
     REFRESH: `${API_BASE_URL}/api/admin/auth/session/refresh`,
     LOGOUT: `${API_BASE_URL}/api/admin/auth/logout`,
+    SETUP_PHONE: `${API_BASE_URL}/api/admin/auth/setup-phone`,
   },
 
   // ==================== ADMIN AUTH (System Admin) ====================
@@ -40,6 +41,7 @@ export const API_ENDPOINTS = {
     REMOVE: (id: string) => `${API_BASE_URL}/api/admin/teachers/${id}/remove`,
     ASSIGN: (id: string) => `${API_BASE_URL}/api/admin/teachers/${id}/assign`,
     REMOVE_ASSIGNMENT: (id: string) => `${API_BASE_URL}/api/admin/teachers/${id}/remove-assignment`,
+    ASSIGN_SCHOOL: (id: string) => `${API_BASE_URL}/api/admin/teachers/${id}/assign-school`,
   },
 
   // ==================== COURSES ====================
@@ -119,6 +121,16 @@ export const API_ENDPOINTS = {
     REMOVE: `${API_BASE_URL}/api/admin/admins/remove`,
     SET_SUPER_ADMIN: `${API_BASE_URL}/api/admin/admins/set-super-admin`,
     DEMOTE_SUPER_ADMIN: `${API_BASE_URL}/api/admin/admins/demote-super-admin`,
+  },
+
+  // ==================== SCHOOL MANAGEMENT ====================
+  SCHOOLS: {
+    LIST: `${API_BASE_URL}/api/admin/schools`,
+    DROPDOWN: `${API_BASE_URL}/api/admin/schools/dropdown`,
+    CREATE: `${API_BASE_URL}/api/admin/schools`,
+    GET: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}`,
+    UPDATE: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}`,
+    DEACTIVATE: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/deactivate`,
   },
 
   // ==================== APP UPDATE =================

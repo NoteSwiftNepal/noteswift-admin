@@ -30,12 +30,18 @@ export type TeacherSummary = {
     subject: string;
     assignedAt?: string;
   }>;
+  schoolId?: string | null;
 };
 
-export async function fetchPendingTeachers(): Promise<TeacherSummary[]> {
-  const res = await fetch(`${API_ENDPOINTS.TEACHERS.LIST}?status=pending_approval`, { 
+function withSchoolFilter(url: string, schoolId?: string): string {
+  if (!schoolId) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}schoolId=${schoolId}`;
+}
+
+export async function fetchPendingTeachers(schoolId?: string): Promise<TeacherSummary[]> {
+  const res = await fetch(withSchoolFilter(`${API_ENDPOINTS.TEACHERS.LIST}?status=pending_approval`, schoolId), {
     ...createFetchOptions('GET'),
-    cache: 'no-store' 
+    cache: 'no-store'
   });
   if (!res.ok) throw new Error('Failed to fetch pending teachers');
   const json = await res.json();
@@ -48,34 +54,40 @@ export async function approveTeacher(id: string, notify = true) {
   return res.json();
 }
 
-export async function fetchApprovedTeachers(): Promise<TeacherSummary[]> {
-  const res = await fetch(`${API_ENDPOINTS.TEACHERS.LIST}?status=approved`, { 
+export async function fetchApprovedTeachers(schoolId?: string): Promise<TeacherSummary[]> {
+  const res = await fetch(withSchoolFilter(`${API_ENDPOINTS.TEACHERS.LIST}?status=approved`, schoolId), {
     ...createFetchOptions('GET'),
-    cache: 'no-store' 
+    cache: 'no-store'
   });
   if (!res.ok) throw new Error('Failed to fetch approved teachers');
   const json = await res.json();
   return json.data?.teachers || [];
 }
 
-export async function fetchAllTeachers(): Promise<TeacherSummary[]> {
-  const res = await fetch(API_ENDPOINTS.TEACHERS.LIST, { 
+export async function fetchAllTeachers(schoolId?: string): Promise<TeacherSummary[]> {
+  const res = await fetch(withSchoolFilter(API_ENDPOINTS.TEACHERS.LIST, schoolId), {
     ...createFetchOptions('GET'),
-    cache: 'no-store' 
+    cache: 'no-store'
   });
   if (!res.ok) throw new Error('Failed to fetch all teachers');
   const json = await res.json();
   return json.data?.teachers || [];
 }
 
-export async function fetchRejectedTeachers(): Promise<TeacherSummary[]> {
-  const res = await fetch(`${API_ENDPOINTS.TEACHERS.LIST}?status=rejected`, { 
+export async function fetchRejectedTeachers(schoolId?: string): Promise<TeacherSummary[]> {
+  const res = await fetch(withSchoolFilter(`${API_ENDPOINTS.TEACHERS.LIST}?status=rejected`, schoolId), {
     ...createFetchOptions('GET'),
-    cache: 'no-store' 
+    cache: 'no-store'
   });
   if (!res.ok) throw new Error('Failed to fetch rejected teachers');
   const json = await res.json();
   return json.data?.teachers || [];
+}
+
+export async function assignTeacherSchool(id: string, schoolId: string | null) {
+  const res = await fetch(API_ENDPOINTS.TEACHERS.ASSIGN_SCHOOL(id), createFetchOptions('POST', { schoolId }));
+  if (!res.ok) throw new Error('Failed to update teacher school assignment');
+  return res.json();
 }
 
 export async function removeTeacher(id: string, reason?: string, notify = true) {
