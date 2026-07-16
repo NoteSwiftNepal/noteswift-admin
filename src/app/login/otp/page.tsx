@@ -3,11 +3,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookMarked, Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthCard } from "@/components/auth/AuthCard";
 import { useToast } from "@/hooks/use-toast";
 
 export default function OtpPage() {
@@ -141,44 +141,38 @@ export default function OtpPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-secondary p-4">
-      <Card className="w-full max-w-md shadow-2xl">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex items-center justify-center">
-                                       <img
-      src="/assets/logo.png"
-      alt="NoteSwift Logo"
-      className="h-16 w-16 object-contain"
-    />
+    <AuthCard
+      title="Enter Verification Code"
+      description="A 6-digit code has been sent to your registered mobile number."
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-1.5">
+          <Label htmlFor="otp">One-Time Code</Label>
+          <div className="relative">
+            <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              id="otp"
+              type="text"
+              inputMode="numeric"
+              placeholder="123456"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              required
+              maxLength={6}
+              autoFocus
+              className="h-12 rounded-lg pl-10 text-center text-lg font-semibold tracking-[0.3em]"
+            />
           </div>
-          <CardTitle className="text-3xl font-bold font-headline">Enter Verification Code</CardTitle>
-          <CardDescription>A 6-digit code has been sent to your registered mobile number.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="otp">One-Time Code</Label>
-              <Input
-                id="otp"
-                type="text"
-                placeholder="123456"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                required
-                maxLength={6}
-              />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full font-semibold text-base py-6" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Verify Code
-            </Button>
-            <Button type="button" variant="link" className="w-full" onClick={onResend} disabled={isResending}>
-              {isResending ? "Sending..." : "Didn't get a code? Resend"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </main>
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button type="submit" className="h-11 w-full rounded-lg font-medium" disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Verify Code
+        </Button>
+        <Button type="button" variant="link" className="w-full" onClick={onResend} disabled={isResending}>
+          {isResending ? "Sending..." : "Didn't get a code? Resend"}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

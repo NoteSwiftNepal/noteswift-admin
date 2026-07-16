@@ -3,11 +3,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookMarked, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Mail, Lock, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthCard } from "@/components/auth/AuthCard";
 import { useToast } from "@/hooks/use-toast";
 
 export default function LoginPage() {
@@ -140,103 +140,94 @@ export default function LoginPage() {
 
   if (needsPhoneSetup) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-secondary p-4">
-        <Card className="w-full max-w-md shadow-2xl">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold font-headline">Add Your Phone Number</CardTitle>
-            <CardDescription>
-              Your account doesn't have a phone number on file yet. We use it to send a login verification code.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePhoneSetupSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="phoneNumber">Phone Number</Label>
-                <Input
-                  id="phoneNumber"
-                  type="tel"
-                  placeholder="98XXXXXXXX"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" className="w-full font-semibold text-base py-6" disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save and Continue
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => { setNeedsPhoneSetup(false); setPhoneSetupToken(""); setError(""); }}
-              >
-                Back to Login
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </main>
+      <AuthCard
+        title="Add Your Phone Number"
+        description="Your account doesn't have a phone number on file yet. We use it to send a login verification code."
+      >
+        <form onSubmit={handlePhoneSetupSubmit} className="space-y-5">
+          <div className="space-y-1.5">
+            <Label htmlFor="phoneNumber">Phone Number</Label>
+            <div className="relative">
+              <Smartphone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                id="phoneNumber"
+                type="tel"
+                placeholder="98XXXXXXXX"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                required
+                autoFocus
+                className="h-11 rounded-lg pl-10"
+              />
+            </div>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" className="h-11 w-full rounded-lg font-medium" disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save and Continue
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 w-full rounded-lg"
+            onClick={() => { setNeedsPhoneSetup(false); setPhoneSetupToken(""); setError(""); }}
+          >
+            Back to Login
+          </Button>
+        </form>
+      </AuthCard>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-secondary p-4">
-      <Card className="w-full max-w-md shadow-2xl">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex items-center justify-center">
-                           <img
-      src="/assets/logo.png"
-      alt="NoteSwift Logo"
-      className="h-16 w-16 object-contain"
-    />
+    <AuthCard title="NoteSwift Admin" description="Enter your credentials to access the dashboard">
+      <form onSubmit={handleLogin} className="space-y-5">
+        <div className="space-y-1.5">
+          <Label htmlFor="username">Email address</Label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              id="username"
+              type="text"
+              placeholder="eg: admin@example.com"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              autoComplete="username"
+              className="h-11 rounded-lg pl-10"
+            />
           </div>
-          <CardTitle className="text-3xl font-bold font-headline">NoteSwift Admin</CardTitle>
-          <CardDescription>Enter your credentials to access the dashboard</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="username">Email address</Label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="eg: admin@example.com"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                autoComplete="username"
-              />
-            </div>
-            <div className="space-y-2 relative">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-9 text-muted-foreground"
-              >
-                {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
-              </button>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full font-semibold text-base py-6" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Log In
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </main>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Password</Label>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              className="h-11 rounded-lg pl-10 pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button type="submit" className="h-11 w-full rounded-lg font-medium" disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Log In
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

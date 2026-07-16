@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthCard } from "@/components/auth/AuthCard";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Shield, CheckCircle } from "lucide-react";
+import { Loader2, Shield, CheckCircle, User, Smartphone, Lock } from "lucide-react";
 
 export function AdminSignupForm() {
   const [name, setName] = useState("");
@@ -144,124 +144,122 @@ export function AdminSignupForm() {
 
   if (verifying) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p>Verifying invitation...</p>
-          </CardContent>
-        </Card>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+          <p className="text-sm text-gray-500">Verifying invitation...</p>
+        </div>
       </div>
     );
   }
 
   if (!invitationValid) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <Shield className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Invalid Invitation</h2>
-            <p className="text-muted-foreground mb-4">
-              This invitation link is invalid or has expired.
-            </p>
-            <Button onClick={() => router.push('/login')}>
-              Go to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthCard title="Invalid Invitation">
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+            <Shield className="h-6 w-6 text-red-500" />
+          </div>
+          <p className="mb-5 text-sm text-gray-500">
+            This invitation link is invalid or has expired.
+          </p>
+          <Button className="h-11 w-full rounded-lg font-medium" onClick={() => router.push('/login')}>
+            Go to Login
+          </Button>
+        </div>
+      </AuthCard>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-            <Shield className="h-6 w-6 text-blue-600" />
+    <AuthCard title="Welcome to NoteSwift Admin" description="Complete your account setup to join the admin team">
+      <div className="mb-5 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-green-800">
+        <CheckCircle className="h-4 w-4 shrink-0" />
+        <span className="text-sm font-medium">Invitation verified for {invitationEmail}</span>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-1.5">
+          <Label htmlFor="name">Full Name</Label>
+          <div className="relative">
+            <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              id="name"
+              type="text"
+              placeholder="Enter your full name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="h-11 rounded-lg pl-10"
+            />
           </div>
-          <CardTitle>Welcome to NoteSwift Admin</CardTitle>
-          <CardDescription>
-            Complete your account setup to join the admin team
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center gap-2 text-green-800">
-              <CheckCircle className="h-4 w-4" />
-              <span className="text-sm font-medium">Invitation verified for {invitationEmail}</span>
-            </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="phoneNumber">Phone Number</Label>
+          <div className="relative">
+            <Smartphone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              id="phoneNumber"
+              type="tel"
+              placeholder="98XXXXXXXX"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              required
+              className="h-11 rounded-lg pl-10"
+            />
           </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Used to send you a login verification code
+          </p>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Enter your full name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Password</Label>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              id="password"
+              type="password"
+              placeholder="Create a strong password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="h-11 rounded-lg pl-10"
+            />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            At least 10 characters, including letters and numbers
+          </p>
+        </div>
 
-            <div>
-              <Label htmlFor="phoneNumber">Phone Number</Label>
-              <Input
-                id="phoneNumber"
-                type="tel"
-                placeholder="98XXXXXXXX"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                required
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Used to send you a login verification code
-              </p>
-            </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="confirmPassword">Confirm Password</Label>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="Confirm your password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className="h-11 rounded-lg pl-10"
+            />
+          </div>
+        </div>
 
-            <div>
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Create a strong password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                At least 10 characters, including letters and numbers
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
-
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating Account...
-                </>
-              ) : (
-                "Complete Setup"
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+        <Button type="submit" className="h-11 w-full rounded-lg font-medium" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Creating Account...
+            </>
+          ) : (
+            "Complete Setup"
+          )}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }
