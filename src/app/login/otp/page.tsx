@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { useToast } from "@/hooks/use-toast";
 
+type LoginFlow = 'regular' | 'system_admin' | 'mobile_otp';
+
 export default function OtpPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -19,6 +21,8 @@ export default function OtpPage() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [flow, setFlow] = useState<LoginFlow>('regular');
 
   useEffect(() => {
     const isVerified = localStorage.getItem("isPasswordVerified");
@@ -26,16 +30,14 @@ export default function OtpPage() {
       router.replace("/login");
     }
 
-    // Get the email and password from localStorage
-    const storedEmail = localStorage.getItem("adminLoginEmail");
-    const storedPassword = localStorage.getItem("adminLoginPassword");
-    if (storedEmail) {
-      setEmail(storedEmail);
-    }
-    if (storedPassword) {
-      setPassword(storedPassword);
-    }
+    setFlow((localStorage.getItem('adminLoginFlow') as LoginFlow) || 'regular');
+    setEmail(localStorage.getItem("adminLoginEmail") || "");
+    setPassword(localStorage.getItem("adminLoginPassword") || "");
+    setPhone(localStorage.getItem("adminLoginPhone") || "");
   }, [router]);
+
+  const isMobileOtp = flow === 'mobile_otp';
+  const isSystemAdmin = flow === 'system_admin';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,15 +45,14 @@ export default function OtpPage() {
     setIsLoading(true);
 
     try {
-      // Call Express backend to verify OTP - endpoint depends on which login flow was used
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      const flow = localStorage.getItem('adminLoginFlow') || 'regular';
-      const isSystemAdmin = flow === 'system_admin';
 
-      const response = await fetch(
-        isSystemAdmin ? API_ENDPOINTS.ADMIN_AUTH.VERIFY_OTP : API_ENDPOINTS.AUTH.VERIFY_OTP,
-        createFetchOptions('POST', isSystemAdmin ? { email, otp } : { email, password, otp })
-      );
+      const response = isMobileOtp
+        ? await fetch(API_ENDPOINTS.AUTH.OTP_LOGIN_VERIFY, createFetchOptions('POST', { phone_number: phone, otp }))
+        : await fetch(
+            isSystemAdmin ? API_ENDPOINTS.ADMIN_AUTH.VERIFY_OTP : API_ENDPOINTS.AUTH.VERIFY_OTP,
+            createFetchOptions('POST', { email, otp })
+          );
 
       const data = await response.json();
 
@@ -71,13 +72,14 @@ export default function OtpPage() {
         localStorage.removeItem("isPasswordVerified");
         localStorage.removeItem("adminLoginEmail");
         localStorage.removeItem("adminLoginPassword");
+        localStorage.removeItem("adminLoginPhone");
         localStorage.removeItem("adminLoginFlow");
 
         toast({
           title: "Authentication Successful",
           description: "Redirecting to the dashboard.....!",
         });
-        
+
         // Use window.location.href for full page reload so middleware can see the cookie
         window.location.href = "/dashboard";
       } else {
@@ -103,20 +105,20 @@ export default function OtpPage() {
 
   const onResend = async () => {
     setIsResending(true);
-    
-    try {
-      // Call Express backend to resend OTP - endpoint depends on which login flow was used
-      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      const flow = localStorage.getItem('adminLoginFlow') || 'regular';
 
-      const response = await fetch(
-        flow === 'system_admin' ? API_ENDPOINTS.ADMIN_AUTH.LOGIN : API_ENDPOINTS.AUTH.LOGIN,
-        createFetchOptions('POST', { email, password })
-      );
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+
+      const response = isMobileOtp
+        ? await fetch(API_ENDPOINTS.AUTH.OTP_LOGIN_REQUEST, createFetchOptions('POST', { phone_number: phone }))
+        : await fetch(
+            isSystemAdmin ? API_ENDPOINTS.ADMIN_AUTH.LOGIN : API_ENDPOINTS.AUTH.LOGIN,
+            createFetchOptions('POST', { email, password })
+          );
 
       const data = await response.json();
 
-      if (response.ok && data.requiresOtp) {
+      if (response.ok && (data.requiresOtp || data.success)) {
         toast({
           title: "Code Resent",
           description: data.message || "A new one-time code has been sent.",
@@ -143,7 +145,7 @@ export default function OtpPage() {
   return (
     <AuthCard
       title="Enter Verification Code"
-      description="A 6-digit code has been sent to your registered mobile number."
+      description={isMobileOtp ? "A 6-digit code has been sent to your phone." : "A 6-digit code has been sent to your registered email address."}
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">

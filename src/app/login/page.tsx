@@ -10,17 +10,23 @@ import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { useToast } from "@/hooks/use-toast";
 
+type LoginMode = 'password' | 'mobile';
+
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [mode, setMode] = useState<LoginMode>('password');
+
+  // Email + password state
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Mobile number (passwordless OTP) state
+  const [phoneNumber, setPhoneNumber] = useState("");
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [needsPhoneSetup, setNeedsPhoneSetup] = useState(false);
-  const [phoneSetupToken, setPhoneSetupToken] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +37,7 @@ export default function LoginPage() {
       // Call Express backend for authentication
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
 
-      // Step 1: Authenticate with backend (validates credentials and sends OTP)
+      // Step 1: Authenticate with backend (validates credentials and sends an email OTP)
       // Try the regular admin endpoint first (super_admin, admin)
       let loginResponse = await fetch(
         API_ENDPOINTS.AUTH.LOGIN,
@@ -51,15 +57,9 @@ export default function LoginPage() {
         flow = 'system_admin';
       }
 
-      if (loginResponse.ok && loginData.needsPhoneSetup) {
-        setPhoneSetupToken(loginData.phoneSetupToken);
-        setNeedsPhoneSetup(true);
-        toast({
-          title: "Add your phone number",
-          description: loginData.message || "No phone number is on file for this account yet.",
-        });
-      } else if (loginResponse.ok && loginData.requiresOtp) {
+      if (loginResponse.ok && loginData.requiresOtp) {
         // Store email, password, and which flow to use for OTP verification
+        // (password is needed again for the "Resend code" button on the OTP screen)
         localStorage.setItem('adminLoginEmail', username);
         localStorage.setItem('adminLoginPassword', password);
         localStorage.setItem('adminLoginFlow', flow);
@@ -67,7 +67,7 @@ export default function LoginPage() {
 
         toast({
           title: "Code Sent",
-          description: loginData.message || "A one-time code has been sent to your registered mobile number.",
+          description: loginData.message || "A one-time code has been sent to your registered email address.",
         });
         router.push("/login/otp");
       } else if (loginResponse.ok && loginData.token) {
@@ -96,7 +96,7 @@ export default function LoginPage() {
     }
   };
 
-  const handlePhoneSetupSubmit = async (e: React.FormEvent) => {
+  const handleMobileOtpRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -109,26 +109,27 @@ export default function LoginPage() {
     try {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
       const response = await fetch(
-        API_ENDPOINTS.AUTH.SETUP_PHONE,
-        createFetchOptions('POST', { token: phoneSetupToken, phone_number: phoneNumber.trim() })
+        API_ENDPOINTS.AUTH.OTP_LOGIN_REQUEST,
+        createFetchOptions('POST', { phone_number: phoneNumber.trim() })
       );
       const data = await response.json();
 
       if (response.ok && data.success) {
+        localStorage.setItem('adminLoginPhone', phoneNumber.trim());
+        localStorage.setItem('adminLoginFlow', 'mobile_otp');
+        localStorage.setItem('isPasswordVerified', 'true');
+
         toast({
-          title: "Phone number saved",
-          description: "Please log in again to continue.",
+          title: "Code Sent",
+          description: data.message || "If this number is on file, a verification code has been sent.",
         });
-        setNeedsPhoneSetup(false);
-        setPhoneSetupToken("");
-        setPhoneNumber("");
-        setPassword("");
+        router.push("/login/otp");
       } else {
-        setError(data.error || "Failed to save phone number.");
+        setError(data.error || "Failed to send verification code.");
         toast({
           variant: "destructive",
           title: "Error",
-          description: data.error || "Failed to save phone number.",
+          description: data.error || "Failed to send verification code.",
         });
       }
     } catch (err) {
@@ -138,13 +139,75 @@ export default function LoginPage() {
     }
   };
 
-  if (needsPhoneSetup) {
-    return (
-      <AuthCard
-        title="Add Your Phone Number"
-        description="Your account doesn't have a phone number on file yet. We use it to send a login verification code."
-      >
-        <form onSubmit={handlePhoneSetupSubmit} className="space-y-5">
+  return (
+    <AuthCard title="NoteSwift Admin" description="Enter your credentials to access the dashboard">
+      <div className="mb-5 grid grid-cols-2 rounded-lg bg-gray-100 p-1 text-sm font-medium">
+        <button
+          type="button"
+          onClick={() => { setMode('password'); setError(""); }}
+          className={`rounded-md py-1.5 transition-colors ${mode === 'password' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Email &amp; Password
+        </button>
+        <button
+          type="button"
+          onClick={() => { setMode('mobile'); setError(""); }}
+          className={`rounded-md py-1.5 transition-colors ${mode === 'mobile' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Mobile Number
+        </button>
+      </div>
+
+      {mode === 'password' ? (
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div className="space-y-1.5">
+            <Label htmlFor="username">Email address</Label>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                id="username"
+                type="text"
+                placeholder="eg: admin@example.com"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                autoComplete="username"
+                className="h-11 rounded-lg pl-10"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="h-11 rounded-lg pl-10 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" className="h-11 w-full rounded-lg font-medium" disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Log In
+          </Button>
+        </form>
+      ) : (
+        <form onSubmit={handleMobileOtpRequest} className="space-y-5">
           <div className="space-y-1.5">
             <Label htmlFor="phoneNumber">Phone Number</Label>
             <div className="relative">
@@ -160,74 +223,15 @@ export default function LoginPage() {
                 className="h-11 rounded-lg pl-10"
               />
             </div>
+            <p className="text-xs text-gray-500">We'll text a one-time code to this number — no password needed.</p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className="h-11 w-full rounded-lg font-medium" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save and Continue
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-10 w-full rounded-lg"
-            onClick={() => { setNeedsPhoneSetup(false); setPhoneSetupToken(""); setError(""); }}
-          >
-            Back to Login
+            Send Code
           </Button>
         </form>
-      </AuthCard>
-    );
-  }
-
-  return (
-    <AuthCard title="NoteSwift Admin" description="Enter your credentials to access the dashboard">
-      <form onSubmit={handleLogin} className="space-y-5">
-        <div className="space-y-1.5">
-          <Label htmlFor="username">Email address</Label>
-          <div className="relative">
-            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input
-              id="username"
-              type="text"
-              placeholder="eg: admin@example.com"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoComplete="username"
-              className="h-11 rounded-lg pl-10"
-            />
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
-          <div className="relative">
-            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              className="h-11 rounded-lg pl-10 pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              tabIndex={-1}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-        </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="h-11 w-full rounded-lg font-medium" disabled={isLoading}>
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Log In
-        </Button>
-      </form>
+      )}
     </AuthCard>
   );
 }

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MyAccountSettings } from "@/components/admin/my-account-settings";
 import { PlatformSettings } from "@/components/admin/platform-settings";
 import { SecuritySettings } from "@/components/admin/security-settings";
 import { PaymentSettings } from "@/components/admin/payment-settings";
@@ -20,8 +21,9 @@ export default function SettingsPage() {
                   </div>
           <p className="text-gray-600 mt-2">Configure and manage your NoteSwift platform settings</p>
         </div>
-      <Tabs defaultValue="platform" className="w-full">
-        <TabsList className="grid w-full grid-cols-7">
+      <Tabs defaultValue="account" className="w-full">
+        <TabsList className="grid w-full grid-cols-8">
+          <TabsTrigger value="account">My Account</TabsTrigger>
           <TabsTrigger value="platform">Platform</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="payment">Payment</TabsTrigger>
@@ -30,6 +32,18 @@ export default function SettingsPage() {
           <TabsTrigger value="content">Content</TabsTrigger>
           <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="account">
+          <Card className="shadow-md mt-6">
+            <CardHeader>
+              <CardTitle>My Account</CardTitle>
+              <CardDescription>Update your own phone number, email address, and password.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MyAccountSettings />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="platform">
           <Card className="shadow-md mt-6">

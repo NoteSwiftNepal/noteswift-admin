@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 export interface AdminData {
   _id: string;
   email: string;
+  phone_number?: string | null;
   name: string;
   role: 'system_admin' | 'super_admin' | 'admin';
   isActive: boolean;

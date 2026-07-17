@@ -19,6 +19,15 @@ export const API_ENDPOINTS = {
     REFRESH: `${API_BASE_URL}/api/admin/auth/session/refresh`,
     LOGOUT: `${API_BASE_URL}/api/admin/auth/logout`,
     SETUP_PHONE: `${API_BASE_URL}/api/admin/auth/setup-phone`,
+    // Passwordless mobile-number + OTP login — unified across system_admin
+    // and regular admins, so this single pair serves both login portals.
+    OTP_LOGIN_REQUEST: `${API_BASE_URL}/api/admin/auth/otp-login/request`,
+    OTP_LOGIN_VERIFY: `${API_BASE_URL}/api/admin/auth/otp-login/verify`,
+    // Self-service Account Settings — same pair of routes for every admin
+    // role, unified under the regular /auth prefix.
+    UPDATE_PHONE: `${API_BASE_URL}/api/admin/auth/profile/phone`,
+    UPDATE_EMAIL: `${API_BASE_URL}/api/admin/auth/profile/email`,
+    UPDATE_PASSWORD: `${API_BASE_URL}/api/admin/auth/profile/password`,
   },
 
   // ==================== ADMIN AUTH (System Admin) ====================
