@@ -229,9 +229,25 @@ export default function UsersPage() {
         const studentsData = await studentsRes.json();
         // Calculate real enrollment count for each student
         const studentsWithRealEnrollments = (studentsData.students || []).map((student: Student) => {
-          const studentEnrollments = enrollmentsData.filter(
+          const rawStudentEnrollments = enrollmentsData.filter(
             (enrollment: any) => enrollment.studentId === student._id
           );
+
+          // A single course enrollment can appear twice in the combined
+          // enrollments list — once as the regular CourseEnrollment record
+          // and once as the access-code usage record redeeming it — since
+          // redeeming a code always creates its own CourseEnrollment too.
+          // Dedupe by courseId, keeping the entry that isn't 'access_code'
+          // when both exist since it carries the real progress value.
+          const enrollmentsByCourseId = new Map<string, any>();
+          for (const enrollment of rawStudentEnrollments) {
+            const existing = enrollmentsByCourseId.get(enrollment.courseId);
+            if (!existing || existing.enrollmentType === 'access_code') {
+              enrollmentsByCourseId.set(enrollment.courseId, enrollment);
+            }
+          }
+          const studentEnrollments = Array.from(enrollmentsByCourseId.values());
+
           return {
             ...student,
             realEnrolledCoursesCount: studentEnrollments.length,
@@ -508,19 +524,12 @@ export default function UsersPage() {
                               <TableCell>
                                 <div className="flex items-center gap-3">
                                   <div className="h-10 w-10 rounded-full overflow-hidden flex items-center justify-center">
-                                    {student.profileImage ? (
-                                      <img
-                                        src={student.profileImage}
-                                        alt={student.full_name}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="h-full w-full bg-primary/10 flex items-center justify-center">
-                                        <span className="text-sm font-semibold text-primary">
-                                          {student.avatarEmoji || student.full_name?.charAt(0)?.toUpperCase() || student.email?.charAt(0)?.toUpperCase() || '?'}
-                                        </span>
-                                      </div>
-                                    )}
+                                    <img
+                                      src={student.profileImage || '/assets/default-avatar.svg'}
+                                      alt={student.full_name}
+                                      className="h-full w-full object-cover"
+                                      onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/default-avatar.svg'; }}
+                                    />
                                   </div>
                                   <div>
                                     <div className="font-medium">{student.full_name}</div>
@@ -570,19 +579,12 @@ export default function UsersPage() {
                                         {/* Profile Header */}
                                         <div className="flex items-center gap-4">
                                           <div className="h-16 w-16 rounded-full overflow-hidden flex items-center justify-center">
-                                            {selectedUser.profileImage ? (
-                                              <img
-                                                src={selectedUser.profileImage}
-                                                alt={selectedUser.full_name}
-                                                className="h-full w-full object-cover"
-                                              />
-                                            ) : (
-                                              <div className="h-full w-full bg-primary/10 flex items-center justify-center">
-                                                <span className="text-2xl font-semibold text-primary">
-                                                  {selectedUser.avatarEmoji || selectedUser.full_name.charAt(0).toUpperCase()}
-                                                </span>
-                                              </div>
-                                            )}
+                                            <img
+                                              src={selectedUser.profileImage || '/assets/default-avatar.svg'}
+                                              alt={selectedUser.full_name}
+                                              className="h-full w-full object-cover"
+                                              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/default-avatar.svg'; }}
+                                            />
                                           </div>
                                           <div>
                                             <h3 className="text-xl font-semibold">{selectedUser.full_name}</h3>
@@ -839,19 +841,12 @@ export default function UsersPage() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-full overflow-hidden flex items-center justify-center">
-                              {teacher.profileImage ? (
-                                <img
-                                  src={teacher.profileImage}
-                                  alt={teacher.full_name}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="h-full w-full bg-primary/10 flex items-center justify-center">
-                                  <span className="text-sm font-semibold text-primary">
-                                    {(teacher.full_name?.charAt(0) || teacher.email?.charAt(0) || '?').toUpperCase()}
-                                  </span>
-                                </div>
-                              )}
+                              <img
+                                src={teacher.profileImage || '/assets/default-avatar.svg'}
+                                alt={teacher.full_name}
+                                className="h-full w-full object-cover"
+                                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/default-avatar.svg'; }}
+                              />
                             </div>
                             <div>
                               <div className="font-medium">{teacher.full_name}</div>
@@ -910,19 +905,12 @@ export default function UsersPage() {
                                   {/* Profile Header */}
                                   <div className="flex items-center gap-4">
                                     <div className="h-16 w-16 rounded-full overflow-hidden flex items-center justify-center">
-                                      {selectedUser.profileImage || (selectedUser as any).profilePhoto ? (
-                                        <img
-                                          src={selectedUser.profileImage || (selectedUser as any).profilePhoto}
-                                          alt={selectedUser.fullName || selectedUser.firstName || 'Teacher'}
-                                          className="h-full w-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="h-full w-full bg-primary/10 flex items-center justify-center">
-                                          <span className="text-2xl font-semibold text-primary">
-                                            {(selectedUser.fullName?.charAt(0) || selectedUser.firstName?.charAt(0) || selectedUser.email?.charAt(0) || '?').toUpperCase()}
-                                          </span>
-                                        </div>
-                                      )}
+                                      <img
+                                        src={selectedUser.profileImage || (selectedUser as any).profilePhoto || '/assets/default-avatar.svg'}
+                                        alt={selectedUser.fullName || selectedUser.firstName || 'Teacher'}
+                                        className="h-full w-full object-cover"
+                                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/default-avatar.svg'; }}
+                                      />
                                     </div>
                                     <div>
                                       
