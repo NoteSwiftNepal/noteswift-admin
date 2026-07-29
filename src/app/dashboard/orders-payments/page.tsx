@@ -6,36 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Download, Eye, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddOfflineSaleDialog } from "@/components/orders/AddOfflineSaleDialog";
 import { CodeGeneratedDialog } from "@/components/orders/CodeGeneratedDialog";
 import { BulkCodeGenerationDialog } from "@/components/orders/BulkCodeGenerationDialog";
-
-const exportBulkToCSV = (bulk: any, courseMap: Record<string, string>) => {
-  const csvContent = `Organization,${bulk.organizationName}\nCourse,${courseMap[bulk.courseId] || bulk.courseId}\nGenerated On,${new Date(bulk.createdAt).toLocaleDateString()}\nNumber of Codes,${bulk.numberOfCodes}\nNotes,${bulk.notes || ''}\n\nCode\n${bulk.codes.join('\n')}`;
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = `bulk-codes-${bulk.organizationName}-${new Date(bulk.createdAt).toISOString().split('T')[0]}.csv`;
-  link.click();
-};
-
-const exportBulkCodesToCSV = (bulkCodes: any[], courseMap: Record<string, string>) => {
-  if (bulkCodes.length === 0) return;
-
-  let csvContent = 'Organization,Course,Generated On,Number of Codes,Notes,Codes\n';
-  bulkCodes.forEach(bulk => {
-    const codesStr = bulk.codes.join('; ');
-    csvContent += `"${bulk.organizationName}","${courseMap[bulk.courseId] || bulk.courseId}","${new Date(bulk.createdAt).toLocaleDateString()}",${bulk.numberOfCodes},"${bulk.notes || ''}","${codesStr}"\n`;
-  });
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = `all-bulk-codes-${new Date().toISOString().split('T')[0]}.csv`;
-  link.click();
-};
+import { exportCodesListToPDF } from "@/lib/pdf-utils";
 
 export default function OrdersPaymentsPage() {
   const { toast } = useToast();
@@ -53,13 +31,105 @@ export default function OrdersPaymentsPage() {
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
-  const [bulkCodes, setBulkCodes] = useState<any[]>([]);
+
+  // School-wise bulk code history — persisted server-side and fetched per
+  // selected school on demand, unlike the old approach of only holding
+  // this session's just-generated batches in local state (lost on reload).
+  const [historySchools, setHistorySchools] = useState<{ _id: string; name: string; shortCode: string }[]>([]);
+  const [selectedHistorySchoolId, setSelectedHistorySchoolId] = useState('');
+  const [schoolCodes, setSchoolCodes] = useState<any[]>([]);
+  const [schoolCodesLoading, setSchoolCodesLoading] = useState(false);
+  const [selectedCodeIds, setSelectedCodeIds] = useState<Set<string>>(new Set());
+  const [selectQuantity, setSelectQuantity] = useState('');
+  const [pdfExporting, setPdfExporting] = useState(false);
 
   useEffect(() => {
     fetchAdmins();
     fetchTransactions();
     fetchCourses();
+    fetchHistorySchools();
   }, []);
+
+  useEffect(() => {
+    setSelectedCodeIds(new Set());
+    setSelectQuantity('');
+    if (selectedHistorySchoolId) {
+      fetchSchoolCodes(selectedHistorySchoolId);
+    } else {
+      setSchoolCodes([]);
+    }
+  }, [selectedHistorySchoolId]);
+
+  const fetchHistorySchools = async () => {
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(API_ENDPOINTS.SCHOOLS.DROPDOWN, createFetchOptions('GET'));
+      const data = await response.json();
+      setHistorySchools(data.data?.schools || []);
+    } catch (error) {
+      console.error('Failed to fetch schools:', error);
+    }
+  };
+
+  const fetchSchoolCodes = async (schoolId: string) => {
+    try {
+      setSchoolCodesLoading(true);
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      // listUnlockCodes caps each page at 100, and a single bulk-generation
+      // batch can be up to 1000 codes — so "history" and "Export All" must
+      // page through every result, not just the first 100.
+      let page = 1;
+      let allCodes: any[] = [];
+      let totalPages = 1;
+      do {
+        const response = await fetch(
+          `${API_ENDPOINTS.ORDERS_PAYMENTS.CODES.LIST}?schoolId=${schoolId}&limit=100&page=${page}&sortBy=createdAt&order=desc`,
+          createFetchOptions('GET')
+        );
+        const data = await response.json();
+        if (!data.success) break;
+        allCodes = allCodes.concat(data.data);
+        totalPages = data.pagination?.pages || 1;
+        page++;
+      } while (page <= totalPages);
+      setSchoolCodes(allCodes);
+    } catch (error) {
+      console.error('Failed to fetch school codes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load codes for this school",
+        variant: "destructive",
+      });
+    } finally {
+      setSchoolCodesLoading(false);
+    }
+  };
+
+  const toggleSelectCode = (id: string) => {
+    setSelectedCodeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Only unused codes are ever exportable, so "select all" only selects those
+  // — selecting a used code would just be silently dropped at export time.
+  const toggleSelectAll = () => {
+    const unusedIds = schoolCodes.filter((c: any) => !c.isUsed).map((c: any) => c._id);
+    setSelectedCodeIds(prev =>
+      prev.size === unusedIds.length ? new Set() : new Set(unusedIds)
+    );
+  };
+
+  // Quick-select the first N unused codes, so an admin can grab e.g. "30
+  // codes to hand out" without checking each row individually.
+  const handleSelectQuantity = () => {
+    const qty = parseInt(selectQuantity, 10);
+    if (!qty || qty < 1) return;
+    const unusedIds = schoolCodes.filter((c: any) => !c.isUsed).map((c: any) => c._id);
+    setSelectedCodeIds(new Set(unusedIds.slice(0, qty)));
+  };
 
   const fetchTransactions = async () => {
     try {
@@ -191,23 +261,18 @@ export default function OrdersPaymentsPage() {
       const data = await response.json();
 
       if (data.success) {
-        setBulkCodes(prev => [...prev, {
-          id: Date.now(), // temporary id
-          organizationName: formData.organizationName,
-          courseId: formData.course,
-          numberOfCodes: parseInt(formData.numberOfCodes),
-          paymentMethod: formData.paymentMethod,
-          amount: formData.amount,
-          codes: data.data.codes,
-          createdAt: new Date().toISOString(),
-          notes: formData.notes,
-        }]);
         toast({
           title: "Success",
           description: `Generated ${formData.numberOfCodes} codes for ${formData.organizationName}`,
         });
         setIsBulkDialogOpen(false);
         fetchCodes(); // refresh the codes list
+        // If generated for a school, jump the history view to that school so
+        // the new codes are immediately visible in the persisted list.
+        if (formData.schoolId) {
+          setSelectedHistorySchoolId(formData.schoolId);
+          fetchSchoolCodes(formData.schoolId);
+        }
       } else {
         toast({
           title: "Error",
@@ -525,8 +590,12 @@ export default function OrdersPaymentsPage() {
         {activeTab === 'bulk-codes' && (
           <Card>
             <CardHeader>
-              <CardTitle>Bulk Generated Codes</CardTitle>
-              <CardDescription>Organization bulk code generations and their details</CardDescription>
+              <CardTitle>Bulk Codes — School History</CardTitle>
+              <CardDescription>
+                School-linked bulk codes, kept here permanently (separate from the Unlock Codes tab's normal codes).
+                Each code is one-time-use; a used school code is automatically removed 24 hours after redemption —
+                unused codes stay listed indefinitely.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 mb-4">
@@ -534,43 +603,149 @@ export default function OrdersPaymentsPage() {
                   <Plus className="w-4 h-4 mr-2" />
                   Generate Bulk Codes
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => exportBulkCodesToCSV(bulkCodes, courseMap)}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export All
-                </Button>
+                <div className="w-64">
+                  <Select value={selectedHistorySchoolId} onValueChange={setSelectedHistorySchoolId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a school to view its codes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {historySchools.map((school) => (
+                        <SelectItem key={school._id} value={school._id}>
+                          {school.name} ({school.shortCode})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {schoolCodes.length > 0 && (
+                  <>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="Qty"
+                      value={selectQuantity}
+                      onChange={(e) => setSelectQuantity(e.target.value)}
+                      className="w-20"
+                    />
+                    <Button variant="outline" size="sm" onClick={handleSelectQuantity}>
+                      Select N Unused
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={selectedCodeIds.size === 0 || pdfExporting}
+                      onClick={async () => {
+                        setPdfExporting(true);
+                        try {
+                          await exportCodesListToPDF(
+                            schoolCodes.filter((c: any) => selectedCodeIds.has(c._id)),
+                            historySchools.find(s => s._id === selectedHistorySchoolId)?.name || 'School',
+                            courseMap
+                          );
+                        } finally {
+                          setPdfExporting(false);
+                        }
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {pdfExporting ? 'Exporting...' : `Export Selected (${selectedCodeIds.size})`}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pdfExporting}
+                      onClick={async () => {
+                        setPdfExporting(true);
+                        try {
+                          await exportCodesListToPDF(
+                            schoolCodes,
+                            historySchools.find(s => s._id === selectedHistorySchoolId)?.name || 'School',
+                            courseMap
+                          );
+                        } finally {
+                          setPdfExporting(false);
+                        }
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {pdfExporting ? 'Exporting...' : 'Export All'}
+                    </Button>
+                  </>
+                )}
               </div>
-              {bulkCodes.length === 0 ? (
+
+              {!selectedHistorySchoolId ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No bulk code generations found
+                  Select a school above to see its bulk code history
+                </div>
+              ) : schoolCodesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+                  Loading codes...
+                </div>
+              ) : schoolCodes.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No bulk codes generated for this school yet
                 </div>
               ) : (
-                bulkCodes.map((bulk: any) => (
-                  <Card key={bulk.id} className="mb-4">
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">{bulk.organizationName}</CardTitle>
-                          <CardDescription>
-                            {courseMap[bulk.courseId] || bulk.courseId} • {bulk.numberOfCodes} codes • {bulk.paymentMethod} • Rs. {bulk.amount} • Generated on {new Date(bulk.createdAt).toLocaleDateString()}
-                          </CardDescription>
-                          {bulk.notes && <p className="text-sm text-muted-foreground mt-1">{bulk.notes}</p>}
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => exportBulkToCSV(bulk, courseMap)}>
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {bulk.codes.map((code: string, index: number) => (
-                          <div key={index} className="font-mono text-sm bg-gray-50 p-2 rounded border">
-                            {code}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={
+                            selectedCodeIds.size > 0 &&
+                            selectedCodeIds.size === schoolCodes.filter((c: any) => !c.isUsed).length
+                          }
+                          onCheckedChange={toggleSelectAll}
+                        />
+                      </TableHead>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Course</TableHead>
+                      <TableHead>Generated</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Used By</TableHead>
+                      <TableHead>Used On</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {schoolCodes.map((code: any) => (
+                      <TableRow key={code._id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedCodeIds.has(code._id)}
+                            disabled={code.isUsed}
+                            onCheckedChange={() => toggleSelectCode(code._id)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono font-bold text-blue-600">
+                          {code.code || '***'}
+                        </TableCell>
+                        <TableCell>
+                          {courseMap[code.courseId] || code.courseId}
+                        </TableCell>
+                        <TableCell>
+                          {code.createdAt ? new Date(code.createdAt).toLocaleDateString() : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={code.isUsed ? "secondary" : "default"}>
+                            {code.isUsed ? "Used" : "Unused"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {code.usedByStudent
+                            ? (code.usedByStudent.email
+                                ? `${code.usedByStudent.full_name} (${code.usedByStudent.email})`
+                                : code.usedByStudent.full_name)
+                            : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          {code.usedTimestamp ? new Date(code.usedTimestamp).toLocaleString() : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>

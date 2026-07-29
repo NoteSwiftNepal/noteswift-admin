@@ -51,6 +51,8 @@
     "genkit": "^1.13.0",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.475.0",
     "mongoose": "^8.16.1",
     "next": "15.3.3",
