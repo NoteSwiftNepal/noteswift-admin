@@ -44,16 +44,19 @@ async function loadImageAsDataUrl(path: string): Promise<string | null> {
 // block, then a Roll No / Code / Student Name / Payment / Remarks table) —
 // the printable sheet an admin hands to a school to fill in by hand as
 // they distribute codes.
+// Returns the number of codes actually written to the PDF (0 if every code
+// passed in was already used) so the caller can tell the admin nothing was
+// exported instead of a click silently doing nothing.
 export async function exportCodesListToPDF(
   allCodes: RosterCode[],
   schoolName: string,
   courseMap: Record<string, string>
-): Promise<void> {
-  // A used code is one-time-use and about to be auto-deleted (or already
-  // gone) — handing it out on a printed roster would just be a dead code,
-  // so only unused codes ever make it into the export.
+): Promise<number> {
+  // A used code is one-time-use and already redeemed — handing it out on a
+  // printed roster would just be a dead code, so only unused codes ever
+  // make it into the export.
   const codes = allCodes.filter(c => !c.isUsed);
-  if (codes.length === 0) return;
+  if (codes.length === 0) return 0;
 
   const courseIds = Array.from(new Set(codes.map(c => c.courseId)));
   const courseLabel = courseIds.length === 1
@@ -152,4 +155,5 @@ export async function exportCodesListToPDF(
 
   const safeSchoolName = schoolName.replace(/[^a-z0-9]+/gi, '-');
   pdf.save(`${safeSchoolName}-codes-${new Date().toISOString().split('T')[0]}.pdf`);
+  return codes.length;
 }

@@ -8,10 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Download, Eye, Receipt } from "lucide-react";
+import { Search, Download, Eye, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddOfflineSaleDialog } from "@/components/orders/AddOfflineSaleDialog";
 import { CodeGeneratedDialog } from "@/components/orders/CodeGeneratedDialog";
+import { CodeDialog } from "@/components/orders/CodeDialog";
 import { BulkCodeGenerationDialog } from "@/components/orders/BulkCodeGenerationDialog";
 import { exportCodesListToPDF } from "@/lib/pdf-utils";
 
@@ -20,6 +21,9 @@ export default function OrdersPaymentsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [codes, setCodes] = useState([]);
+  const [codeSearchQuery, setCodeSearchQuery] = useState('');
+  const [isCodeDetailOpen, setIsCodeDetailOpen] = useState(false);
+  const [selectedCodeDetail, setSelectedCodeDetail] = useState<any>(null);
   const [courses, setCourses] = useState([]);
   const [adminMap, setAdminMap] = useState<Record<string, { email: string; role: string }>>({});
   const [courseMap, setCourseMap] = useState<Record<string, string>>({});
@@ -40,7 +44,6 @@ export default function OrdersPaymentsPage() {
   const [schoolCodes, setSchoolCodes] = useState<any[]>([]);
   const [schoolCodesLoading, setSchoolCodesLoading] = useState(false);
   const [selectedCodeIds, setSelectedCodeIds] = useState<Set<string>>(new Set());
-  const [selectQuantity, setSelectQuantity] = useState('');
   const [pdfExporting, setPdfExporting] = useState(false);
 
   useEffect(() => {
@@ -52,7 +55,6 @@ export default function OrdersPaymentsPage() {
 
   useEffect(() => {
     setSelectedCodeIds(new Set());
-    setSelectQuantity('');
     if (selectedHistorySchoolId) {
       fetchSchoolCodes(selectedHistorySchoolId);
     } else {
@@ -122,15 +124,6 @@ export default function OrdersPaymentsPage() {
     );
   };
 
-  // Quick-select the first N unused codes, so an admin can grab e.g. "30
-  // codes to hand out" without checking each row individually.
-  const handleSelectQuantity = () => {
-    const qty = parseInt(selectQuantity, 10);
-    if (!qty || qty < 1) return;
-    const unusedIds = schoolCodes.filter((c: any) => !c.isUsed).map((c: any) => c._id);
-    setSelectedCodeIds(new Set(unusedIds.slice(0, qty)));
-  };
-
   const fetchTransactions = async () => {
     try {
       setTransactionsLoading(true);
@@ -186,14 +179,18 @@ export default function OrdersPaymentsPage() {
     }
   };
 
-  const fetchCodes = async () => {
-    if (codes.length > 0) return;
-
+  // Shared by both the plain tab-open load and an active search — a search
+  // must query the whole collection server-side (not just filter whatever's
+  // already loaded), so a match can surface a code outside the normal
+  // latest-50 window.
+  const runCodesQuery = async (search?: string) => {
     try {
       setCodesLoading(true);
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const params = new URLSearchParams({ limit: '50', sortBy: 'createdAt', order: 'desc' });
+      if (search) params.set('search', search);
       const response = await fetch(
-        `${API_ENDPOINTS.ORDERS_PAYMENTS.CODES.LIST}?limit=50&sortBy=createdAt&order=desc`,
+        `${API_ENDPOINTS.ORDERS_PAYMENTS.CODES.LIST}?${params.toString()}`,
         createFetchOptions('GET')
       );
       const data = await response.json();
@@ -213,6 +210,15 @@ export default function OrdersPaymentsPage() {
     } finally {
       setCodesLoading(false);
     }
+  };
+
+  const fetchCodes = async () => {
+    if (codes.length > 0) return;
+    await runCodesQuery();
+  };
+
+  const searchCodes = async (query: string) => {
+    await runCodesQuery(query.trim() || undefined);
   };
 
   const fetchAdmins = async () => {
@@ -386,6 +392,14 @@ export default function OrdersPaymentsPage() {
           onOpenChange={setIsCodeDialogOpen}
           code={generatedCode}
         />
+        <CodeDialog
+          open={isCodeDetailOpen}
+          onOpenChange={setIsCodeDetailOpen}
+          code={selectedCodeDetail}
+          loading={false}
+          courseMap={courseMap}
+          formatIssuerInfo={formatIssuerInfo}
+        />
       </div>
 
       <div className="grid gap-6">
@@ -503,8 +517,14 @@ export default function OrdersPaymentsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 mb-4">
-                <Input placeholder="Search codes..." className="max-w-sm" />
-                <Button variant="outline" size="sm">
+                <Input
+                  placeholder="Search by code, course, school, issued to, issued by, status, used by..."
+                  className="max-w-sm"
+                  value={codeSearchQuery}
+                  onChange={(e) => setCodeSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') searchCodes(codeSearchQuery); }}
+                />
+                <Button variant="outline" size="sm" onClick={() => searchCodes(codeSearchQuery)}>
                   <Search className="w-4 h-4" />
                 </Button>
                 <Button variant="outline" size="sm">
@@ -520,7 +540,7 @@ export default function OrdersPaymentsPage() {
                     <TableHead>Issued To</TableHead>
                     <TableHead>Issued By</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Expires</TableHead>
+                    <TableHead>Used By</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -541,44 +561,66 @@ export default function OrdersPaymentsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    codes.map((code: any) => (
-                      <TableRow key={code._id}>
-                        <TableCell className="font-mono font-bold text-blue-600">
-                          {code.code || '***'}
-                        </TableCell>
-                        <TableCell>
-                          {courseMap[code.courseId]
-                            ? `${courseMap[code.courseId]} (${code.courseId})`
-                            : code.courseId}
-                        </TableCell>
-                        <TableCell>
-                          {code.schoolId?.shortCode ? (
-                            <Badge variant="outline" className="font-mono">{code.schoolId.shortCode}</Badge>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>{code.issuedTo}</TableCell>
-                        <TableCell>
-                          {code.issuedByAdminId && code.issuedByRole
-                            ? formatIssuerInfo(code.issuedByAdminId, code.issuedByRole)
-                            : 'Unknown'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={code.isUsed ? "secondary" : "default"}>
-                            {code.isUsed ? "Used" : "Unused"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {code.expiresOn ? new Date(code.expiresOn).toLocaleDateString() : 'N/A'}
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    codes.map((code: any) => {
+                      const courseLabel = courseMap[code.courseId]
+                        ? `${courseMap[code.courseId]} (${code.courseId})`
+                        : code.courseId;
+                      const issuerLabel = code.issuedByAdminId && code.issuedByRole
+                        ? formatIssuerInfo(code.issuedByAdminId, code.issuedByRole)
+                        : 'Unknown';
+                      const usedByLabel = code.usedByStudent
+                        ? (code.usedByStudent.email
+                            ? `${code.usedByStudent.full_name} (${code.usedByStudent.email})`
+                            : code.usedByStudent.full_name)
+                        : null;
+                      return (
+                        <TableRow key={code._id}>
+                          <TableCell className="font-mono font-bold text-blue-600">
+                            {code.code || '***'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="max-w-[220px] truncate" title={courseLabel}>{courseLabel}</div>
+                          </TableCell>
+                          <TableCell>
+                            {code.schoolId?.shortCode ? (
+                              <Badge variant="outline" className="font-mono">{code.schoolId.shortCode}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="max-w-[140px] truncate" title={code.issuedTo}>{code.issuedTo}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="max-w-[180px] truncate" title={issuerLabel}>{issuerLabel}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={code.isUsed ? "secondary" : "default"}>
+                              {code.isUsed ? "Used" : "Unused"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {usedByLabel ? (
+                              <div className="max-w-[180px] truncate" title={usedByLabel}>{usedByLabel}</div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCodeDetail(code);
+                                setIsCodeDetailOpen(true);
+                              }}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -593,16 +635,11 @@ export default function OrdersPaymentsPage() {
               <CardTitle>Bulk Codes — School History</CardTitle>
               <CardDescription>
                 School-linked bulk codes, kept here permanently (separate from the Unlock Codes tab's normal codes).
-                Each code is one-time-use; a used school code is automatically removed 24 hours after redemption —
-                unused codes stay listed indefinitely.
+                Each code is one-time-use; both used and unused codes stay listed here indefinitely.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 mb-4">
-                <Button variant="outline" size="sm" onClick={() => setIsBulkDialogOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Generate Bulk Codes
-                </Button>
                 <div className="w-64">
                   <Select value={selectedHistorySchoolId} onValueChange={setSelectedHistorySchoolId}>
                     <SelectTrigger>
@@ -619,17 +656,6 @@ export default function OrdersPaymentsPage() {
                 </div>
                 {schoolCodes.length > 0 && (
                   <>
-                    <Input
-                      type="number"
-                      min={1}
-                      placeholder="Qty"
-                      value={selectQuantity}
-                      onChange={(e) => setSelectQuantity(e.target.value)}
-                      className="w-20"
-                    />
-                    <Button variant="outline" size="sm" onClick={handleSelectQuantity}>
-                      Select N Unused
-                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -637,11 +663,18 @@ export default function OrdersPaymentsPage() {
                       onClick={async () => {
                         setPdfExporting(true);
                         try {
-                          await exportCodesListToPDF(
+                          const exportedCount = await exportCodesListToPDF(
                             schoolCodes.filter((c: any) => selectedCodeIds.has(c._id)),
                             historySchools.find(s => s._id === selectedHistorySchoolId)?.name || 'School',
                             courseMap
                           );
+                          if (exportedCount === 0) {
+                            toast({
+                              title: "Nothing to export",
+                              description: "All selected codes have already been used.",
+                              variant: "destructive",
+                            });
+                          }
                         } finally {
                           setPdfExporting(false);
                         }
@@ -657,11 +690,18 @@ export default function OrdersPaymentsPage() {
                       onClick={async () => {
                         setPdfExporting(true);
                         try {
-                          await exportCodesListToPDF(
+                          const exportedCount = await exportCodesListToPDF(
                             schoolCodes,
                             historySchools.find(s => s._id === selectedHistorySchoolId)?.name || 'School',
                             courseMap
                           );
+                          if (exportedCount === 0) {
+                            toast({
+                              title: "Nothing to export",
+                              description: "All codes for this school have already been used.",
+                              variant: "destructive",
+                            });
+                          }
                         } finally {
                           setPdfExporting(false);
                         }
