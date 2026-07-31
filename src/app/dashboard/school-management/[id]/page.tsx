@@ -13,13 +13,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { School, ArrowLeft, UserPlus, Ban, Pencil } from "lucide-react";
+import { School, ArrowLeft, UserPlus, Ban, Pencil, ExternalLink } from "lucide-react";
 import { AdminList } from "@/components/admin/admin-list";
 import { InviteAdmin } from "@/components/admin/invite-admin";
 import { SchoolTeachersList } from "@/components/schools/school-teachers-list";
 import { SchoolStudentsList } from "@/components/schools/school-students-list";
 import { SchoolFormDialog } from "@/components/schools/school-form-dialog";
+import { SchoolPrincipalPanel } from "@/components/schools/school-principal-panel";
 import { useAdmin } from "@/context/admin-context";
+import { viewSchoolDashboard } from "@/lib/view-school-dashboard";
+import { useToast } from "@/hooks/use-toast";
 
 interface SchoolDetail {
   _id: string;
@@ -37,11 +40,24 @@ export default function SchoolDetailPage() {
   const schoolId = params.id as string;
   const { isSystemAdmin, isSuperAdmin } = useAdmin();
   const canManageSchools = isSystemAdmin || isSuperAdmin;
+  const { toast } = useToast();
 
   const [school, setSchool] = useState<SchoolDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  const handleViewDashboard = async () => {
+    try {
+      await viewSchoolDashboard(schoolId);
+    } catch (error) {
+      toast({
+        title: "Can't open dashboard",
+        description: error instanceof Error ? error.message : "Unexpected error.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchSchool = useCallback(async () => {
     try {
@@ -117,6 +133,12 @@ export default function SchoolDetailPage() {
           </div>
           {canManageSchools && (
             <div className="flex items-center gap-2">
+              {school.isActive && (
+                <Button variant="outline" onClick={handleViewDashboard}>
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  View Dashboard
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setEditOpen(true)}>
                 <Pencil className="h-4 w-4 mr-1" />
                 Edit School
@@ -133,12 +155,17 @@ export default function SchoolDetailPage() {
         <p className="text-gray-600 mt-2">{school.address || "No address on file"}</p>
       </div>
 
-      <Tabs defaultValue="admins" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs defaultValue="principal" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="principal">Principal</TabsTrigger>
           <TabsTrigger value="admins">Admins</TabsTrigger>
           <TabsTrigger value="teachers">Teachers</TabsTrigger>
           <TabsTrigger value="students">Students</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="principal">
+          <SchoolPrincipalPanel schoolId={schoolId} schoolName={school.name} canManage={canManageSchools} />
+        </TabsContent>
 
         <TabsContent value="admins">
           <Card className="shadow-md mt-6">

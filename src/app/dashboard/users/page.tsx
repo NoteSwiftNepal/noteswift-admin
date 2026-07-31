@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { MoreHorizontal, Search, Filter, ChevronDown, ChevronRight, Eye, Mail, Calendar, MapPin, BookOpen, TrendingUp, Users } from "lucide-react";
+import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2 } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -39,14 +39,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useToast } from "@/hooks/use-toast";
 
 // Types
+type StudentStatus = 'enrolled' | 'not_enrolled' | 'free_trial' | 'trial_ended' | 'blocked';
+
 interface Student {
   _id: string;
   id: string;
   full_name: string;
   email: string;
+  phone_number?: string | null;
   grade: number;
   address: {
     institution: string;
@@ -56,10 +59,21 @@ interface Student {
   avatarEmoji: string;
   profileImage: string | null;
   enrolledCourses: string[];
+  isBanned?: boolean;
+  status?: StudentStatus;
   realEnrolledCoursesCount?: number;
   realEnrollments?: any[];
   lastLogin: string;
   createdAt: string;
+}
+
+interface StudentStats {
+  total: number;
+  enrolled: number;
+  free_trial: number;
+  trial_ended: number;
+  not_enrolled: number;
+  blocked: number;
 }
 
 interface Teacher {
@@ -80,6 +94,7 @@ interface UserDetails {
   id: string;
   full_name: string;
   email: string;
+  phone_number?: string | null;
   grade: number;
   address: {
     institution: string;
@@ -87,6 +102,7 @@ interface UserDetails {
     province: string;
   };
   profileImage: string | null;
+  isBanned?: boolean;
   type: 'student';
   enrolledCourses: Array<{
     id: string;
@@ -189,73 +205,109 @@ interface TeacherDetails {
   lastLogin: string;
 }
 
+// A single course enrollment can appear twice in the combined enrollments
+// list — once as the regular CourseEnrollment record and once as the
+// access-code usage record redeeming it — since redeeming a code always
+// creates its own CourseEnrollment too. Dedupe by courseId, keeping the
+// entry that isn't 'access_code' when both exist since it carries the real
+// progress value.
+function computeStudentEnrollments(studentId: string, allEnrollments: any[]): any[] {
+  const rawStudentEnrollments = allEnrollments.filter((e: any) => e.studentId === studentId);
+  const enrollmentsByCourseId = new Map<string, any>();
+  for (const enrollment of rawStudentEnrollments) {
+    const existing = enrollmentsByCourseId.get(enrollment.courseId);
+    if (!existing || existing.enrollmentType === 'access_code') {
+      enrollmentsByCourseId.set(enrollment.courseId, enrollment);
+    }
+  }
+  return Array.from(enrollmentsByCourseId.values());
+}
+
+function mergeStudentEnrollments(students: Student[], enrollments: any[]): Student[] {
+  return students.map((student) => {
+    const studentEnrollments = computeStudentEnrollments(student._id, enrollments);
+    return {
+      ...student,
+      realEnrolledCoursesCount: studentEnrollments.length,
+      realEnrollments: studentEnrollments,
+    };
+  });
+}
+
+const JOINED_WITHIN_OPTIONS = [
+  { value: 'all', label: 'Any time' },
+  { value: '3d', label: 'Last 3 days' },
+  { value: '7d', label: 'Last 7 days' },
+  { value: '30d', label: 'Last 30 days' },
+  { value: '3m', label: 'Last 3 months' },
+  { value: '6m', label: 'Last 6 months' },
+  { value: '12m', label: 'Last 12 months' },
+];
+
+const STATUS_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'enrolled', label: 'Enrolled' },
+  { value: 'not_enrolled', label: 'Not Enrolled' },
+  { value: 'free_trial', label: 'Free Trial' },
+  { value: 'trial_ended', label: 'Trial Ended' },
+];
+
+const STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  enrolled: { label: 'Enrolled', className: 'bg-green-100 text-green-700 border-green-200' },
+  not_enrolled: { label: 'Not Enrolled', className: 'bg-gray-100 text-gray-600 border-gray-200' },
+  free_trial: { label: 'Free Trial', className: 'bg-blue-100 text-blue-700 border-blue-200' },
+  trial_ended: { label: 'Trial Ended', className: 'bg-amber-100 text-amber-700 border-amber-200' },
+  blocked: { label: 'Blocked', className: 'bg-red-100 text-red-700 border-red-200' },
+};
+
 export default function UsersPage() {
   const [students, setStudents] = useState<Student[]>([]);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
+  const [studentsLoading, setStudentsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [joinedFilter, setJoinedFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
-  const [expandedGrades, setExpandedGrades] = useState<Set<number>>(new Set([10, 11, 12]));
+  const [studentStats, setStudentStats] = useState<StudentStats | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserDetails | TeacherDetails | null>(null);
   const [userDetailsLoading, setUserDetailsLoading] = useState(false);
+  const { toast } = useToast();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get('tab') || 'students';
 
-  // Fetch users data
+  // Initial load: teachers + the full enrollments cache (used to compute
+  // each student's real course list without a per-student network call).
   useEffect(() => {
-    fetchUsers();
+    fetchInitialData();
+    fetchStudentStats();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchEnrollments = async () => {
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const enrollmentsRes = await fetch(API_ENDPOINTS.ENROLLMENTS.LIST, createFetchOptions('GET'));
+      if (enrollmentsRes.ok) {
+        const enrollmentsJson = await enrollmentsRes.json();
+        setEnrollments(enrollmentsJson.enrollments || []);
+      }
+    } catch (error) {
+      console.error('Error fetching enrollments:', error);
+    }
+  };
+
+  const fetchInitialData = async () => {
     try {
       setLoading(true);
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      
-      // Fetch students, teachers, and enrollments in parallel
-      const [studentsRes, teachersRes, enrollmentsRes] = await Promise.all([
-        fetch(`${API_ENDPOINTS.USERS.LIST}?type=students`, createFetchOptions('GET')),
+
+      const [teachersRes] = await Promise.all([
         fetch(`${API_ENDPOINTS.USERS.LIST}?type=teachers&includeVerificationDocs=true`, createFetchOptions('GET')),
-        fetch(`${API_ENDPOINTS.BASE}/api/admin/enrollments`, createFetchOptions('GET'))
+        fetchEnrollments()
       ]);
-
-      let enrollmentsData = [];
-      if (enrollmentsRes.ok) {
-        const enrollmentsJson = await enrollmentsRes.json();
-        enrollmentsData = enrollmentsJson.enrollments || [];
-      }
-
-      if (studentsRes.ok) {
-        const studentsData = await studentsRes.json();
-        // Calculate real enrollment count for each student
-        const studentsWithRealEnrollments = (studentsData.students || []).map((student: Student) => {
-          const rawStudentEnrollments = enrollmentsData.filter(
-            (enrollment: any) => enrollment.studentId === student._id
-          );
-
-          // A single course enrollment can appear twice in the combined
-          // enrollments list — once as the regular CourseEnrollment record
-          // and once as the access-code usage record redeeming it — since
-          // redeeming a code always creates its own CourseEnrollment too.
-          // Dedupe by courseId, keeping the entry that isn't 'access_code'
-          // when both exist since it carries the real progress value.
-          const enrollmentsByCourseId = new Map<string, any>();
-          for (const enrollment of rawStudentEnrollments) {
-            const existing = enrollmentsByCourseId.get(enrollment.courseId);
-            if (!existing || existing.enrollmentType === 'access_code') {
-              enrollmentsByCourseId.set(enrollment.courseId, enrollment);
-            }
-          }
-          const studentEnrollments = Array.from(enrollmentsByCourseId.values());
-
-          return {
-            ...student,
-            realEnrolledCoursesCount: studentEnrollments.length,
-            realEnrollments: studentEnrollments
-          };
-        });
-        setStudents(studentsWithRealEnrollments);
-      }
 
       if (teachersRes.ok) {
         const teachersData = await teachersRes.json();
@@ -266,6 +318,60 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchStudentStats = async () => {
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const res = await fetch(API_ENDPOINTS.USERS.STUDENT_STATS, createFetchOptions('GET'));
+      if (res.ok) {
+        const json = await res.json();
+        setStudentStats(json.data);
+      }
+    } catch (error) {
+      console.error('Error fetching student stats:', error);
+    }
+  };
+
+  // Search/grade/status/joined-date are all resolved server-side — a search
+  // for "Name, Email, Number, School" or a status/date filter needs to see
+  // every matching student, not just whichever page happened to load first.
+  const fetchStudents = async () => {
+    try {
+      setStudentsLoading(true);
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const params = new URLSearchParams({ type: 'students', sort: sortBy === 'name' ? 'alphabetical' : sortBy });
+      if (studentSearch.trim()) params.set('search', studentSearch.trim());
+      if (gradeFilter !== 'all') params.set('grade', gradeFilter);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (joinedFilter !== 'all') params.set('joinedWithin', joinedFilter);
+
+      const res = await fetch(`${API_ENDPOINTS.USERS.LIST}?${params.toString()}`, createFetchOptions('GET'));
+      if (res.ok) {
+        const data = await res.json();
+        setStudents(data.students || []);
+      }
+    } catch (error) {
+      console.error('Error fetching students:', error);
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+
+  // Debounced re-fetch whenever search/filters change — this also covers
+  // the very first student load (all deps start at their default values).
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchStudents();
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentSearch, gradeFilter, statusFilter, joinedFilter, sortBy]);
+
+  const studentsWithEnrollments = mergeStudentEnrollments(students, enrollments);
+
+  const refreshAfterStudentAction = async () => {
+    await Promise.all([fetchStudents(), fetchStudentStats(), fetchEnrollments()]);
   };
 
   const fetchUserDetails = async (userId: string, userType: 'student' | 'teacher') => {
@@ -312,12 +418,15 @@ export default function UsersPage() {
             }
           }
           
-          // If student, also fetch real enrollment data
+          // If student, also fetch real enrollment data. Fetched fresh here
+          // (not from the local `enrollments` cache) so the dialog reflects
+          // an enrollment just removed or a ban that just deactivated
+          // enrollments, instead of a stale pre-action snapshot.
           if (userType === 'student') {
-            // Use the already fetched enrollment data from the student object
-            const studentData = students.find(s => s._id === userId);
-            userData = { ...userData, realEnrollments: (studentData as any)?.realEnrollments || [] };
-            console.log('✅ Student enrollments loaded from cache:', (studentData as any)?.realEnrollments?.length || 0);
+            const enrollmentsRes = await fetch(API_ENDPOINTS.ENROLLMENTS.LIST, createFetchOptions('GET'));
+            const freshEnrollments = enrollmentsRes.ok ? (await enrollmentsRes.json()).enrollments || [] : [];
+            userData = { ...userData, realEnrollments: computeStudentEnrollments(userId, freshEnrollments) };
+            console.log('✅ Student enrollments loaded fresh:', userData.realEnrollments.length);
           }
           
           console.log('📦 Processed user data:', userData);
@@ -336,36 +445,43 @@ export default function UsersPage() {
     }
   };
 
-  // Filter and sort students
-  const filteredStudents = students
-    .filter(student => {
-      const matchesSearch = (student.full_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-                          (student.email?.toLowerCase() || '').includes(searchTerm.toLowerCase());
-      const matchesGrade = gradeFilter === "all" || student.grade?.toString() === gradeFilter;
-      return matchesSearch && matchesGrade;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case "name":
-          return (a.full_name || '').localeCompare(b.full_name || '');
-        case "grade":
-          return (a.grade || 0) - (b.grade || 0);
-        case "lastLogin":
-          return new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime();
-        default:
-          return 0;
-      }
-    });
-
-  // Group students by grade
-  const studentsByGrade = filteredStudents.reduce((acc, student) => {
-    const gradeKey = student.grade || 0; // Default to grade 0 for null grades
-    if (!acc[gradeKey]) {
-      acc[gradeKey] = [];
+  const handleRemoveEnrollment = async (enrollment: any) => {
+    if (!selectedUser || selectedUser.type !== 'student') return;
+    if (!confirm(`Remove enrollment in "${enrollment.courseName}"?`)) return;
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(
+        API_ENDPOINTS.ENROLLMENTS.REMOVE(enrollment._id),
+        createFetchOptions('DELETE', { enrollmentType: enrollment.enrollmentType })
+      );
+      if (!response.ok) throw new Error('Failed to remove enrollment');
+      toast({ title: 'Enrollment removed', description: `Removed from "${enrollment.courseName}".` });
+      await fetchUserDetails(selectedUser._id, 'student');
+      refreshAfterStudentAction();
+    } catch (error) {
+      console.error('Error removing enrollment:', error);
+      toast({ title: 'Failed to remove enrollment', variant: 'destructive' });
     }
-    acc[gradeKey].push(student);
-    return acc;
-  }, {} as Record<number, Student[]>);
+  };
+
+  const handleToggleBan = async () => {
+    if (!selectedUser || selectedUser.type !== 'student') return;
+    const isBanned = !!(selectedUser as any).isBanned;
+    const action = isBanned ? 'unblock' : 'block';
+    if (!confirm(`Are you sure you want to ${action} ${selectedUser.full_name}?`)) return;
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const url = isBanned ? API_ENDPOINTS.USERS.UNBAN(selectedUser._id) : API_ENDPOINTS.USERS.BAN(selectedUser._id);
+      const response = await fetch(url, createFetchOptions('POST'));
+      if (!response.ok) throw new Error('Failed to update account status');
+      toast({ title: isBanned ? 'User unblocked' : 'User blocked' });
+      await fetchUserDetails(selectedUser._id, 'student');
+      refreshAfterStudentAction();
+    } catch (error) {
+      console.error('Error updating ban status:', error);
+      toast({ title: 'Failed to update account status', variant: 'destructive' });
+    }
+  };
 
   // Filter teachers
   const filteredTeachers = teachers
@@ -383,16 +499,6 @@ export default function UsersPage() {
           return 0;
       }
     });
-
-  const toggleGradeExpansion = (grade: number) => {
-    const newExpanded = new Set(expandedGrades);
-    if (newExpanded.has(grade)) {
-      newExpanded.delete(grade);
-    } else {
-      newExpanded.add(grade);
-    }
-    setExpandedGrades(newExpanded);
-  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -458,7 +564,7 @@ export default function UsersPage() {
       <Tabs defaultValue={activeTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="students">
-            Students ({filteredStudents.length})
+            Students ({studentStats?.total ?? studentsWithEnrollments.length})
           </TabsTrigger>
           <TabsTrigger value="teachers">
             Teachers ({filteredTeachers.length})
@@ -466,9 +572,38 @@ export default function UsersPage() {
         </TabsList>
 
         <TabsContent value="students" className="space-y-6">
-          <div className="flex items-center gap-4">
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {[
+              { label: 'Total Students', value: studentStats?.total, className: 'text-gray-900' },
+              { label: 'Enrolled', value: studentStats?.enrolled, className: 'text-green-600' },
+              { label: 'Free Trial', value: studentStats?.free_trial, className: 'text-blue-600' },
+              { label: 'Trial Ended', value: studentStats?.trial_ended, className: 'text-amber-600' },
+              { label: 'Not Enrolled', value: studentStats?.not_enrolled, className: 'text-gray-500' },
+              { label: 'Blocked', value: studentStats?.blocked, className: 'text-red-600' },
+            ].map((stat) => (
+              <Card key={stat.label} className="shadow-sm">
+                <CardContent className="p-4">
+                  <div className={`text-2xl font-bold ${stat.className}`}>{stat.value ?? '—'}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{stat.label}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Search and filters */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, email, number, or school..."
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
             <Select value={gradeFilter} onValueChange={setGradeFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full md:w-40">
                 <SelectValue placeholder="Filter by grade" />
               </SelectTrigger>
               <SelectContent>
@@ -479,335 +614,329 @@ export default function UsersPage() {
                 <SelectItem value="12">Grade 12</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full md:w-44">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_FILTER_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={joinedFilter} onValueChange={setJoinedFilter}>
+              <SelectTrigger className="w-full md:w-44">
+                <SelectValue placeholder="Joined date" />
+              </SelectTrigger>
+              <SelectContent>
+                {JOINED_WITHIN_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {Object.keys(studentsByGrade).sort((a, b) => parseInt(b) - parseInt(a)).map(gradeStr => {
-            const grade = parseInt(gradeStr);
-            const gradeStudents = studentsByGrade[grade];
-            const isExpanded = expandedGrades.has(grade);
-
-            return (
-              <Card key={grade} className="shadow-md">
-                <Collapsible open={isExpanded} onOpenChange={() => toggleGradeExpansion(grade)}>
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          {isExpanded ? (
-                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                          )}
-                          <CardTitle className="text-xl">Grade {grade}</CardTitle>
-                          <Badge variant={getGradeBadgeVariant(grade)}>
-                            {gradeStudents.length} students
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Student</TableHead>
-                            <TableHead>Institution</TableHead>
-                            <TableHead>Enrolled Courses</TableHead>
-                            <TableHead>Last Login</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {gradeStudents.map((student) => (
-                            <TableRow key={student._id}>
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  <div className="h-10 w-10 rounded-full overflow-hidden flex items-center justify-center">
-                                    <img
-                                      src={student.profileImage || '/assets/default-avatar.svg'}
-                                      alt={student.full_name}
-                                      className="h-full w-full object-cover"
-                                      onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/default-avatar.svg'; }}
-                                    />
+          <Card className="shadow-md">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student Name</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Institute</TableHead>
+                    <TableHead>Enrolled Courses</TableHead>
+                    <TableHead>Last Login</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {studentsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        Loading students...
+                      </TableCell>
+                    </TableRow>
+                  ) : studentsWithEnrollments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No students found matching your criteria.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    studentsWithEnrollments.map((student) => {
+                      const badge = STATUS_BADGE[student.status || 'not_enrolled'];
+                      return (
+                        <TableRow key={student._id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
+                                <img
+                                  src={student.profileImage || '/assets/default-avatar.svg'}
+                                  alt={student.full_name}
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/default-avatar.svg'; }}
+                                />
+                              </div>
+                              <div>
+                                <div className="font-medium">{student.full_name}</div>
+                                <div className="text-sm text-muted-foreground">{student.email}</div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">{student.phone_number || 'N/A'}</TableCell>
+                          <TableCell className="text-sm">{student.address?.institution || 'N/A'}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {student.realEnrolledCoursesCount || 0} courses
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDate(student.lastLogin)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={badge?.className}>
+                              {badge?.label || 'Not Enrolled'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => fetchUserDetails(student._id, 'student')}
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Details
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                                <DialogHeader>
+                                  <DialogTitle>Student Details</DialogTitle>
+                                  <DialogDescription>
+                                    Complete profile and activity information
+                                  </DialogDescription>
+                                </DialogHeader>
+                                {userDetailsLoading ? (
+                                  <div className="flex items-center justify-center py-8">
+                                    <div className="text-muted-foreground">Loading details...</div>
                                   </div>
-                                  <div>
-                                    <div className="font-medium">{student.full_name}</div>
-                                    <div className="text-sm text-muted-foreground">{student.email}</div>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="text-sm">
-                                  <div>{student.address.institution}</div>
-                                  <div className="text-muted-foreground">{student.address.district}</div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline">
-                                  {(student as any).realEnrolledCoursesCount || 0} courses
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">
-                                {formatDate(student.lastLogin)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => fetchUserDetails(student._id, 'student')}
-                                    >
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      View Details
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                                    <DialogHeader>
-                                      <DialogTitle>Student Details</DialogTitle>
-                                      <DialogDescription>
-                                        Complete profile and activity information
-                                      </DialogDescription>
-                                    </DialogHeader>
-                                    {userDetailsLoading ? (
-                                      <div className="flex items-center justify-center py-8">
-                                        <div className="text-muted-foreground">Loading details...</div>
+                                ) : selectedUser && selectedUser.type === 'student' ? (
+                                  <div className="space-y-6">
+                                    {/* Profile Header */}
+                                    <div className="flex items-center gap-4">
+                                      <div className="h-16 w-16 rounded-full overflow-hidden flex items-center justify-center">
+                                        <img
+                                          src={selectedUser.profileImage || '/assets/default-avatar.svg'}
+                                          alt={selectedUser.full_name}
+                                          className="h-full w-full object-cover"
+                                          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/default-avatar.svg'; }}
+                                        />
                                       </div>
-                                    ) : selectedUser && selectedUser.type === 'student' ? (
-                                      <div className="space-y-6">
-                                        {/* Profile Header */}
-                                        <div className="flex items-center gap-4">
-                                          <div className="h-16 w-16 rounded-full overflow-hidden flex items-center justify-center">
-                                            <img
-                                              src={selectedUser.profileImage || '/assets/default-avatar.svg'}
-                                              alt={selectedUser.full_name}
-                                              className="h-full w-full object-cover"
-                                              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/default-avatar.svg'; }}
-                                            />
-                                          </div>
+                                      <div>
+                                        <h3 className="text-xl font-semibold">{selectedUser.full_name}</h3>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <Mail className="h-4 w-4 text-primary" />
+                                          <span className="font-medium text-foreground">{selectedUser.email}</span>
+                                        </div>
+                                        <Badge variant={getGradeBadgeVariant(selectedUser.grade)} className="mt-2">
+                                          Grade {selectedUser.grade}
+                                        </Badge>
+                                      </div>
+                                    </div>
+
+                                    {/* Basic Information */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                      <div className="space-y-4">
+                                        <div className="flex items-center gap-3 text-sm">
+                                          <Mail className="h-4 w-4 text-primary flex-shrink-0" />
                                           <div>
-                                            <h3 className="text-xl font-semibold">{selectedUser.full_name}</h3>
-                                            <div className="flex items-center gap-2 mt-1">
-                                              <Mail className="h-4 w-4 text-primary" />
-                                              <span className="font-medium text-foreground">{selectedUser.email}</span>
-                                            </div>
-                                            <Badge variant={getGradeBadgeVariant(selectedUser.grade)} className="mt-2">
-                                              Grade {selectedUser.grade}
-                                            </Badge>
+                                            <span className="font-medium">Email:</span> <span className="text-primary font-medium">{selectedUser.email}</span>
                                           </div>
                                         </div>
-
-                                        {/* Basic Information */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                          <div className="space-y-4">
-                                            <div className="flex items-center gap-3 text-sm">
-                                              <Mail className="h-4 w-4 text-primary flex-shrink-0" />
-                                              <div>
-                                                <span className="font-medium">Email:</span> <span className="text-primary font-medium">{selectedUser.email}</span>
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center gap-3 text-sm">
-                                              <BookOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                              <div>
-                                                <span className="font-medium">Grade:</span> {selectedUser.grade}
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center gap-3 text-sm">
-                                              <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                              <div>
-                                                <span className="font-medium">Joined:</span> {formatDate(selectedUser.createdAt)}
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center gap-3 text-sm">
-                                              <TrendingUp className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                              <div>
-                                                <span className="font-medium">Last Login:</span> {formatDate(selectedUser.lastLogin)}
-                                              </div>
-                                            </div>
-                                          </div>
-                                          <div className="space-y-4">
-                                            <div className="flex items-center gap-3 text-sm">
-                                              <BookOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                              <div>
-                                                <span className="font-medium">Enrolled Courses:</span> {(selectedUser as any).realEnrollments?.length || 0}
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center gap-3 text-sm">
-                                              <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                              <div>
-                                                <span className="font-medium">Last Updated:</span> {selectedUser.createdAt ? formatDate(selectedUser.createdAt) : 'Unknown'}
-                                              </div>
-                                            </div>
+                                        <div className="flex items-center gap-3 text-sm">
+                                          <BookOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                          <div>
+                                            <span className="font-medium">Grade:</span> {selectedUser.grade}
                                           </div>
                                         </div>
-
-                                        {/* Address Information */}
-                                        {selectedUser.address && (
+                                        <div className="flex items-center gap-3 text-sm">
+                                          <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                           <div>
-                                            <h4 className="font-medium mb-3">Address Information</h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                              <div className="p-3 border rounded-lg bg-muted/20">
-                                                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Institution</div>
-                                                <div className="text-sm mt-1">{selectedUser.address.institution || 'N/A'}</div>
-                                              </div>
-                                              <div className="p-3 border rounded-lg bg-muted/20">
-                                                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">District</div>
-                                                <div className="text-sm mt-1">{selectedUser.address.district || 'N/A'}</div>
-                                              </div>
-                                              <div className="p-3 border rounded-lg bg-muted/20">
-                                                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Province</div>
-                                                <div className="text-sm mt-1">{selectedUser.address.province || 'N/A'}</div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-
-                                        {/* Profile Information */}
-                                        <div>
-                                          <h4 className="font-medium mb-3">Profile Information</h4>
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="p-3 border rounded-lg bg-muted/20">
-                                              <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Profile Image</div>
-                                              <div className="text-sm mt-1">
-                                                {selectedUser.profileImage ? (
-                                                  <span className="text-green-600">✓ Available</span>
-                                                ) : (
-                                                  <span className="text-muted-foreground">Not set</span>
-                                                )}
-                                              </div>
-                                            </div>
-                                            <div className="p-3 border rounded-lg bg-muted/20">
-                                              <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Avatar Emoji</div>
-                                              <div className="text-sm mt-1">
-                                                <span className="text-sm text-muted-foreground">
-                                                  {selectedUser.avatarEmoji || 'Default'}
-                                                </span>
-                                              </div>
-                                            </div>
+                                            <span className="font-medium">Joined:</span> {formatDate(selectedUser.createdAt)}
                                           </div>
                                         </div>
-
-                                        {/* Real Enrollments */}
-                                        {(selectedUser as any).realEnrollments && (selectedUser as any).realEnrollments.length > 0 && (
+                                        <div className="flex items-center gap-3 text-sm">
+                                          <TrendingUp className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                           <div>
-                                            <h4 className="font-medium mb-3">Course Enrollments ({(selectedUser as any).realEnrollments.length})</h4>
-                                            <div className="grid gap-3">
-                                              {(selectedUser as any).realEnrollments.map((enrollment: any) => (
-                                                <div key={enrollment._id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                                                  <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-3">
-                                                      <div className="h-10 w-10 rounded-full overflow-hidden flex items-center justify-center bg-primary/10">
-                                                        {enrollment.studentProfileImage ? (
-                                                          <img 
-                                                            src={enrollment.studentProfileImage} 
-                                                            alt={enrollment.studentName} 
-                                                            className="h-10 w-10 object-cover"
-                                                          />
-                                                        ) : (
-                                                          <span className="text-sm font-semibold text-primary">
-                                                            {enrollment.studentAvatarEmoji || enrollment.studentName?.charAt(0)?.toUpperCase() || '?'}
-                                                          </span>
-                                                        )}
-                                                      </div>
-                                                      <div>
-                                                        <div className="font-medium">{enrollment.courseName}</div>
-                                                        <div className="text-sm text-muted-foreground">
-                                                          {enrollment.courseType} • {enrollment.enrollmentType === 'regular' ? 'Paid' : enrollment.enrollmentType === 'trial' ? 'Trial' : 'Access Code'}
-                                                        </div>
-                                                      </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                      <Badge 
-                                                        variant={
-                                                          enrollment.enrollmentType === 'trial' ? "outline" : 
-                                                          enrollment.enrollmentType === 'access_code' ? "secondary" : 
-                                                          "default"
-                                                        }
-                                                        className="mb-1"
-                                                      >
-                                                        {enrollment.enrollmentType === 'regular' ? 'Paid' : 
-                                                         enrollment.enrollmentType === 'trial' ? 'Trial' : 
-                                                         'Access Code'}
-                                                      </Badge>
-                                                      <div className="text-xs text-muted-foreground">
-                                                        {enrollment.status}
-                                                      </div>
-                                                    </div>
+                                            <span className="font-medium">Last Login:</span> {formatDate(selectedUser.lastLogin)}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="space-y-4">
+                                        <div className="flex items-center gap-3 text-sm">
+                                          <BookOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                          <div>
+                                            <span className="font-medium">Enrolled Courses:</span> {(selectedUser as any).realEnrollments?.length || 0}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 text-sm">
+                                          <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                          <div>
+                                            <span className="font-medium">Last Updated:</span> {selectedUser.createdAt ? formatDate(selectedUser.createdAt) : 'Unknown'}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Address Information */}
+                                    {selectedUser.address && (
+                                      <div>
+                                        <h4 className="font-medium mb-3">Additional Information</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                          <div className="p-3 border rounded-lg bg-muted/20">
+                                            <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Institution</div>
+                                            <div className="text-sm mt-1">{selectedUser.address.institution || 'N/A'}</div>
+                                          </div>
+                                          <div className="p-3 border rounded-lg bg-muted/20">
+                                            <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Province</div>
+                                            <div className="text-sm mt-1">{selectedUser.address.province || 'N/A'}</div>
+                                          </div>
+                                          <div className="p-3 border rounded-lg bg-muted/20">
+                                            <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">District</div>
+                                            <div className="text-sm mt-1">{selectedUser.address.district || 'N/A'}</div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Real Enrollments */}
+                                    {(selectedUser as any).realEnrollments && (selectedUser as any).realEnrollments.length > 0 && (
+                                      <div>
+                                        <h4 className="font-medium mb-3">Course Enrollments ({(selectedUser as any).realEnrollments.length})</h4>
+                                        <div className="grid gap-3">
+                                          {(selectedUser as any).realEnrollments.map((enrollment: any) => (
+                                            <div key={enrollment._id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                                              <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-3">
+                                                  <div className="h-10 w-10 rounded-full overflow-hidden flex items-center justify-center bg-primary/10">
+                                                    {enrollment.studentProfileImage ? (
+                                                      <img
+                                                        src={enrollment.studentProfileImage}
+                                                        alt={enrollment.studentName}
+                                                        className="h-10 w-10 object-cover"
+                                                      />
+                                                    ) : (
+                                                      <span className="text-sm font-semibold text-primary">
+                                                        {enrollment.studentAvatarEmoji || enrollment.studentName?.charAt(0)?.toUpperCase() || '?'}
+                                                      </span>
+                                                    )}
                                                   </div>
-                                                  
-                                                  <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
-                                                    <div>
-                                                      <span className="font-medium">Progress:</span> {enrollment.progress}%
+                                                  <div>
+                                                    <div className="font-medium">{enrollment.courseName}</div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                      {enrollment.courseType} • {enrollment.enrollmentType === 'regular' ? 'Paid' : enrollment.enrollmentType === 'trial' ? 'Trial' : 'Access Code'}
                                                     </div>
-                                                    <div>
-                                                      <span className="font-medium">Enrolled:</span> {formatDate(enrollment.enrolledAt)}
-                                                    </div>
-                                                  </div>
-                                                  
-                                                  {enrollment.enrollmentType === 'trial' && enrollment.expiresAt && (
-                                                    <div className="mt-2 text-sm">
-                                                      <span className="font-medium">Expires:</span> {formatDate(enrollment.expiresAt)}
-                                                    </div>
-                                                  )}
-                                                  
-                                                  {enrollment.enrollmentType === 'access_code' && (
-                                                    <div className="mt-2 text-sm">
-                                                      <span className="font-medium">Code:</span> 
-                                                      <code className="ml-1 bg-muted px-1 py-0.5 rounded text-xs">
-                                                        {enrollment.accessCode}
-                                                      </code>
-                                                    </div>
-                                                  )}
-                                                  
-                                                  <div className="mt-2 bg-muted rounded-full h-2">
-                                                    <div
-                                                      className="bg-primary h-2 rounded-full transition-all duration-300"
-                                                      style={{ width: `${enrollment.progress}%` }}
-                                                    ></div>
                                                   </div>
                                                 </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
+                                                <div className="text-right">
+                                                  <Badge
+                                                    variant={
+                                                      enrollment.enrollmentType === 'trial' ? "outline" :
+                                                      enrollment.enrollmentType === 'access_code' ? "secondary" :
+                                                      "default"
+                                                    }
+                                                    className="mb-1"
+                                                  >
+                                                    {enrollment.enrollmentType === 'regular' ? 'Paid' :
+                                                     enrollment.enrollmentType === 'trial' ? 'Trial' :
+                                                     'Access Code'}
+                                                  </Badge>
+                                                  <div className="text-xs text-muted-foreground">
+                                                    {enrollment.status}
+                                                  </div>
+                                                </div>
+                                              </div>
 
-                                        {/* Account Status */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                          <div className="flex items-center justify-between p-3 border rounded">
-                                            <span className="text-sm font-medium">Account Status</span>
-                                            <Badge variant="default">Active</Badge>
-                                          </div>
-                                          <div className="flex items-center justify-between p-3 border rounded">
-                                            <span className="text-sm font-medium">Profile Complete</span>
-                                            <Badge variant="default">Yes</Badge>
-                                          </div>
+                                              <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
+                                                <div>
+                                                  <span className="font-medium">Progress:</span> {enrollment.progress}%
+                                                </div>
+                                                <div>
+                                                  <span className="font-medium">Enrolled:</span> {formatDate(enrollment.enrolledAt)}
+                                                </div>
+                                              </div>
+
+                                              {enrollment.enrollmentType === 'trial' && enrollment.expiresAt && (
+                                                <div className="mt-2 text-sm">
+                                                  <span className="font-medium">Expires:</span> {formatDate(enrollment.expiresAt)}
+                                                </div>
+                                              )}
+
+                                              {enrollment.enrollmentType === 'access_code' && (
+                                                <div className="mt-2 text-sm">
+                                                  <span className="font-medium">Code:</span>
+                                                  <code className="ml-1 bg-muted px-1 py-0.5 rounded text-xs">
+                                                    {enrollment.accessCode}
+                                                  </code>
+                                                </div>
+                                              )}
+
+                                              <div className="mt-2 bg-muted rounded-full h-2">
+                                                <div
+                                                  className="bg-primary h-2 rounded-full transition-all duration-300"
+                                                  style={{ width: `${enrollment.progress}%` }}
+                                                ></div>
+                                              </div>
+
+                                              <div className="mt-3 flex justify-end">
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                  onClick={() => handleRemoveEnrollment(enrollment)}
+                                                >
+                                                  <Trash2 className="h-4 w-4 mr-2" />
+                                                  Remove from Course
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          ))}
                                         </div>
                                       </div>
-                                    ) : null}
-                                  </DialogContent>
-                                </Dialog>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
-              </Card>
-            );
-          })}
+                                    )}
 
-          {Object.keys(studentsByGrade).length === 0 && (
-            <Card className="shadow-md">
-              <CardContent className="py-8">
-                <div className="text-center text-muted-foreground">
-                  No students found matching your criteria.
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                                    {/* Account Status */}
+                                    <div className="flex items-center justify-between p-3 border rounded">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium">Account Status</span>
+                                        <Badge variant={(selectedUser as any).isBanned ? 'destructive' : 'default'}>
+                                          {(selectedUser as any).isBanned ? 'Blocked' : 'Active'}
+                                        </Badge>
+                                      </div>
+                                      <Button
+                                        variant={(selectedUser as any).isBanned ? 'default' : 'destructive'}
+                                        size="sm"
+                                        onClick={handleToggleBan}
+                                      >
+                                        <Ban className="h-4 w-4 mr-2" />
+                                        {(selectedUser as any).isBanned ? 'Unblock User' : 'Block User'}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </DialogContent>
+                            </Dialog>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="teachers" className="space-y-6">
