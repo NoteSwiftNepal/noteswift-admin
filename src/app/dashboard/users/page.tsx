@@ -283,7 +283,6 @@ export default function UsersPage() {
   // each student's real course list without a per-student network call).
   useEffect(() => {
     fetchInitialData();
-    fetchStudentStats();
   }, []);
 
   const fetchEnrollments = async () => {
@@ -323,7 +322,10 @@ export default function UsersPage() {
   const fetchStudentStats = async () => {
     try {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      const res = await fetch(API_ENDPOINTS.USERS.STUDENT_STATS, createFetchOptions('GET'));
+      const url = gradeFilter !== 'all'
+        ? `${API_ENDPOINTS.USERS.STUDENT_STATS}?grade=${gradeFilter}`
+        : API_ENDPOINTS.USERS.STUDENT_STATS;
+      const res = await fetch(url, createFetchOptions('GET'));
       if (res.ok) {
         const json = await res.json();
         setStudentStats(json.data);
@@ -367,6 +369,15 @@ export default function UsersPage() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentSearch, gradeFilter, statusFilter, joinedFilter, sortBy]);
+
+  // The stat row is scoped to grade only — not search/status/joined-date —
+  // so it answers "how is Grade 12 doing" when a grade is picked, and
+  // otherwise stays a global summary independent of the list's other
+  // filters. Runs on mount too (this is the initial stats load).
+  useEffect(() => {
+    fetchStudentStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gradeFilter]);
 
   const studentsWithEnrollments = mergeStudentEnrollments(students, enrollments);
 
