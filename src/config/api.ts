@@ -9,7 +9,7 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://loc
 
 // The noteswift-schools app's own public URL — used to open a school's
 // dashboard in "view as principal" mode from the admin dashboard.
-export const SCHOOLS_APP_URL = process.env.NEXT_PUBLIC_SCHOOLS_APP_URL || 'http://localhost:9004';
+export const SCHOOLS_APP_URL = process.env.NEXT_PUBLIC_SCHOOLS_APP_URL || 'https://noteswift-schools.vercel.app';
 
 export const API_ENDPOINTS = {
   BASE: API_BASE_URL,
