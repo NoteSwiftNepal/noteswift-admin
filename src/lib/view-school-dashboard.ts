@@ -12,6 +12,9 @@ export async function viewSchoolDashboard(schoolId: string): Promise<void> {
     throw new Error(data.message || 'Failed to open school dashboard.');
   }
 
-  const url = `${SCHOOLS_APP_URL}/admin-preview?token=${encodeURIComponent(data.token)}`;
+  const baseUrl = SCHOOLS_APP_URL && !SCHOOLS_APP_URL.includes('localhost')
+    ? SCHOOLS_APP_URL
+    : 'https://noteswift-schools.vercel.app';
+  const url = `${baseUrl}/admin-preview?token=${encodeURIComponent(data.token)}`;
   window.open(url, '_blank', 'noopener,noreferrer');
 }
