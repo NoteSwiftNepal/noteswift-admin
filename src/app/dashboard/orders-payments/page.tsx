@@ -14,6 +14,7 @@ import { AddOfflineSaleDialog } from "@/components/orders/AddOfflineSaleDialog";
 import { CodeGeneratedDialog } from "@/components/orders/CodeGeneratedDialog";
 import { CodeDialog } from "@/components/orders/CodeDialog";
 import { BulkCodeGenerationDialog } from "@/components/orders/BulkCodeGenerationDialog";
+import { EsewaTransactionDialog } from "@/components/orders/EsewaTransactionDialog";
 import { exportCodesListToPDF } from "@/lib/pdf-utils";
 
 export default function OrdersPaymentsPage() {
@@ -31,7 +32,11 @@ export default function OrdersPaymentsPage() {
   const [codesLoading, setCodesLoading] = useState(true);
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'transactions' | 'codes' | 'bulk-codes'>('transactions');
+  const [activeTab, setActiveTab] = useState<'transactions' | 'codes' | 'bulk-codes' | 'esewa'>('transactions');
+  const [esewaTransactions, setEsewaTransactions] = useState<any[]>([]);
+  const [esewaLoading, setEsewaLoading] = useState(false);
+  const [selectedEsewaTransaction, setSelectedEsewaTransaction] = useState<any | null>(null);
+  const [isEsewaDetailOpen, setIsEsewaDetailOpen] = useState(false);
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
@@ -148,6 +153,37 @@ export default function OrdersPaymentsPage() {
       });
     } finally {
       setTransactionsLoading(false);
+    }
+  };
+
+  // Deliberately no status filter (unlike fetchTransactions above, which
+  // hardcodes status=pending-code-redemption for the manual-code flow) —
+  // this tab needs to show pending-gateway/completed/failed alike.
+  const fetchEsewaTransactions = async () => {
+    if (esewaTransactions.length > 0) return;
+    try {
+      setEsewaLoading(true);
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(
+        `${API_ENDPOINTS.ORDERS_PAYMENTS.TRANSACTIONS.LIST}?limit=50&paymentMethod=esewa-gateway`,
+        createFetchOptions('GET')
+      );
+      const data = await response.json();
+      if (data.success) {
+        setEsewaTransactions(data.data);
+        if (data.courseMap) {
+          setCourseMap(prev => ({ ...prev, ...data.courseMap }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch eSewa transactions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load eSewa transactions",
+        variant: "destructive",
+      });
+    } finally {
+      setEsewaLoading(false);
     }
   };
 
@@ -437,6 +473,19 @@ export default function OrdersPaymentsPage() {
             }`}
           >
             Bulk Codes
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('esewa');
+              fetchEsewaTransactions();
+            }}
+            className={`px-4 py-2 font-medium transition-colors ${
+              activeTab === 'esewa'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            eSewa Payments
           </button>
         </div>
 
@@ -790,6 +839,108 @@ export default function OrdersPaymentsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* eSewa Payments Tab */}
+        {activeTab === 'esewa' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>eSewa Payments</CardTitle>
+              <CardDescription>Automated in-app eSewa gateway transactions (direct pay-to-enroll)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Buyer</TableHead>
+                    <TableHead>Course</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Gateway Status</TableHead>
+                    <TableHead>Transaction UUID</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {esewaLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+                          Loading eSewa transactions...
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : esewaTransactions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        No eSewa transactions found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    esewaTransactions.map((transaction: any) => (
+                      <TableRow key={transaction._id}>
+                        <TableCell>
+                          <div className="font-medium">{transaction.buyerName}</div>
+                          <div className="text-sm text-muted-foreground">{transaction.contact}</div>
+                        </TableCell>
+                        <TableCell>
+                          {courseMap[transaction.courseId]
+                            ? `${courseMap[transaction.courseId]} (${transaction.courseId})`
+                            : transaction.courseId}
+                        </TableCell>
+                        <TableCell>Rs. {transaction.amount}</TableCell>
+                        <TableCell>
+                          <Badge variant={transaction.status === 'completed' ? 'default' : transaction.status === 'failed' || transaction.status === 'cancelled' ? 'destructive' : 'secondary'}>
+                            {transaction.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {transaction.gatewayStatus ? (
+                            <Badge variant={
+                              transaction.gatewayStatus === 'COMPLETE' ? 'default'
+                                : (transaction.gatewayStatus === 'PENDING' || transaction.gatewayStatus === 'AMBIGUOUS') ? 'secondary'
+                                : 'destructive'
+                            }>
+                              {transaction.gatewayStatus}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono text-xs" title={transaction.transactionUuid}>
+                            {transaction.transactionUuid ? `${transaction.transactionUuid.slice(0, 8)}…` : '—'}
+                          </span>
+                        </TableCell>
+                        <TableCell>{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedEsewaTransaction(transaction);
+                              setIsEsewaDetailOpen(true);
+                            }}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        <EsewaTransactionDialog
+          open={isEsewaDetailOpen}
+          onOpenChange={setIsEsewaDetailOpen}
+          transaction={selectedEsewaTransaction}
+          courseMap={courseMap}
+        />
       </div>
     </div>
   );
