@@ -6,16 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { School, ArrowLeft, UserPlus, Ban, Pencil, ExternalLink } from "lucide-react";
-import { AdminList } from "@/components/admin/admin-list";
-import { InviteAdmin } from "@/components/admin/invite-admin";
+import { School, ArrowLeft, Ban, Pencil, ExternalLink } from "lucide-react";
 import { SchoolTeachersList } from "@/components/schools/school-teachers-list";
 import { SchoolStudentsList } from "@/components/schools/school-students-list";
 import { SchoolFormDialog } from "@/components/schools/school-form-dialog";
@@ -44,7 +35,6 @@ export default function SchoolDetailPage() {
 
   const [school, setSchool] = useState<SchoolDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
   const handleViewDashboard = async () => {
@@ -156,33 +146,14 @@ export default function SchoolDetailPage() {
       </div>
 
       <Tabs defaultValue="principal" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="principal">Principal</TabsTrigger>
-          <TabsTrigger value="admins">Admins</TabsTrigger>
           <TabsTrigger value="teachers">Teachers</TabsTrigger>
           <TabsTrigger value="students">Students</TabsTrigger>
         </TabsList>
 
         <TabsContent value="principal">
           <SchoolPrincipalPanel schoolId={schoolId} schoolName={school.name} canManage={canManageSchools} />
-        </TabsContent>
-
-        <TabsContent value="admins">
-          <Card className="shadow-md mt-6">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle>School Admins</CardTitle>
-                <CardDescription>Administrators scoped to {school.name}</CardDescription>
-              </div>
-              <Button size="sm" onClick={() => setInviteOpen(true)}>
-                <UserPlus className="h-4 w-4 mr-1" />
-                Invite Admin
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <AdminList schoolId={schoolId} />
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="teachers">
@@ -204,21 +175,11 @@ export default function SchoolDetailPage() {
               <CardDescription>Students linked to {school.name} via redeemed unlock codes</CardDescription>
             </CardHeader>
             <CardContent>
-              <SchoolStudentsList schoolId={schoolId} />
+              <SchoolStudentsList schoolId={schoolId} canManage={canManageSchools} />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Invite Admin to {school.name}</DialogTitle>
-            <DialogDescription>This admin will be scoped to this school.</DialogDescription>
-          </DialogHeader>
-          <InviteAdmin schoolId={schoolId} onInvited={() => setInviteOpen(false)} />
-        </DialogContent>
-      </Dialog>
 
       <SchoolFormDialog open={editOpen} onOpenChange={setEditOpen} school={school} onSaved={fetchSchool} />
     </div>

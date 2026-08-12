@@ -155,7 +155,9 @@ export const API_ENDPOINTS = {
     DEACTIVATE: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/deactivate`,
     PRINCIPAL_STATUS: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/principal`,
     INVITE_PRINCIPAL: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/invite-principal`,
+    REMOVE_PRINCIPAL: (id: string, principalId: string) => `${API_BASE_URL}/api/admin/schools/${id}/principals/${principalId}/remove`,
     VIEW_DASHBOARD: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/view-dashboard`,
+    REMOVE_STUDENT: (schoolId: string, studentId: string) => `${API_BASE_URL}/api/admin/schools/${schoolId}/students/${studentId}/remove`,
   },
 
   // ==================== APP UPDATE =================
