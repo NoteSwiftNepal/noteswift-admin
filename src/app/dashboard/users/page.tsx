@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2 } from "lucide-react";
+import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2, GraduationCap, School } from "lucide-react";
+import { AssignCourseDialog, AssignCourseFormData } from "@/components/users/AssignCourseDialog";
+import { ManageSchoolDialog } from "@/components/users/ManageSchoolDialog";
 import {
   Table,
   TableHeader,
@@ -103,6 +105,8 @@ interface UserDetails {
   };
   profileImage: string | null;
   isBanned?: boolean;
+  schoolId?: string | null;
+  schoolName?: string | null;
   type: 'student';
   enrolledCourses: Array<{
     id: string;
@@ -260,12 +264,18 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   blocked: { label: 'Blocked', className: 'bg-red-100 text-red-700 border-red-200' },
 };
 
+const STUDENTS_PAGE_SIZE = 25;
+
 export default function UsersPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [studentsLoading, setStudentsLoading] = useState(true);
+  const [studentsLoadingMore, setStudentsLoadingMore] = useState(false);
+  const [studentsPage, setStudentsPage] = useState(1);
+  const [studentsHasMore, setStudentsHasMore] = useState(false);
+  const [studentsTotal, setStudentsTotal] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState<string>("all");
@@ -275,6 +285,15 @@ export default function UsersPage() {
   const [studentStats, setStudentStats] = useState<StudentStats | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserDetails | TeacherDetails | null>(null);
   const [userDetailsLoading, setUserDetailsLoading] = useState(false);
+  const [courses, setCourses] = useState<{ _id: string; title: string }[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [schools, setSchools] = useState<{ _id: string; name: string; shortCode: string }[]>([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(false);
+  const [assignCourseDialogOpen, setAssignCourseDialogOpen] = useState(false);
+  const [assignCourseLoading, setAssignCourseLoading] = useState(false);
+  const [manageSchoolDialogOpen, setManageSchoolDialogOpen] = useState(false);
+  const [assignSchoolLoading, setAssignSchoolLoading] = useState(false);
+  const [makeIndependentLoading, setMakeIndependentLoading] = useState(false);
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get('tab') || 'students';
@@ -298,6 +317,38 @@ export default function UsersPage() {
     }
   };
 
+  const fetchCourses = async () => {
+    try {
+      setCoursesLoading(true);
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(API_ENDPOINTS.COURSES.DROPDOWN, createFetchOptions('GET'));
+      if (response.ok) {
+        const data = await response.json();
+        setCourses(data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+    } finally {
+      setCoursesLoading(false);
+    }
+  };
+
+  const fetchSchools = async () => {
+    try {
+      setSchoolsLoading(true);
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(API_ENDPOINTS.SCHOOLS.DROPDOWN, createFetchOptions('GET'));
+      if (response.ok) {
+        const data = await response.json();
+        setSchools(data.data?.schools || data.schools || []);
+      }
+    } catch (error) {
+      console.error('Error fetching schools:', error);
+    } finally {
+      setSchoolsLoading(false);
+    }
+  };
+
   const fetchInitialData = async () => {
     try {
       setLoading(true);
@@ -305,7 +356,9 @@ export default function UsersPage() {
 
       const [teachersRes] = await Promise.all([
         fetch(`${API_ENDPOINTS.USERS.LIST}?type=teachers&includeVerificationDocs=true`, createFetchOptions('GET')),
-        fetchEnrollments()
+        fetchEnrollments(),
+        fetchCourses(),
+        fetchSchools(),
       ]);
 
       if (teachersRes.ok) {
@@ -335,14 +388,21 @@ export default function UsersPage() {
     }
   };
 
-  // Search/grade/status/joined-date are all resolved server-side — a search
-  // for "Name, Email, Number, School" or a status/date filter needs to see
-  // every matching student, not just whichever page happened to load first.
-  const fetchStudents = async () => {
+  // Search/grade/status/joined-date are all resolved server-side. Paginated
+  // 25-at-a-time (STUDENTS_PAGE_SIZE) instead of fetching every matching
+  // student at once — `page=1` (the default, used whenever filters change)
+  // replaces the list; any later page appends onto it via "Load More".
+  const fetchStudents = async (page: number = 1) => {
     try {
-      setStudentsLoading(true);
+      if (page === 1) setStudentsLoading(true);
+      else setStudentsLoadingMore(true);
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      const params = new URLSearchParams({ type: 'students', sort: sortBy === 'name' ? 'alphabetical' : sortBy });
+      const params = new URLSearchParams({
+        type: 'students',
+        sort: sortBy === 'name' ? 'alphabetical' : sortBy,
+        page: String(page),
+        limit: String(STUDENTS_PAGE_SIZE),
+      });
       if (studentSearch.trim()) params.set('search', studentSearch.trim());
       if (gradeFilter !== 'all') params.set('grade', gradeFilter);
       if (statusFilter !== 'all') params.set('status', statusFilter);
@@ -351,20 +411,33 @@ export default function UsersPage() {
       const res = await fetch(`${API_ENDPOINTS.USERS.LIST}?${params.toString()}`, createFetchOptions('GET'));
       if (res.ok) {
         const data = await res.json();
-        setStudents(data.students || []);
+        const fetched: Student[] = data.students || [];
+        setStudents((prev) => (page === 1 ? fetched : [...prev, ...fetched]));
+        setStudentsPage(page);
+        setStudentsHasMore(!!data.pagination?.hasMore);
+        setStudentsTotal(data.pagination?.total ?? fetched.length);
       }
     } catch (error) {
       console.error('Error fetching students:', error);
     } finally {
       setStudentsLoading(false);
+      setStudentsLoadingMore(false);
+    }
+  };
+
+  const handleLoadMoreStudents = () => {
+    if (studentsHasMore && !studentsLoadingMore) {
+      fetchStudents(studentsPage + 1);
     }
   };
 
   // Debounced re-fetch whenever search/filters change — this also covers
   // the very first student load (all deps start at their default values).
+  // Always restarts from page 1: a new filter invalidates whatever pages
+  // were already appended.
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchStudents();
+      fetchStudents(1);
     }, 350);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -491,6 +564,88 @@ export default function UsersPage() {
     } catch (error) {
       console.error('Error updating ban status:', error);
       toast({ title: 'Failed to update account status', variant: 'destructive' });
+    }
+  };
+
+  const handleAssignCourseSubmit = async (formData: AssignCourseFormData) => {
+    if (!selectedUser || selectedUser.type !== 'student') return;
+    setAssignCourseLoading(true);
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(
+        API_ENDPOINTS.ENROLLMENTS.CREATE,
+        createFetchOptions('POST', {
+          studentId: selectedUser._id,
+          courseId: formData.course,
+          paymentMethod: formData.paymentMethod,
+          amount: formData.amount,
+          paymentReference: formData.paymentReference || undefined,
+          notes: formData.notes || undefined,
+        })
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to assign course');
+      }
+      toast({ title: 'Course assigned', description: `${selectedUser.full_name} was enrolled successfully.` });
+      setAssignCourseDialogOpen(false);
+      await fetchUserDetails(selectedUser._id, 'student');
+      refreshAfterStudentAction();
+    } catch (error: any) {
+      console.error('Error assigning course:', error);
+      toast({ title: 'Failed to assign course', description: error.message, variant: 'destructive' });
+    } finally {
+      setAssignCourseLoading(false);
+    }
+  };
+
+  const handleAssignSchool = async (schoolId: string) => {
+    if (!selectedUser || selectedUser.type !== 'student') return;
+    setAssignSchoolLoading(true);
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(
+        API_ENDPOINTS.SCHOOLS.ASSIGN_STUDENT(schoolId, selectedUser._id),
+        createFetchOptions('POST')
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to assign school');
+      }
+      toast({ title: 'School updated', description: data.message });
+      setManageSchoolDialogOpen(false);
+      await fetchUserDetails(selectedUser._id, 'student');
+      refreshAfterStudentAction();
+    } catch (error: any) {
+      console.error('Error assigning school:', error);
+      toast({ title: 'Failed to update school', description: error.message, variant: 'destructive' });
+    } finally {
+      setAssignSchoolLoading(false);
+    }
+  };
+
+  const handleMakeIndependent = async () => {
+    if (!selectedUser || selectedUser.type !== 'student' || !(selectedUser as any).schoolId) return;
+    setMakeIndependentLoading(true);
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(
+        API_ENDPOINTS.SCHOOLS.REMOVE_STUDENT((selectedUser as any).schoolId, selectedUser._id),
+        createFetchOptions('POST')
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to remove student from school');
+      }
+      toast({ title: 'Student is now independent', description: data.message });
+      setManageSchoolDialogOpen(false);
+      await fetchUserDetails(selectedUser._id, 'student');
+      refreshAfterStudentAction();
+    } catch (error: any) {
+      console.error('Error making student independent:', error);
+      toast({ title: 'Failed to update school', description: error.message, variant: 'destructive' });
+    } finally {
+      setMakeIndependentLoading(false);
     }
   };
 
@@ -822,6 +977,18 @@ export default function UsersPage() {
                                       </div>
                                     )}
 
+                                    {/* Course Access — always visible so admin can assign a course
+                                        even to a student with zero enrollments today. */}
+                                    <div className="flex items-center justify-between p-3 border rounded">
+                                      <div className="flex items-center gap-2">
+                                        <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-sm font-medium">Course Access</span>
+                                      </div>
+                                      <Button size="sm" onClick={() => setAssignCourseDialogOpen(true)}>
+                                        Assign to Course
+                                      </Button>
+                                    </div>
+
                                     {/* Real Enrollments */}
                                     {(selectedUser as any).realEnrollments && (selectedUser as any).realEnrollments.length > 0 && (
                                       <div>
@@ -847,7 +1014,12 @@ export default function UsersPage() {
                                                   <div>
                                                     <div className="font-medium">{enrollment.courseName}</div>
                                                     <div className="text-sm text-muted-foreground">
-                                                      {enrollment.courseType} • {enrollment.enrollmentType === 'regular' ? 'Paid' : enrollment.enrollmentType === 'trial' ? 'Trial' : 'Access Code'}
+                                                      {enrollment.courseType} • {
+                                                        enrollment.enrollmentType === 'regular' ? 'Paid' :
+                                                        enrollment.enrollmentType === 'trial' ? 'Trial' :
+                                                        enrollment.enrollmentType === 'admin_assigned' ? 'Admin Assigned' :
+                                                        'Access Code'
+                                                      }
                                                     </div>
                                                   </div>
                                                 </div>
@@ -856,12 +1028,14 @@ export default function UsersPage() {
                                                     variant={
                                                       enrollment.enrollmentType === 'trial' ? "outline" :
                                                       enrollment.enrollmentType === 'access_code' ? "secondary" :
+                                                      enrollment.enrollmentType === 'admin_assigned' ? "secondary" :
                                                       "default"
                                                     }
                                                     className="mb-1"
                                                   >
                                                     {enrollment.enrollmentType === 'regular' ? 'Paid' :
                                                      enrollment.enrollmentType === 'trial' ? 'Trial' :
+                                                     enrollment.enrollmentType === 'admin_assigned' ? 'Admin Assigned' :
                                                      'Access Code'}
                                                   </Badge>
                                                   <div className="text-xs text-muted-foreground">
@@ -882,6 +1056,21 @@ export default function UsersPage() {
                                               {enrollment.enrollmentType === 'trial' && enrollment.expiresAt && (
                                                 <div className="mt-2 text-sm">
                                                   <span className="font-medium">Expires:</span> {formatDate(enrollment.expiresAt)}
+                                                </div>
+                                              )}
+
+                                              {enrollment.enrollmentType === 'admin_assigned' && (
+                                                <div className="mt-2 text-sm space-y-1">
+                                                  <div>
+                                                    <span className="font-medium">Payment:</span> {enrollment.paymentMethod || 'N/A'}
+                                                    {typeof enrollment.amount === 'number' && ` • Rs ${enrollment.amount}`}
+                                                  </div>
+                                                  {enrollment.paymentReference && (
+                                                    <div>
+                                                      <span className="font-medium">Reference:</span> {enrollment.paymentReference}
+                                                    </div>
+                                                  )}
+                                                  <div className="text-muted-foreground">{enrollment.generatedBy}</div>
                                                 </div>
                                               )}
 
@@ -918,6 +1107,20 @@ export default function UsersPage() {
                                       </div>
                                     )}
 
+                                    {/* School */}
+                                    <div className="flex items-center justify-between p-3 border rounded">
+                                      <div className="flex items-center gap-2">
+                                        <School className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-sm font-medium">School</span>
+                                        <Badge variant={(selectedUser as any).schoolId ? 'default' : 'outline'}>
+                                          {(selectedUser as any).schoolId ? ((selectedUser as any).schoolName || 'Linked') : 'Independent'}
+                                        </Badge>
+                                      </div>
+                                      <Button size="sm" variant="outline" onClick={() => setManageSchoolDialogOpen(true)}>
+                                        Manage School
+                                      </Button>
+                                    </div>
+
                                     {/* Account Status */}
                                     <div className="flex items-center justify-between p-3 border rounded">
                                       <div className="flex items-center gap-2">
@@ -935,6 +1138,29 @@ export default function UsersPage() {
                                         {(selectedUser as any).isBanned ? 'Unblock User' : 'Block User'}
                                       </Button>
                                     </div>
+
+                                    <AssignCourseDialog
+                                      open={assignCourseDialogOpen}
+                                      onOpenChange={setAssignCourseDialogOpen}
+                                      studentName={selectedUser.full_name}
+                                      courses={courses}
+                                      coursesLoading={coursesLoading}
+                                      onSubmit={handleAssignCourseSubmit}
+                                      loading={assignCourseLoading}
+                                    />
+                                    <ManageSchoolDialog
+                                      open={manageSchoolDialogOpen}
+                                      onOpenChange={setManageSchoolDialogOpen}
+                                      studentName={selectedUser.full_name}
+                                      currentSchoolId={(selectedUser as any).schoolId || null}
+                                      currentSchoolName={(selectedUser as any).schoolName || null}
+                                      schools={schools}
+                                      schoolsLoading={schoolsLoading}
+                                      onAssign={handleAssignSchool}
+                                      assignLoading={assignSchoolLoading}
+                                      onMakeIndependent={handleMakeIndependent}
+                                      independentLoading={makeIndependentLoading}
+                                    />
                                   </div>
                                 ) : null}
                               </DialogContent>
@@ -946,6 +1172,18 @@ export default function UsersPage() {
                   )}
                 </TableBody>
               </Table>
+              {!studentsLoading && studentsWithEnrollments.length > 0 && (
+                <div className="flex flex-col items-center gap-2 py-6">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {studentsWithEnrollments.length} of {studentsTotal} student{studentsTotal === 1 ? '' : 's'}
+                  </div>
+                  {studentsHasMore && (
+                    <Button variant="outline" onClick={handleLoadMoreStudents} disabled={studentsLoadingMore}>
+                      {studentsLoadingMore ? 'Loading...' : 'Load More'}
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

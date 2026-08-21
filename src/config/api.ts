@@ -113,6 +113,7 @@ export const API_ENDPOINTS = {
   },
   ENROLLMENTS: {
     LIST: `${API_BASE_URL}/api/admin/enrollments`,
+    CREATE: `${API_BASE_URL}/api/admin/enrollments`,
     REMOVE: (enrollmentId: string) => `${API_BASE_URL}/api/admin/enrollments/${enrollmentId}`,
   },
 
@@ -158,6 +159,7 @@ export const API_ENDPOINTS = {
     REMOVE_PRINCIPAL: (id: string, principalId: string) => `${API_BASE_URL}/api/admin/schools/${id}/principals/${principalId}/remove`,
     VIEW_DASHBOARD: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/view-dashboard`,
     REMOVE_STUDENT: (schoolId: string, studentId: string) => `${API_BASE_URL}/api/admin/schools/${schoolId}/students/${studentId}/remove`,
+    ASSIGN_STUDENT: (schoolId: string, studentId: string) => `${API_BASE_URL}/api/admin/schools/${schoolId}/students/${studentId}/assign`,
   },
 
   // ==================== APP UPDATE =================
