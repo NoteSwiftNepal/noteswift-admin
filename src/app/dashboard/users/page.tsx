@@ -737,35 +737,39 @@ export default function UsersPage() {
                                                   </div>
                                                   
                                                   <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
-                                                    <div>
-                                                      <span className="font-medium">Progress:</span> {enrollment.progress}%
-                                                    </div>
+                                                    {enrollment.enrollmentType !== 'trial' && (
+                                                      <div>
+                                                        <span className="font-medium">Progress:</span> {enrollment.weightedCourseProgress ?? enrollment.progress ?? 0}%
+                                                      </div>
+                                                    )}
                                                     <div>
                                                       <span className="font-medium">Enrolled:</span> {formatDate(enrollment.enrolledAt)}
                                                     </div>
                                                   </div>
-                                                  
+
                                                   {enrollment.enrollmentType === 'trial' && enrollment.expiresAt && (
                                                     <div className="mt-2 text-sm">
                                                       <span className="font-medium">Expires:</span> {formatDate(enrollment.expiresAt)}
                                                     </div>
                                                   )}
-                                                  
+
                                                   {enrollment.enrollmentType === 'access_code' && (
                                                     <div className="mt-2 text-sm">
-                                                      <span className="font-medium">Code:</span> 
+                                                      <span className="font-medium">Code:</span>
                                                       <code className="ml-1 bg-muted px-1 py-0.5 rounded text-xs">
                                                         {enrollment.accessCode}
                                                       </code>
                                                     </div>
                                                   )}
-                                                  
-                                                  <div className="mt-2 bg-muted rounded-full h-2">
-                                                    <div
-                                                      className="bg-primary h-2 rounded-full transition-all duration-300"
-                                                      style={{ width: `${enrollment.progress}%` }}
-                                                    ></div>
-                                                  </div>
+
+                                                  {enrollment.enrollmentType !== 'trial' && (
+                                                    <div className="mt-2 bg-muted rounded-full h-2">
+                                                      <div
+                                                        className="bg-primary h-2 rounded-full transition-all duration-300"
+                                                        style={{ width: `${enrollment.weightedCourseProgress ?? enrollment.progress ?? 0}%` }}
+                                                      ></div>
+                                                    </div>
+                                                  )}
                                                 </div>
                                               ))}
                                             </div>
