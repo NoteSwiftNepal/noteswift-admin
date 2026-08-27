@@ -22,6 +22,7 @@ import {
   Image,
   School,
   ChevronDown,
+  Link2,
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -91,6 +92,7 @@ const links = [
   { href: "/dashboard/revenue", label: "Revenue", icon: CreditCard },
   { href: "/dashboard/orders-payments", label: "Orders & Payments", icon: Receipt },
   { href: "/dashboard/archives", label: "Archives", icon: Archive },
+  { href: "/dashboard/subject-groups", label: "Subject Groups", icon: Link2 },
   { href: "/dashboard/audit-log", label: "Audit Log", icon: ShieldCheck },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
   { href: "/dashboard/about", label: "About", icon: Info },
@@ -131,6 +133,7 @@ const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
     label: "System",
     hrefs: [
       "/dashboard/archives",
+      "/dashboard/subject-groups",
       "/dashboard/audit-log",
       "/dashboard/settings",
       "/dashboard/about",

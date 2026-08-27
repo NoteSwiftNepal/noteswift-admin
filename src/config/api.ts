@@ -191,6 +191,12 @@ export const API_ENDPOINTS = {
     PERMANENT_DELETE_LIVE_CLASS: (id: string) => `${API_BASE_URL}/api/admin/archives/live-classes/${id}/permanent-delete`,
     PERMANENT_DELETE_TEACHER_ASSIGNMENT: (id: string) => `${API_BASE_URL}/api/admin/archives/teacher-assignments/${id}/permanent-delete`,
   },
+
+  // ==================== SUBJECT GROUPS (Shared Live Class Groups) ====================
+  SUBJECT_GROUPS: {
+    LIST: `${API_BASE_URL}/api/admin/subject-groups`,
+    DISABLE: (id: string) => `${API_BASE_URL}/api/admin/subject-groups/${id}/disable`,
+  },
 };
 
 /**
