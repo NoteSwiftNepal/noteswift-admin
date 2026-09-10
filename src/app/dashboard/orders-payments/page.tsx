@@ -6,42 +6,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Download, Eye, Receipt } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, Download, Eye, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddOfflineSaleDialog } from "@/components/orders/AddOfflineSaleDialog";
 import { CodeGeneratedDialog } from "@/components/orders/CodeGeneratedDialog";
+import { CodeDialog } from "@/components/orders/CodeDialog";
 import { BulkCodeGenerationDialog } from "@/components/orders/BulkCodeGenerationDialog";
-
-const exportBulkToCSV = (bulk: any, courseMap: Record<string, string>) => {
-  const csvContent = `Organization,${bulk.organizationName}\nCourse,${courseMap[bulk.courseId] || bulk.courseId}\nGenerated On,${new Date(bulk.createdAt).toLocaleDateString()}\nNumber of Codes,${bulk.numberOfCodes}\nNotes,${bulk.notes || ''}\n\nCode\n${bulk.codes.join('\n')}`;
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = `bulk-codes-${bulk.organizationName}-${new Date(bulk.createdAt).toISOString().split('T')[0]}.csv`;
-  link.click();
-};
-
-const exportBulkCodesToCSV = (bulkCodes: any[], courseMap: Record<string, string>) => {
-  if (bulkCodes.length === 0) return;
-
-  let csvContent = 'Organization,Course,Generated On,Number of Codes,Notes,Codes\n';
-  bulkCodes.forEach(bulk => {
-    const codesStr = bulk.codes.join('; ');
-    csvContent += `"${bulk.organizationName}","${courseMap[bulk.courseId] || bulk.courseId}","${new Date(bulk.createdAt).toLocaleDateString()}",${bulk.numberOfCodes},"${bulk.notes || ''}","${codesStr}"\n`;
-  });
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = `all-bulk-codes-${new Date().toISOString().split('T')[0]}.csv`;
-  link.click();
-};
+import { EsewaTransactionDialog } from "@/components/orders/EsewaTransactionDialog";
+import { exportCodesListToPDF } from "@/lib/pdf-utils";
 
 export default function OrdersPaymentsPage() {
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [codes, setCodes] = useState([]);
+  const [codeSearchQuery, setCodeSearchQuery] = useState('');
+  const [isCodeDetailOpen, setIsCodeDetailOpen] = useState(false);
+  const [selectedCodeDetail, setSelectedCodeDetail] = useState<any>(null);
   const [courses, setCourses] = useState([]);
   const [adminMap, setAdminMap] = useState<Record<string, { email: string; role: string }>>({});
   const [courseMap, setCourseMap] = useState<Record<string, string>>({});
@@ -49,17 +32,102 @@ export default function OrdersPaymentsPage() {
   const [codesLoading, setCodesLoading] = useState(true);
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'transactions' | 'codes' | 'bulk-codes'>('transactions');
+  const [activeTab, setActiveTab] = useState<'transactions' | 'codes' | 'bulk-codes' | 'esewa'>('transactions');
+  const [esewaTransactions, setEsewaTransactions] = useState<any[]>([]);
+  const [esewaLoading, setEsewaLoading] = useState(false);
+  const [selectedEsewaTransaction, setSelectedEsewaTransaction] = useState<any | null>(null);
+  const [isEsewaDetailOpen, setIsEsewaDetailOpen] = useState(false);
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
-  const [bulkCodes, setBulkCodes] = useState<any[]>([]);
+
+  // School-wise bulk code history — persisted server-side and fetched per
+  // selected school on demand, unlike the old approach of only holding
+  // this session's just-generated batches in local state (lost on reload).
+  const [historySchools, setHistorySchools] = useState<{ _id: string; name: string; shortCode: string }[]>([]);
+  const [selectedHistorySchoolId, setSelectedHistorySchoolId] = useState('');
+  const [schoolCodes, setSchoolCodes] = useState<any[]>([]);
+  const [schoolCodesLoading, setSchoolCodesLoading] = useState(false);
+  const [selectedCodeIds, setSelectedCodeIds] = useState<Set<string>>(new Set());
+  const [pdfExporting, setPdfExporting] = useState(false);
 
   useEffect(() => {
     fetchAdmins();
     fetchTransactions();
     fetchCourses();
+    fetchHistorySchools();
   }, []);
+
+  useEffect(() => {
+    setSelectedCodeIds(new Set());
+    if (selectedHistorySchoolId) {
+      fetchSchoolCodes(selectedHistorySchoolId);
+    } else {
+      setSchoolCodes([]);
+    }
+  }, [selectedHistorySchoolId]);
+
+  const fetchHistorySchools = async () => {
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(API_ENDPOINTS.SCHOOLS.DROPDOWN, createFetchOptions('GET'));
+      const data = await response.json();
+      setHistorySchools(data.data?.schools || []);
+    } catch (error) {
+      console.error('Failed to fetch schools:', error);
+    }
+  };
+
+  const fetchSchoolCodes = async (schoolId: string) => {
+    try {
+      setSchoolCodesLoading(true);
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      // listUnlockCodes caps each page at 100, and a single bulk-generation
+      // batch can be up to 1000 codes — so "history" and "Export All" must
+      // page through every result, not just the first 100.
+      let page = 1;
+      let allCodes: any[] = [];
+      let totalPages = 1;
+      do {
+        const response = await fetch(
+          `${API_ENDPOINTS.ORDERS_PAYMENTS.CODES.LIST}?schoolId=${schoolId}&limit=100&page=${page}&sortBy=createdAt&order=desc`,
+          createFetchOptions('GET')
+        );
+        const data = await response.json();
+        if (!data.success) break;
+        allCodes = allCodes.concat(data.data);
+        totalPages = data.pagination?.pages || 1;
+        page++;
+      } while (page <= totalPages);
+      setSchoolCodes(allCodes);
+    } catch (error) {
+      console.error('Failed to fetch school codes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load codes for this school",
+        variant: "destructive",
+      });
+    } finally {
+      setSchoolCodesLoading(false);
+    }
+  };
+
+  const toggleSelectCode = (id: string) => {
+    setSelectedCodeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Only unused codes are ever exportable, so "select all" only selects those
+  // — selecting a used code would just be silently dropped at export time.
+  const toggleSelectAll = () => {
+    const unusedIds = schoolCodes.filter((c: any) => !c.isUsed).map((c: any) => c._id);
+    setSelectedCodeIds(prev =>
+      prev.size === unusedIds.length ? new Set() : new Set(unusedIds)
+    );
+  };
 
   const fetchTransactions = async () => {
     try {
@@ -85,6 +153,37 @@ export default function OrdersPaymentsPage() {
       });
     } finally {
       setTransactionsLoading(false);
+    }
+  };
+
+  // Deliberately no status filter (unlike fetchTransactions above, which
+  // hardcodes status=pending-code-redemption for the manual-code flow) —
+  // this tab needs to show pending-gateway/completed/failed alike.
+  const fetchEsewaTransactions = async () => {
+    if (esewaTransactions.length > 0) return;
+    try {
+      setEsewaLoading(true);
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(
+        `${API_ENDPOINTS.ORDERS_PAYMENTS.TRANSACTIONS.LIST}?limit=50&paymentMethod=esewa-gateway`,
+        createFetchOptions('GET')
+      );
+      const data = await response.json();
+      if (data.success) {
+        setEsewaTransactions(data.data);
+        if (data.courseMap) {
+          setCourseMap(prev => ({ ...prev, ...data.courseMap }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch eSewa transactions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load eSewa transactions",
+        variant: "destructive",
+      });
+    } finally {
+      setEsewaLoading(false);
     }
   };
 
@@ -116,14 +215,18 @@ export default function OrdersPaymentsPage() {
     }
   };
 
-  const fetchCodes = async () => {
-    if (codes.length > 0) return;
-
+  // Shared by both the plain tab-open load and an active search — a search
+  // must query the whole collection server-side (not just filter whatever's
+  // already loaded), so a match can surface a code outside the normal
+  // latest-50 window.
+  const runCodesQuery = async (search?: string) => {
     try {
       setCodesLoading(true);
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const params = new URLSearchParams({ limit: '50', sortBy: 'createdAt', order: 'desc' });
+      if (search) params.set('search', search);
       const response = await fetch(
-        `${API_ENDPOINTS.ORDERS_PAYMENTS.CODES.LIST}?limit=50&sortBy=createdAt&order=desc`,
+        `${API_ENDPOINTS.ORDERS_PAYMENTS.CODES.LIST}?${params.toString()}`,
         createFetchOptions('GET')
       );
       const data = await response.json();
@@ -143,6 +246,15 @@ export default function OrdersPaymentsPage() {
     } finally {
       setCodesLoading(false);
     }
+  };
+
+  const fetchCodes = async () => {
+    if (codes.length > 0) return;
+    await runCodesQuery();
+  };
+
+  const searchCodes = async (query: string) => {
+    await runCodesQuery(query.trim() || undefined);
   };
 
   const fetchAdmins = async () => {
@@ -191,23 +303,18 @@ export default function OrdersPaymentsPage() {
       const data = await response.json();
 
       if (data.success) {
-        setBulkCodes(prev => [...prev, {
-          id: Date.now(), // temporary id
-          organizationName: formData.organizationName,
-          courseId: formData.course,
-          numberOfCodes: parseInt(formData.numberOfCodes),
-          paymentMethod: formData.paymentMethod,
-          amount: formData.amount,
-          codes: data.data.codes,
-          createdAt: new Date().toISOString(),
-          notes: formData.notes,
-        }]);
         toast({
           title: "Success",
           description: `Generated ${formData.numberOfCodes} codes for ${formData.organizationName}`,
         });
         setIsBulkDialogOpen(false);
         fetchCodes(); // refresh the codes list
+        // If generated for a school, jump the history view to that school so
+        // the new codes are immediately visible in the persisted list.
+        if (formData.schoolId) {
+          setSelectedHistorySchoolId(formData.schoolId);
+          fetchSchoolCodes(formData.schoolId);
+        }
       } else {
         toast({
           title: "Error",
@@ -321,6 +428,14 @@ export default function OrdersPaymentsPage() {
           onOpenChange={setIsCodeDialogOpen}
           code={generatedCode}
         />
+        <CodeDialog
+          open={isCodeDetailOpen}
+          onOpenChange={setIsCodeDetailOpen}
+          code={selectedCodeDetail}
+          loading={false}
+          courseMap={courseMap}
+          formatIssuerInfo={formatIssuerInfo}
+        />
       </div>
 
       <div className="grid gap-6">
@@ -358,6 +473,19 @@ export default function OrdersPaymentsPage() {
             }`}
           >
             Bulk Codes
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('esewa');
+              fetchEsewaTransactions();
+            }}
+            className={`px-4 py-2 font-medium transition-colors ${
+              activeTab === 'esewa'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            eSewa Payments
           </button>
         </div>
 
@@ -438,8 +566,14 @@ export default function OrdersPaymentsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 mb-4">
-                <Input placeholder="Search codes..." className="max-w-sm" />
-                <Button variant="outline" size="sm">
+                <Input
+                  placeholder="Search by code, course, school, issued to, issued by, status, used by..."
+                  className="max-w-sm"
+                  value={codeSearchQuery}
+                  onChange={(e) => setCodeSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') searchCodes(codeSearchQuery); }}
+                />
+                <Button variant="outline" size="sm" onClick={() => searchCodes(codeSearchQuery)}>
                   <Search className="w-4 h-4" />
                 </Button>
                 <Button variant="outline" size="sm">
@@ -455,7 +589,7 @@ export default function OrdersPaymentsPage() {
                     <TableHead>Issued To</TableHead>
                     <TableHead>Issued By</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Expires</TableHead>
+                    <TableHead>Used By</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -476,28 +610,211 @@ export default function OrdersPaymentsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    codes.map((code: any) => (
+                    codes.map((code: any) => {
+                      const courseLabel = courseMap[code.courseId]
+                        ? `${courseMap[code.courseId]} (${code.courseId})`
+                        : code.courseId;
+                      const issuerLabel = code.issuedByAdminId && code.issuedByRole
+                        ? formatIssuerInfo(code.issuedByAdminId, code.issuedByRole)
+                        : 'Unknown';
+                      const usedByLabel = code.usedByStudent
+                        ? (code.usedByStudent.email
+                            ? `${code.usedByStudent.full_name} (${code.usedByStudent.email})`
+                            : code.usedByStudent.full_name)
+                        : null;
+                      return (
+                        <TableRow key={code._id}>
+                          <TableCell className="font-mono font-bold text-blue-600">
+                            {code.code || '***'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="max-w-[220px] truncate" title={courseLabel}>{courseLabel}</div>
+                          </TableCell>
+                          <TableCell>
+                            {code.schoolId?.shortCode ? (
+                              <Badge variant="outline" className="font-mono">{code.schoolId.shortCode}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="max-w-[140px] truncate" title={code.issuedTo}>{code.issuedTo}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="max-w-[180px] truncate" title={issuerLabel}>{issuerLabel}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={code.isUsed ? "secondary" : "default"}>
+                              {code.isUsed ? "Used" : "Unused"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {usedByLabel ? (
+                              <div className="max-w-[180px] truncate" title={usedByLabel}>{usedByLabel}</div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCodeDetail(code);
+                                setIsCodeDetailOpen(true);
+                              }}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Bulk Codes Tab */}
+        {activeTab === 'bulk-codes' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Bulk Codes — School History</CardTitle>
+              <CardDescription>
+                School-linked bulk codes, kept here permanently (separate from the Unlock Codes tab's normal codes).
+                Each code is one-time-use; both used and unused codes stay listed here indefinitely.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-64">
+                  <Select value={selectedHistorySchoolId} onValueChange={setSelectedHistorySchoolId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a school to view its codes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {historySchools.map((school) => (
+                        <SelectItem key={school._id} value={school._id}>
+                          {school.name} ({school.shortCode})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {schoolCodes.length > 0 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={selectedCodeIds.size === 0 || pdfExporting}
+                      onClick={async () => {
+                        setPdfExporting(true);
+                        try {
+                          const exportedCount = await exportCodesListToPDF(
+                            schoolCodes.filter((c: any) => selectedCodeIds.has(c._id)),
+                            historySchools.find(s => s._id === selectedHistorySchoolId)?.name || 'School',
+                            courseMap
+                          );
+                          if (exportedCount === 0) {
+                            toast({
+                              title: "Nothing to export",
+                              description: "All selected codes have already been used.",
+                              variant: "destructive",
+                            });
+                          }
+                        } finally {
+                          setPdfExporting(false);
+                        }
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {pdfExporting ? 'Exporting...' : `Export Selected (${selectedCodeIds.size})`}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pdfExporting}
+                      onClick={async () => {
+                        setPdfExporting(true);
+                        try {
+                          const exportedCount = await exportCodesListToPDF(
+                            schoolCodes,
+                            historySchools.find(s => s._id === selectedHistorySchoolId)?.name || 'School',
+                            courseMap
+                          );
+                          if (exportedCount === 0) {
+                            toast({
+                              title: "Nothing to export",
+                              description: "All codes for this school have already been used.",
+                              variant: "destructive",
+                            });
+                          }
+                        } finally {
+                          setPdfExporting(false);
+                        }
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {pdfExporting ? 'Exporting...' : 'Export All'}
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {!selectedHistorySchoolId ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Select a school above to see its bulk code history
+                </div>
+              ) : schoolCodesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+                  Loading codes...
+                </div>
+              ) : schoolCodes.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No bulk codes generated for this school yet
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={
+                            selectedCodeIds.size > 0 &&
+                            selectedCodeIds.size === schoolCodes.filter((c: any) => !c.isUsed).length
+                          }
+                          onCheckedChange={toggleSelectAll}
+                        />
+                      </TableHead>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Course</TableHead>
+                      <TableHead>Generated</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Used By</TableHead>
+                      <TableHead>Used On</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {schoolCodes.map((code: any) => (
                       <TableRow key={code._id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedCodeIds.has(code._id)}
+                            disabled={code.isUsed}
+                            onCheckedChange={() => toggleSelectCode(code._id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-mono font-bold text-blue-600">
                           {code.code || '***'}
                         </TableCell>
                         <TableCell>
-                          {courseMap[code.courseId]
-                            ? `${courseMap[code.courseId]} (${code.courseId})`
-                            : code.courseId}
+                          {courseMap[code.courseId] || code.courseId}
                         </TableCell>
                         <TableCell>
-                          {code.schoolId?.shortCode ? (
-                            <Badge variant="outline" className="font-mono">{code.schoolId.shortCode}</Badge>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>{code.issuedTo}</TableCell>
-                        <TableCell>
-                          {code.issuedByAdminId && code.issuedByRole
-                            ? formatIssuerInfo(code.issuedByAdminId, code.issuedByRole)
-                            : 'Unknown'}
+                          {code.createdAt ? new Date(code.createdAt).toLocaleDateString() : 'N/A'}
                         </TableCell>
                         <TableCell>
                           <Badge variant={code.isUsed ? "secondary" : "default"}>
@@ -505,10 +822,107 @@ export default function OrdersPaymentsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {code.expiresOn ? new Date(code.expiresOn).toLocaleDateString() : 'N/A'}
+                          {code.usedByStudent
+                            ? (code.usedByStudent.email
+                                ? `${code.usedByStudent.full_name} (${code.usedByStudent.email})`
+                                : code.usedByStudent.full_name)
+                            : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm">
+                          {code.usedTimestamp ? new Date(code.usedTimestamp).toLocaleString() : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* eSewa Payments Tab */}
+        {activeTab === 'esewa' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>eSewa Payments</CardTitle>
+              <CardDescription>Automated in-app eSewa gateway transactions (direct pay-to-enroll)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Buyer</TableHead>
+                    <TableHead>Course</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Gateway Status</TableHead>
+                    <TableHead>Transaction UUID</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {esewaLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+                          Loading eSewa transactions...
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : esewaTransactions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        No eSewa transactions found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    esewaTransactions.map((transaction: any) => (
+                      <TableRow key={transaction._id}>
+                        <TableCell>
+                          <div className="font-medium">{transaction.buyerName}</div>
+                          <div className="text-sm text-muted-foreground">{transaction.contact}</div>
+                        </TableCell>
+                        <TableCell>
+                          {courseMap[transaction.courseId]
+                            ? `${courseMap[transaction.courseId]} (${transaction.courseId})`
+                            : transaction.courseId}
+                        </TableCell>
+                        <TableCell>Rs. {transaction.amount}</TableCell>
+                        <TableCell>
+                          <Badge variant={transaction.status === 'completed' ? 'default' : transaction.status === 'failed' || transaction.status === 'cancelled' ? 'destructive' : 'secondary'}>
+                            {transaction.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {transaction.gatewayStatus ? (
+                            <Badge variant={
+                              transaction.gatewayStatus === 'COMPLETE' ? 'default'
+                                : (transaction.gatewayStatus === 'PENDING' || transaction.gatewayStatus === 'AMBIGUOUS') ? 'secondary'
+                                : 'destructive'
+                            }>
+                              {transaction.gatewayStatus}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono text-xs" title={transaction.transactionUuid}>
+                            {transaction.transactionUuid ? `${transaction.transactionUuid.slice(0, 8)}…` : '—'}
+                          </span>
+                        </TableCell>
+                        <TableCell>{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedEsewaTransaction(transaction);
+                              setIsEsewaDetailOpen(true);
+                            }}
+                          >
                             <Eye className="w-4 h-4" />
                           </Button>
                         </TableCell>
@@ -521,60 +935,12 @@ export default function OrdersPaymentsPage() {
           </Card>
         )}
 
-        {/* Bulk Codes Tab */}
-        {activeTab === 'bulk-codes' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Bulk Generated Codes</CardTitle>
-              <CardDescription>Organization bulk code generations and their details</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2 mb-4">
-                <Button variant="outline" size="sm" onClick={() => setIsBulkDialogOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Generate Bulk Codes
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => exportBulkCodesToCSV(bulkCodes, courseMap)}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export All
-                </Button>
-              </div>
-              {bulkCodes.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No bulk code generations found
-                </div>
-              ) : (
-                bulkCodes.map((bulk: any) => (
-                  <Card key={bulk.id} className="mb-4">
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">{bulk.organizationName}</CardTitle>
-                          <CardDescription>
-                            {courseMap[bulk.courseId] || bulk.courseId} • {bulk.numberOfCodes} codes • {bulk.paymentMethod} • Rs. {bulk.amount} • Generated on {new Date(bulk.createdAt).toLocaleDateString()}
-                          </CardDescription>
-                          {bulk.notes && <p className="text-sm text-muted-foreground mt-1">{bulk.notes}</p>}
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => exportBulkToCSV(bulk, courseMap)}>
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {bulk.codes.map((code: string, index: number) => (
-                          <div key={index} className="font-mono text-sm bg-gray-50 p-2 rounded border">
-                            {code}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        )}
+        <EsewaTransactionDialog
+          open={isEsewaDetailOpen}
+          onOpenChange={setIsEsewaDetailOpen}
+          transaction={selectedEsewaTransaction}
+          courseMap={courseMap}
+        />
       </div>
     </div>
   );

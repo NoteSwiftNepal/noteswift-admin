@@ -6,20 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { School, ArrowLeft, UserPlus, Ban, Pencil } from "lucide-react";
-import { AdminList } from "@/components/admin/admin-list";
-import { InviteAdmin } from "@/components/admin/invite-admin";
+import { School, ArrowLeft, Ban, Pencil, ExternalLink } from "lucide-react";
 import { SchoolTeachersList } from "@/components/schools/school-teachers-list";
 import { SchoolStudentsList } from "@/components/schools/school-students-list";
 import { SchoolFormDialog } from "@/components/schools/school-form-dialog";
+import { SchoolPrincipalPanel } from "@/components/schools/school-principal-panel";
 import { useAdmin } from "@/context/admin-context";
+import { viewSchoolDashboard } from "@/lib/view-school-dashboard";
+import { useToast } from "@/hooks/use-toast";
 
 interface SchoolDetail {
   _id: string;
@@ -37,11 +31,23 @@ export default function SchoolDetailPage() {
   const schoolId = params.id as string;
   const { isSystemAdmin, isSuperAdmin } = useAdmin();
   const canManageSchools = isSystemAdmin || isSuperAdmin;
+  const { toast } = useToast();
 
   const [school, setSchool] = useState<SchoolDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  const handleViewDashboard = async () => {
+    try {
+      await viewSchoolDashboard(schoolId);
+    } catch (error) {
+      toast({
+        title: "Can't open dashboard",
+        description: error instanceof Error ? error.message : "Unexpected error.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchSchool = useCallback(async () => {
     try {
@@ -117,6 +123,12 @@ export default function SchoolDetailPage() {
           </div>
           {canManageSchools && (
             <div className="flex items-center gap-2">
+              {school.isActive && (
+                <Button variant="outline" onClick={handleViewDashboard}>
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  View Dashboard
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setEditOpen(true)}>
                 <Pencil className="h-4 w-4 mr-1" />
                 Edit School
@@ -133,29 +145,15 @@ export default function SchoolDetailPage() {
         <p className="text-gray-600 mt-2">{school.address || "No address on file"}</p>
       </div>
 
-      <Tabs defaultValue="admins" className="w-full">
+      <Tabs defaultValue="principal" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="admins">Admins</TabsTrigger>
+          <TabsTrigger value="principal">Principal</TabsTrigger>
           <TabsTrigger value="teachers">Teachers</TabsTrigger>
           <TabsTrigger value="students">Students</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="admins">
-          <Card className="shadow-md mt-6">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle>School Admins</CardTitle>
-                <CardDescription>Administrators scoped to {school.name}</CardDescription>
-              </div>
-              <Button size="sm" onClick={() => setInviteOpen(true)}>
-                <UserPlus className="h-4 w-4 mr-1" />
-                Invite Admin
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <AdminList schoolId={schoolId} />
-            </CardContent>
-          </Card>
+        <TabsContent value="principal">
+          <SchoolPrincipalPanel schoolId={schoolId} schoolName={school.name} canManage={canManageSchools} />
         </TabsContent>
 
         <TabsContent value="teachers">
@@ -177,21 +175,11 @@ export default function SchoolDetailPage() {
               <CardDescription>Students linked to {school.name} via redeemed unlock codes</CardDescription>
             </CardHeader>
             <CardContent>
-              <SchoolStudentsList schoolId={schoolId} />
+              <SchoolStudentsList schoolId={schoolId} canManage={canManageSchools} />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Invite Admin to {school.name}</DialogTitle>
-            <DialogDescription>This admin will be scoped to this school.</DialogDescription>
-          </DialogHeader>
-          <InviteAdmin schoolId={schoolId} onInvited={() => setInviteOpen(false)} />
-        </DialogContent>
-      </Dialog>
 
       <SchoolFormDialog open={editOpen} onOpenChange={setEditOpen} school={school} onSaved={fetchSchool} />
     </div>

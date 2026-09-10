@@ -5,9 +5,11 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { School as SchoolIcon, Search, Plus, Ban } from "lucide-react";
+import { School as SchoolIcon, Search, Plus, Ban, ExternalLink } from "lucide-react";
 import { useAdmin } from "@/context/admin-context";
 import { SchoolFormDialog } from "./school-form-dialog";
+import { viewSchoolDashboard } from "@/lib/view-school-dashboard";
+import { useToast } from "@/hooks/use-toast";
 
 interface School {
   _id: string;
@@ -26,6 +28,19 @@ export function SchoolList() {
   const [addOpen, setAddOpen] = useState(false);
   const { isSystemAdmin, isSuperAdmin } = useAdmin();
   const canManageSchools = isSystemAdmin || isSuperAdmin;
+  const { toast } = useToast();
+
+  const handleViewDashboard = async (schoolId: string) => {
+    try {
+      await viewSchoolDashboard(schoolId);
+    } catch (error) {
+      toast({
+        title: "Can't open dashboard",
+        description: error instanceof Error ? error.message : "Unexpected error.",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     fetchSchools();
@@ -111,6 +126,16 @@ export function SchoolList() {
                 <Badge variant="default" className="bg-green-500">Active</Badge>
               ) : (
                 <Badge variant="secondary">Inactive</Badge>
+              )}
+              {canManageSchools && school.isActive && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleViewDashboard(school._id)}
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  View Dashboard
+                </Button>
               )}
               {canManageSchools && school.isActive && (
                 <Button

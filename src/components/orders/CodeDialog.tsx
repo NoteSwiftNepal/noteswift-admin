@@ -92,12 +92,23 @@ export function CodeDialog({ open, onOpenChange, code, loading, courseMap, forma
             <div>
               <Label className="text-sm font-medium">Issued By</Label>
               <p className="text-sm">
-                {code.issuedByAdminId && code.issuedByRole 
-                  ? formatIssuerInfo(code.issuedByAdminId, code.issuedByRole) 
+                {code.issuedByAdminId && code.issuedByRole
+                  ? formatIssuerInfo(code.issuedByAdminId, code.issuedByRole)
                   : 'Unknown'}
               </p>
             </div>
           </div>
+
+          {code.schoolId && (
+            <div>
+              <Label className="text-sm font-medium">School</Label>
+              <p className="text-sm">
+                {code.schoolId.name
+                  ? `${code.schoolId.name} (${code.schoolId.shortCode})`
+                  : code.schoolId}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-4">
             <div>
@@ -116,8 +127,14 @@ export function CodeDialog({ open, onOpenChange, code, loading, courseMap, forma
             <>
               <div className="space-y-4">
                 <div>
-                  <Label className="text-sm font-medium">Used By User ID</Label>
-                  <p className="text-sm font-mono">{code.usedByUserId || 'N/A'}</p>
+                  <Label className="text-sm font-medium">Used By</Label>
+                  <p className="text-sm">
+                    {code.usedByStudent
+                      ? (code.usedByStudent.email
+                          ? `${code.usedByStudent.full_name} (${code.usedByStudent.email})`
+                          : code.usedByStudent.full_name)
+                      : (code.usedByUserId ? <span className="font-mono">{code.usedByUserId}</span> : 'N/A')}
+                  </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Used At</Label>

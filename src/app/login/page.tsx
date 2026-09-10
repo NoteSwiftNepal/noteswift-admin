@@ -37,13 +37,23 @@ export default function LoginPage() {
       // Call Express backend for authentication
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
 
+      const safeJson = async (res: Response) => {
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          return await res.json();
+        }
+        const text = await res.text();
+        console.error(`Non-JSON response (${res.status}) from ${res.url}:`, text);
+        return { error: `Server error (${res.status}). Please verify backend is running on http://localhost:5000.` };
+      };
+
       // Step 1: Authenticate with backend (validates credentials and sends an email OTP)
       // Try the regular admin endpoint first (super_admin, admin)
       let loginResponse = await fetch(
         API_ENDPOINTS.AUTH.LOGIN,
         createFetchOptions('POST', { email: username, password })
       );
-      let loginData = await loginResponse.json();
+      let loginData = await safeJson(loginResponse);
       let flow: 'regular' | 'system_admin' = 'regular';
 
       // System admin accounts are rejected by the regular endpoint - transparently
@@ -53,7 +63,7 @@ export default function LoginPage() {
           API_ENDPOINTS.ADMIN_AUTH.LOGIN,
           createFetchOptions('POST', { email: username, password })
         );
-        loginData = await loginResponse.json();
+        loginData = await safeJson(loginResponse);
         flow = 'system_admin';
       }
 
@@ -83,13 +93,13 @@ export default function LoginPage() {
           description: loginData.error || "Invalid credentials.",
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
-      setError("An unexpected error occurred. Please try again.");
+      setError(err?.message || "An unexpected error occurred. Please try again.");
       toast({
         variant: "destructive",
         title: "Error",
-        description: "An unexpected error occurred.",
+        description: err?.message || "An unexpected error occurred.",
       });
     } finally {
       setIsLoading(false);

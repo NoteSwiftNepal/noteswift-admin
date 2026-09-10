@@ -7,6 +7,10 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://loc
 
 // export const API_BASE_URL = 'http://localhost:5000';
 
+// The noteswift-schools app's URL — used to open a school's
+// dashboard in "view as principal" mode from the admin dashboard.
+export const SCHOOLS_APP_URL = process.env.NEXT_PUBLIC_SCHOOLS_APP_URL || 'https://school.noteswift.com.np';
+
 export const API_ENDPOINTS = {
   BASE: API_BASE_URL,
   
@@ -101,6 +105,14 @@ export const API_ENDPOINTS = {
   USERS: {
     LIST: `${API_BASE_URL}/api/admin/users`,
     GET: (id: string) => `${API_BASE_URL}/api/admin/users/${id}`,
+    STUDENT_STATS: `${API_BASE_URL}/api/admin/users/students/stats`,
+    BAN: (id: string) => `${API_BASE_URL}/api/admin/users/${id}/ban`,
+    UNBAN: (id: string) => `${API_BASE_URL}/api/admin/users/${id}/unban`,
+  },
+  ENROLLMENTS: {
+    LIST: `${API_BASE_URL}/api/admin/enrollments`,
+    CREATE: `${API_BASE_URL}/api/admin/enrollments`,
+    REMOVE: (enrollmentId: string) => `${API_BASE_URL}/api/admin/enrollments/${enrollmentId}`,
   },
 
   // ==================== HOMEPAGE SETTINGS ====================
@@ -140,6 +152,12 @@ export const API_ENDPOINTS = {
     GET: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}`,
     UPDATE: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}`,
     DEACTIVATE: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/deactivate`,
+    PRINCIPAL_STATUS: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/principal`,
+    INVITE_PRINCIPAL: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/invite-principal`,
+    REMOVE_PRINCIPAL: (id: string, principalId: string) => `${API_BASE_URL}/api/admin/schools/${id}/principals/${principalId}/remove`,
+    VIEW_DASHBOARD: (id: string) => `${API_BASE_URL}/api/admin/schools/${id}/view-dashboard`,
+    REMOVE_STUDENT: (schoolId: string, studentId: string) => `${API_BASE_URL}/api/admin/schools/${schoolId}/students/${studentId}/remove`,
+    ASSIGN_STUDENT: (schoolId: string, studentId: string) => `${API_BASE_URL}/api/admin/schools/${schoolId}/students/${studentId}/assign`,
   },
 
   // ==================== APP UPDATE =================

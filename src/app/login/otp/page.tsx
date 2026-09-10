@@ -47,6 +47,16 @@ export default function OtpPage() {
     try {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
 
+      const safeJson = async (res: Response) => {
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          return await res.json();
+        }
+        const text = await res.text();
+        console.error(`Non-JSON response (${res.status}) from ${res.url}:`, text);
+        return { error: `Server error (${res.status}). Please verify backend is running on http://localhost:5000.` };
+      };
+
       const response = isMobileOtp
         ? await fetch(API_ENDPOINTS.AUTH.OTP_LOGIN_VERIFY, createFetchOptions('POST', { phone_number: phone, otp }))
         : await fetch(
@@ -54,7 +64,7 @@ export default function OtpPage() {
             createFetchOptions('POST', { email, otp })
           );
 
-      const data = await response.json();
+      const data = await safeJson(response);
 
       if (response.ok && data.token) {
         // Store the token in both localStorage and cookie
