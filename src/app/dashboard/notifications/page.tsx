@@ -27,8 +27,13 @@ interface Notification {
   message?: string;
   status: 'draft' | 'sent' | 'scheduled';
   sentAt?: string;
+  scheduledFor?: string;
+  inactivityDays?: number | null;
+  recipientIds?: string[];
   createdAt: string;
 }
+
+const INACTIVITY_PRESETS = [3, 7, 15] as const;
 
 export default function NotificationsPage() {
   const [isSending, setIsSending] = useState(false);
@@ -48,6 +53,14 @@ export default function NotificationsPage() {
     showDontShowAgain: true,
     buttonText: 'Close',
     buttonIcon: 'close'
+  });
+  // Push-only scheduling + inactivity targeting (per locked decisions: frozen
+  // recipient list at schedule time, single inactivityDays field, null =
+  // broadcast to everyone). Homepage notifications are untouched.
+  const [pushSchedule, setPushSchedule] = useState({
+    mode: 'now' as 'now' | 'schedule',
+    scheduledFor: '', // datetime-local string
+    inactivityDays: '' as string, // '' = no filter (everyone)
   });
 
   // Fetch notifications from backend
@@ -87,9 +100,11 @@ export default function NotificationsPage() {
     }
 
     try {
-      const response = await fetch(`/api/notifications/${notificationId}`, {
-        method: 'DELETE',
-      });
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(
+        API_ENDPOINTS.NOTIFICATIONS.DELETE(notificationId),
+        createFetchOptions('DELETE')
+      );
 
       if (response.ok) {
         toast({
@@ -156,19 +171,46 @@ export default function NotificationsPage() {
 
   const handleSendPushNotification = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const isScheduling = pushSchedule.mode === 'schedule';
+    if (isScheduling && !pushSchedule.scheduledFor) {
+      toast({
+        title: "Pick a date/time",
+        description: "Choose when this notification should send, or switch to Send Now.",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (isScheduling && new Date(pushSchedule.scheduledFor).getTime() <= Date.now()) {
+      toast({
+        title: "Pick a future time",
+        description: "The scheduled time must be in the future.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSendingPush(true);
 
     try {
       const formData = new FormData(e.target as HTMLFormElement);
-      const notificationData = {
+      const notificationData: Record<string, unknown> = {
         type: 'push',
         title: formData.get('pushTitle'),
         subject: formData.get('pushSubject'),
         message: formData.get('pushMessage'),
-        status: 'sent',
-        sentAt: new Date().toISOString(),
         adminId: 'admin-system' // In real app, get from auth
       };
+
+      if (isScheduling) {
+        notificationData.scheduledFor = new Date(pushSchedule.scheduledFor).toISOString();
+        notificationData.inactivityDays = pushSchedule.inactivityDays
+          ? Number(pushSchedule.inactivityDays)
+          : null;
+      } else {
+        notificationData.status = 'sent';
+        notificationData.sentAt = new Date().toISOString();
+      }
 
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
       const response = await fetch(
@@ -180,9 +222,13 @@ export default function NotificationsPage() {
 
       if (data.success) {
         toast({
-          title: "Push Notification Sent!",
-          description: `The notification has been sent to all students with registered devices.`,
+          title: isScheduling ? "Push Notification Scheduled!" : "Push Notification Sent!",
+          description: isScheduling
+            ? `Will send at ${new Date(pushSchedule.scheduledFor).toLocaleString()} to ${pushSchedule.inactivityDays ? `students inactive ${pushSchedule.inactivityDays}+ days` : 'all students with registered devices'}.`
+            : `The notification has been sent to all students with registered devices.`,
         });
+        setPushSchedule({ mode: 'now', scheduledFor: '', inactivityDays: '' });
+        (e.target as HTMLFormElement).reset();
         fetchNotifications(); // Refresh the list
       } else {
         throw new Error(data.error || data.message || 'Failed to send notification');
@@ -308,10 +354,90 @@ export default function NotificationsPage() {
                 <Label htmlFor="pushMessage">Message</Label>
                 <Textarea id="pushMessage" name="pushMessage" placeholder="Notification message..." className="min-h-[80px]" required />
               </div>
+
+              <div className="space-y-2">
+                <Label>When to send</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={pushSchedule.mode === 'now' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPushSchedule(prev => ({ ...prev, mode: 'now' }))}
+                  >
+                    Send Now
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={pushSchedule.mode === 'schedule' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPushSchedule(prev => ({ ...prev, mode: 'schedule' }))}
+                  >
+                    Schedule for Later
+                  </Button>
+                </div>
+              </div>
+
+              {pushSchedule.mode === 'schedule' && (
+                <div className="space-y-4 rounded-md border p-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="scheduledFor">Send at</Label>
+                    <Input
+                      id="scheduledFor"
+                      type="datetime-local"
+                      value={pushSchedule.scheduledFor}
+                      onChange={(e) => setPushSchedule(prev => ({ ...prev, scheduledFor: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="inactivityDays">Only send to students inactive for (days) — optional</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {INACTIVITY_PRESETS.map((days) => (
+                        <Button
+                          key={days}
+                          type="button"
+                          variant={pushSchedule.inactivityDays === String(days) ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setPushSchedule(prev => ({ ...prev, inactivityDays: String(days) }))}
+                        >
+                          {days}+ days
+                        </Button>
+                      ))}
+                      <Button
+                        type="button"
+                        variant={pushSchedule.inactivityDays && !(INACTIVITY_PRESETS as readonly number[]).includes(Number(pushSchedule.inactivityDays)) ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPushSchedule(prev => ({ ...prev, inactivityDays: prev.inactivityDays || '30' }))}
+                      >
+                        Custom
+                      </Button>
+                      {pushSchedule.inactivityDays && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPushSchedule(prev => ({ ...prev, inactivityDays: '' }))}
+                        >
+                          Clear (everyone)
+                        </Button>
+                      )}
+                    </div>
+                    <Input
+                      id="inactivityDays"
+                      type="number"
+                      min={1}
+                      placeholder="Leave blank to send to everyone"
+                      value={pushSchedule.inactivityDays}
+                      onChange={(e) => setPushSchedule(prev => ({ ...prev, inactivityDays: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
+
               <Button type="submit" className="w-full" disabled={isSendingPush}>
                 {isSendingPush && <Loader2 className="animate-spin" />}
                 <Smartphone className="w-4 h-4 mr-2" />
-                Send Push Notification
+                {pushSchedule.mode === 'schedule' ? 'Schedule Push Notification' : 'Send Push Notification'}
               </Button>
             </form>
           </CardContent>
@@ -382,7 +508,9 @@ export default function NotificationsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {item.sentAt ? new Date(item.sentAt).toLocaleDateString() : 'N/A'}
+                        {item.status === 'scheduled' && item.scheduledFor
+                          ? `Scheduled: ${new Date(item.scheduledFor).toLocaleString()}`
+                          : item.sentAt ? new Date(item.sentAt).toLocaleDateString() : 'N/A'}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -492,7 +620,26 @@ export default function NotificationsPage() {
                     </div>
                   </div>
                 )}
+                {selectedNotification.scheduledFor && (
+                  <div>
+                    <Label className="text-sm font-medium">Scheduled For</Label>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      {new Date(selectedNotification.scheduledFor).toLocaleString()}
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {selectedNotification.type === 'push' && selectedNotification.recipientIds && (
+                <div>
+                  <Label className="text-sm font-medium">Recipients</Label>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {selectedNotification.inactivityDays
+                      ? `${selectedNotification.recipientIds.length} student(s) inactive ${selectedNotification.inactivityDays}+ days (frozen at schedule time)`
+                      : `${selectedNotification.recipientIds.length} student(s) — broadcast (frozen at schedule time)`}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <Label className="text-sm font-medium">Notification ID</Label>
