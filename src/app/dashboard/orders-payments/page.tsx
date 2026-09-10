@@ -37,6 +37,7 @@ export default function OrdersPaymentsPage() {
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [codesLoading, setCodesLoading] = useState(true);
   const [coursesLoading, setCoursesLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'transactions' | 'codes' | 'bulk-codes' | 'esewa'>(
     (searchParams.get('tab') as any) || 'transactions'
   );
