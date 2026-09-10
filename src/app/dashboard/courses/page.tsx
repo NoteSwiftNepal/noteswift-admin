@@ -86,6 +86,13 @@ export default function CoursesManagementPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'pro');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['pro', 'free', 'enrollments', 'homepage'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
   
   // Confirmation dialog state
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);

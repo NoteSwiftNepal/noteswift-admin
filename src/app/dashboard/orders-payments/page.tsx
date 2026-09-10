@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +17,14 @@ import { CodeDialog } from "@/components/orders/CodeDialog";
 import { BulkCodeGenerationDialog } from "@/components/orders/BulkCodeGenerationDialog";
 import { EsewaTransactionDialog } from "@/components/orders/EsewaTransactionDialog";
 import { exportCodesListToPDF } from "@/lib/pdf-utils";
+import { useAdmin } from "@/context/admin-context";
 
 export default function OrdersPaymentsPage() {
   const { toast } = useToast();
+  const { admin } = useAdmin();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isNormalAdmin = admin?.role === 'admin';
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [codes, setCodes] = useState([]);
@@ -31,8 +37,18 @@ export default function OrdersPaymentsPage() {
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [codesLoading, setCodesLoading] = useState(true);
   const [coursesLoading, setCoursesLoading] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'transactions' | 'codes' | 'bulk-codes' | 'esewa'>('transactions');
+  const [activeTab, setActiveTab] = useState<'transactions' | 'codes' | 'bulk-codes' | 'esewa'>(
+    (searchParams.get('tab') as any) || 'transactions'
+  );
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['transactions', 'codes', 'bulk-codes', 'esewa'].includes(tab)) {
+      setActiveTab(tab as any);
+      if (tab === 'codes') fetchCodes();
+      if (tab === 'esewa') fetchEsewaTransactions();
+    }
+  }, [searchParams]);
   const [esewaTransactions, setEsewaTransactions] = useState<any[]>([]);
   const [esewaLoading, setEsewaLoading] = useState(false);
   const [selectedEsewaTransaction, setSelectedEsewaTransaction] = useState<any | null>(null);
@@ -55,8 +71,16 @@ export default function OrdersPaymentsPage() {
     fetchAdmins();
     fetchTransactions();
     fetchCourses();
-    fetchHistorySchools();
-  }, []);
+    if (!isNormalAdmin) {
+      fetchHistorySchools();
+    }
+  }, [isNormalAdmin]);
+
+  useEffect(() => {
+    if (isNormalAdmin && (activeTab === 'bulk-codes' || activeTab === 'esewa')) {
+      setActiveTab('transactions');
+    }
+  }, [isNormalAdmin, activeTab]);
 
   useEffect(() => {
     setSelectedCodeIds(new Set());
@@ -414,14 +438,16 @@ export default function OrdersPaymentsPage() {
             onSubmit={handleSubmitTransaction}
             loading={loading}
           />
-          <BulkCodeGenerationDialog
-            open={isBulkDialogOpen}
-            onOpenChange={setIsBulkDialogOpen}
-            courses={courses}
-            coursesLoading={coursesLoading}
-            onSubmit={handleSubmitBulkCodes}
-            loading={loading}
-          />
+          {!isNormalAdmin && (
+            <BulkCodeGenerationDialog
+              open={isBulkDialogOpen}
+              onOpenChange={setIsBulkDialogOpen}
+              courses={courses}
+              coursesLoading={coursesLoading}
+              onSubmit={handleSubmitBulkCodes}
+              loading={loading}
+            />
+          )}
         </div>
         <CodeGeneratedDialog
           open={isCodeDialogOpen}
@@ -462,31 +488,35 @@ export default function OrdersPaymentsPage() {
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Unlock Codes
+            {isNormalAdmin ? 'My Unlock Codes' : 'Unlock Codes'}
           </button>
-          <button
-            onClick={() => setActiveTab('bulk-codes')}
-            className={`px-4 py-2 font-medium transition-colors ${
-              activeTab === 'bulk-codes'
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Bulk Codes
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('esewa');
-              fetchEsewaTransactions();
-            }}
-            className={`px-4 py-2 font-medium transition-colors ${
-              activeTab === 'esewa'
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            eSewa Payments
-          </button>
+          {!isNormalAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab('bulk-codes')}
+                className={`px-4 py-2 font-medium transition-colors ${
+                  activeTab === 'bulk-codes'
+                    ? 'border-b-2 border-blue-600 text-blue-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Bulk Codes
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('esewa');
+                  fetchEsewaTransactions();
+                }}
+                className={`px-4 py-2 font-medium transition-colors ${
+                  activeTab === 'esewa'
+                    ? 'border-b-2 border-blue-600 text-blue-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                eSewa Payments
+              </button>
+            </>
+          )}
         </div>
 
         {/* Transactions Tab */}

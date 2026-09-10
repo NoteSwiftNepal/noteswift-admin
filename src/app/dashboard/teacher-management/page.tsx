@@ -202,7 +202,11 @@ export default function TeachersManagementPage() {
                    </div>
                 </div>
 
-      <Tabs defaultValue={activeTab} className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => router.push(`/dashboard/teacher-management?tab=${tab}`)}
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">
             Overview ({pendingTeachers.length + approvedTeachers.length + rejectedTeachers.length})

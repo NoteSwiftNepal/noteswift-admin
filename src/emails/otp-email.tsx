@@ -23,7 +23,7 @@ export const OtpEmail: React.FC<Readonly<OtpEmailProps>> = ({ otp }) => (
           </Text>
         </Section>
         <Hr style={hr} />
-        <Text style={footer}>Codelits Studio Pvt. Ltd.®</Text>
+        <Text style={footer}>NoteSwift Private Limited — All rights reserved.</Text>
       </Container>
     </Body>
   </Html>

@@ -95,7 +95,7 @@ export default function AppUpdatePage() {
           setShowVerificationDialog(true);
           toast({
             title: "Verification Code Sent",
-            description: "Please check info@codelitsstudio.com for the verification code.",
+            description: data.message || "Please check your registered admin email for the verification code.",
           });
         }
       } else {
@@ -349,7 +349,7 @@ export default function AppUpdatePage() {
             </DialogTitle>
             <DialogDescription>
               {codeSent 
-                ? "A verification code has been sent to info@codelitsstudio.com. Please enter the code below to confirm the app update."
+                ? "A verification code has been sent to your registered admin email. Please enter the code below to confirm the app update."
                 : "Click 'Send Code' to receive a verification code via email."
               }
             </DialogDescription>

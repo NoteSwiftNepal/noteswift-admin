@@ -12,9 +12,7 @@ import {
   Settings,
   ShieldCheck,
   Info,
-  UserCheck,
   BookOpen,
-  Sparkles,
   BotMessageSquare,
   Receipt,
   Smartphone,
@@ -37,24 +35,42 @@ import { cn } from "@/lib/utils";
 import { useLoading } from "@/context/loading-context";
 import { useAdmin } from "@/context/admin-context";
 
-const links = [
+interface NavChild {
+  href: string;
+  label: string;
+  requiresSuperAdmin?: boolean;
+}
+
+interface NavLink {
+  href: string;
+  label: string;
+  icon: any;
+  children?: NavChild[];
+}
+
+const links: NavLink[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   {
     href: "/dashboard/admin-management",
     label: "Admin Management",
     icon: ShieldCheck,
     children: [
+      { href: "/dashboard/admin-management?tab=hierarchy", label: "Admin Hierarchy" },
       { href: "/dashboard/admin-management?tab=list", label: "All Admins" },
-    ]
+      { href: "/dashboard/admin-management?tab=invite", label: "Invite Admin" },
+    ],
   },
   {
     href: "/dashboard/teacher-management",
     label: "Teacher Management",
     icon: Users,
     children: [
-      { href: "/dashboard/teacher-management?tab=pending", label: "Pending Teachers" },
+      { href: "/dashboard/teacher-management?tab=overview", label: "Overview" },
+      { href: "/dashboard/teacher-management?tab=pending", label: "Pending" },
+      { href: "/dashboard/teacher-management?tab=approved", label: "Approved" },
+      { href: "/dashboard/teacher-management?tab=rejected", label: "Rejected" },
       { href: "/dashboard/teacher-assignments", label: "Subject Assignments" },
-    ]
+    ],
   },
   {
     href: "/dashboard/school-management",
@@ -67,7 +83,10 @@ const links = [
     icon: BookOpen,
     children: [
       { href: "/dashboard/courses?tab=pro", label: "Pro Courses" },
-    ]
+      { href: "/dashboard/courses?tab=free", label: "Free Courses" },
+      { href: "/dashboard/courses?tab=enrollments", label: "Student Management" },
+      { href: "/dashboard/courses?tab=homepage", label: "Homepage" },
+    ],
   },
   { href: "/dashboard/recommendations", label: "Course Recommendations", icon: BotMessageSquare },
   { href: "/dashboard/app-block", label: "App Block", icon: Smartphone },
@@ -78,7 +97,8 @@ const links = [
     icon: Users,
     children: [
       { href: "/dashboard/users?tab=students", label: "Students" },
-    ]
+      { href: "/dashboard/users?tab=teachers", label: "Teachers" },
+    ],
   },
   { href: "/dashboard/reports", label: "Reports", icon: LineChart },
   {
@@ -87,19 +107,49 @@ const links = [
     icon: Bell,
     children: [
       { href: "/dashboard/notifications", label: "Notification History" },
-    ]
+    ],
   },
   { href: "/dashboard/revenue", label: "Revenue", icon: CreditCard },
-  { href: "/dashboard/orders-payments", label: "Orders & Payments", icon: Receipt },
-  { href: "/dashboard/archives", label: "Archives", icon: Archive },
+  {
+    href: "/dashboard/orders-payments",
+    label: "Orders & Payments",
+    icon: Receipt,
+    children: [
+      { href: "/dashboard/orders-payments?tab=transactions", label: "Transactions" },
+      { href: "/dashboard/orders-payments?tab=codes", label: "Unlock Codes" },
+      { href: "/dashboard/orders-payments?tab=bulk-codes", label: "Bulk Codes", requiresSuperAdmin: true },
+      { href: "/dashboard/orders-payments?tab=esewa", label: "eSewa", requiresSuperAdmin: true },
+    ],
+  },
+  {
+    href: "/dashboard/archives",
+    label: "Archives",
+    icon: Archive,
+    children: [
+      { href: "/dashboard/archives?tab=classes", label: "Live Classes" },
+      { href: "/dashboard/archives?tab=assignments", label: "Assignments" },
+    ],
+  },
   { href: "/dashboard/subject-groups", label: "Subject Groups", icon: Link2 },
   { href: "/dashboard/audit-log", label: "Audit Log", icon: ShieldCheck },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  {
+    href: "/dashboard/settings",
+    label: "Settings",
+    icon: Settings,
+    children: [
+      { href: "/dashboard/settings?tab=account", label: "My Account" },
+      { href: "/dashboard/settings?tab=platform", label: "Platform" },
+      { href: "/dashboard/settings?tab=security", label: "Security" },
+      { href: "/dashboard/settings?tab=payment", label: "Payment" },
+      { href: "/dashboard/settings?tab=email", label: "Email/SMS" },
+      { href: "/dashboard/settings?tab=users", label: "Users" },
+      { href: "/dashboard/settings?tab=content", label: "Content" },
+      { href: "/dashboard/settings?tab=maintenance", label: "Maintenance" },
+    ],
+  },
   { href: "/dashboard/about", label: "About", icon: Info },
 ];
 
-// Section headers purely group the same `links` entries above for a less
-// cluttered scan — every href/label/icon/children is referenced as-is.
 const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
   { label: "Overview", hrefs: ["/dashboard"] },
   {
@@ -141,12 +191,26 @@ const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
   },
 ];
 
-// A section/link is "active" when the current path is that page itself, or
-// (for parents with children) a page nested under it — same check the old
-// flat list used for highlighting, just reused here to auto-expand.
-function isParentActive(href: string, hasChildren: boolean, pathname: string) {
-  return pathname === href || (hasChildren && pathname.startsWith(`${href}/`));
+function isParentActive(linkHref: string, children: NavChild[] | undefined, pathname: string) {
+  if (pathname === linkHref) return true;
+  if (children) {
+    return children.some((child) => {
+      const childPath = child.href.split('?')[0];
+      return pathname === childPath || (childPath !== '/dashboard' && pathname.startsWith(`${childPath}/`));
+    });
+  }
+  return false;
 }
+
+const DEFAULT_TABS: Record<string, string> = {
+  '/dashboard/admin-management': 'hierarchy',
+  '/dashboard/teacher-management': 'overview',
+  '/dashboard/users': 'students',
+  '/dashboard/courses': 'pro',
+  '/dashboard/orders-payments': 'transactions',
+  '/dashboard/archives': 'classes',
+  '/dashboard/settings': 'account',
+};
 
 export function DashboardNav() {
   const pathname = usePathname();
@@ -154,24 +218,24 @@ export function DashboardNav() {
   const { startLoading } = useLoading();
   const { admin } = useAdmin();
 
+  const isNormalAdmin = admin?.role === 'admin';
+
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const link of links) {
       if (link.children) {
-        initial[link.href] = isParentActive(link.href, true, pathname);
+        initial[link.href] = isParentActive(link.href, link.children, pathname);
       }
     }
     return initial;
   });
 
-  // Keep whichever section the user is currently in expanded as they
-  // navigate, without collapsing sections they opened manually.
   useEffect(() => {
     setExpanded((prev) => {
       let changed = false;
       const next = { ...prev };
       for (const link of links) {
-        if (link.children && isParentActive(link.href, true, pathname) && !next[link.href]) {
+        if (link.children && isParentActive(link.href, link.children, pathname) && !next[link.href]) {
           next[link.href] = true;
           changed = true;
         }
@@ -197,16 +261,45 @@ export function DashboardNav() {
     }
   };
 
-  const isLinkActive = (href: string) => {
-    const url = new URL(href, window.location.origin);
-    return pathname === url.pathname && searchParams.get('tab') === url.searchParams.get('tab');
+  const isLinkActive = (childHref: string, parentHref: string) => {
+    const [childPath, childQuery] = childHref.split('?');
+    if (pathname !== childPath) return false;
+
+    const childParams = new URLSearchParams(childQuery || '');
+    const childTab = childParams.get('tab');
+    const currentTab = searchParams.get('tab');
+
+    if (childTab) {
+      if (currentTab) {
+        return currentTab === childTab;
+      }
+      return DEFAULT_TABS[parentHref] === childTab;
+    }
+
+    return !currentTab;
   };
 
   const roleDisplay = admin ? getRoleDisplay(admin.role) : { text: "Loading...", variant: "secondary" as const, className: "" };
 
+  const NORMAL_ADMIN_ALLOWED_HREFS = new Set([
+    "/dashboard",
+    "/dashboard/users",
+    "/dashboard/revenue",
+    "/dashboard/orders-payments",
+    "/dashboard/settings",
+    "/dashboard/about"
+  ]);
+
+  const visibleSections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    hrefs: isNormalAdmin
+      ? section.hrefs.filter((href) => NORMAL_ADMIN_ALLOWED_HREFS.has(href))
+      : section.hrefs,
+  })).filter((section) => section.hrefs.length > 0);
+
   return (
-    <nav className="flex flex-col h-full">
-      <div className="px-4 py-4">
+    <nav className="flex flex-col h-full select-none">
+      <div className="px-4 py-4 shrink-0">
         {admin?.role && (
           <div className="mb-2">
             <Badge variant={roleDisplay.variant} className={cn("text-xs", roleDisplay.className)}>
@@ -216,11 +309,12 @@ export function DashboardNav() {
         )}
         <h2 className="text-lg font-bold">Admin Panel</h2>
       </div>
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
-        {NAV_SECTIONS.map((section) => {
+
+      <div className="flex-1 overflow-y-auto px-2 pb-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        {visibleSections.map((section) => {
           const sectionLinks = section.hrefs
             .map((href) => links.find((l) => l.href === href))
-            .filter((l): l is typeof links[number] => !!l);
+            .filter((l): l is NavLink => !!l);
 
           if (sectionLinks.length === 0) return null;
 
@@ -231,8 +325,13 @@ export function DashboardNav() {
               </div>
               <SidebarMenu className="space-y-0.5">
                 {sectionLinks.map((link) => {
-                  const hasChildren = !!link.children;
-                  const active = isParentActive(link.href, hasChildren, pathname);
+                  const filteredChildren = link.children?.filter((child) => {
+                    if (isNormalAdmin && child.requiresSuperAdmin) return false;
+                    return true;
+                  });
+
+                  const hasChildren = !!filteredChildren && filteredChildren.length > 0;
+                  const active = isParentActive(link.href, filteredChildren, pathname);
                   const isOpen = hasChildren && !!expanded[link.href];
 
                   return (
@@ -242,6 +341,9 @@ export function DashboardNav() {
                           <Link
                             href={link.href}
                             onClick={() => {
+                              if (hasChildren && !isOpen) {
+                                toggleExpanded(link.href);
+                              }
                               if (link.href !== pathname) {
                                 startLoading();
                               }
@@ -250,7 +352,7 @@ export function DashboardNav() {
                               "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
                               hasChildren && "pr-8",
                               active
-                                ? "bg-primary text-primary-foreground"
+                                ? "bg-primary text-primary-foreground font-medium"
                                 : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"
                             )}
                           >
@@ -269,29 +371,42 @@ export function DashboardNav() {
                             )}
                           >
                             <ChevronDown
-                              className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")}
+                              className={cn("h-3.5 w-3.5 transition-transform duration-200", isOpen && "rotate-180")}
                             />
                           </button>
                         )}
                       </div>
                       {hasChildren && isOpen && (
-                        <SidebarMenuSub className="mx-4 border-l-2 border-gray-300 px-2">
-                          {link.children!.map((child) => (
-                            <SidebarMenuSubItem key={child.href}>
-                              <SidebarMenuSubButton
-                                asChild
-                                isActive={isLinkActive(child.href)}
-                                className={cn(
-                                  "text-[13px]",
-                                  isLinkActive(child.href)
-                                    ? "font-medium text-blue-600"
-                                    : "text-gray-500 hover:text-blue-600"
-                                )}
-                              >
-                                <Link href={child.href}>{child.label}</Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
+                        <SidebarMenuSub className="mx-3.5 mt-1 border-l-2 border-gray-200 pl-2.5 space-y-0.5">
+                          {filteredChildren.map((child) => {
+                            const isChildActive = isLinkActive(child.href, link.href);
+                            return (
+                              <SidebarMenuSubItem key={child.href}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  isActive={isChildActive}
+                                  className={cn(
+                                    "text-[13px] py-1.5 px-2 rounded-md transition-colors",
+                                    isChildActive
+                                      ? "font-semibold text-blue-600 bg-blue-50"
+                                      : "text-gray-600 hover:text-blue-600 hover:bg-gray-50"
+                                  )}
+                                >
+                                  <Link
+                                    href={child.href}
+                                    onClick={() => {
+                                      const childPath = child.href.split('?')[0];
+                                      if (childPath !== pathname) {
+                                        startLoading();
+                                      }
+                                    }}
+                                  >
+                                    {child.label}
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
                         </SidebarMenuSub>
                       )}
                     </SidebarMenuItem>
@@ -305,3 +420,4 @@ export function DashboardNav() {
     </nav>
   );
 }
+

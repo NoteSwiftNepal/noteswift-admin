@@ -11,30 +11,61 @@ import { handleGetTaskSuggestions } from "@/app/actions";
 import type { TaskSuggestionsOutput } from "@/ai/flows/task-suggestions";
 import { Skeleton } from "./ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import { BotMessageSquare, Terminal, ArrowRight } from "lucide-react";
+import { BotMessageSquare, Terminal, ArrowRight, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 
+const STORAGE_KEY = "noteswift_dashboard_task_suggestions";
+
 export function TaskSuggestions() {
-  const [suggestions, setSuggestions] = useState<TaskSuggestionsOutput | null>(
-    null
-  );
-  const [isLoading, setIsLoading] = useState(true);
+  const [suggestions, setSuggestions] = useState<TaskSuggestionsOutput | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = sessionStorage.getItem(STORAGE_KEY);
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return null;
+  });
+  const [isLoading, setIsLoading] = useState(!suggestions);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      setIsLoading(true);
+  const fetchSuggestions = async (force = false) => {
+    try {
+      if (force) {
+        setIsRefreshing(true);
+      } else {
+        if (suggestions) return;
+        const cached = typeof window !== "undefined" ? sessionStorage.getItem(STORAGE_KEY) : null;
+        if (cached) {
+          setSuggestions(JSON.parse(cached));
+          setIsLoading(false);
+          return;
+        }
+        setIsLoading(true);
+      }
       setError(null);
       const result = await handleGetTaskSuggestions();
       if (result.success && result.suggestions) {
         setSuggestions(result.suggestions);
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(result.suggestions));
+        }
       } else {
         setError(result.error || "Failed to load suggestions.");
       }
+    } catch (err: any) {
+      setError(err?.message || "Failed to load suggestions.");
+    } finally {
       setIsLoading(false);
-    };
+      setIsRefreshing(false);
+    }
+  };
 
-    fetchSuggestions();
+  useEffect(() => {
+    if (!suggestions) {
+      fetchSuggestions();
+    }
   }, []);
 
   if (isLoading) {
@@ -57,7 +88,7 @@ export function TaskSuggestions() {
     );
   }
 
-  if (error) {
+  if (error && !suggestions) {
     return (
       <Alert variant="destructive" className="max-w-full">
         <Terminal className="h-4 w-4" />
@@ -71,9 +102,21 @@ export function TaskSuggestions() {
     return (
       <Card className="max-w-full">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <BotMessageSquare className="h-6 w-6 text-primary" />
-            <CardTitle className="font-headline">Suggested Tasks</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BotMessageSquare className="h-6 w-6 text-primary" />
+              <CardTitle className="font-headline">Suggested Tasks</CardTitle>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fetchSuggestions(true)}
+              disabled={isRefreshing}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
           </div>
           <CardDescription>AI-powered recommendations will appear here based on real platform data.</CardDescription>
         </CardHeader>
@@ -89,9 +132,21 @@ export function TaskSuggestions() {
   return (
     <Card className="max-w-full">
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <BotMessageSquare className="h-6 w-6 text-primary" />
-          <CardTitle className="font-headline">Suggested Tasks</CardTitle>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BotMessageSquare className="h-6 w-6 text-primary" />
+            <CardTitle className="font-headline">Suggested Tasks</CardTitle>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => fetchSuggestions(true)}
+            disabled={isRefreshing}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
         <CardDescription>
           AI-powered recommendations based on real platform data and metrics.

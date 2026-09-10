@@ -87,7 +87,25 @@ export async function handleGetDashboardInsights() {
       topCourses,
     };
 
-    const result = await getDashboardInsights(realInput);
+    let result;
+    try {
+      result = await getDashboardInsights(realInput);
+    } catch (aiError) {
+      console.warn("AI insights error, using calculated metrics fallback:", aiError);
+      result = {
+        summary: `Platform currently serves ${totalUsers} registered students across ${coursesPublished} published courses, with ${newSignupsLastWeek} new signups this week.`,
+        highlights: [
+          `Total active platform enrollment reached ${totalUsers} registered students.`,
+          coursesPublished > 0 ? `${coursesPublished} courses are published and accessible to students.` : `No courses published yet.`,
+          topCourses.length > 0 ? `Top engaging course is "${topCourses[0].name}" with ${topCourses[0].engagement} enrollments.` : `Track user enrollments to identify top courses.`
+        ],
+        suggestions: [
+          `Promote high-performing courses to encourage active student signups.`,
+          `Keep course notes and curriculum updated for active study groups.`
+        ]
+      };
+    }
+
     return { success: true, insights: result };
   } catch (error) {
     console.error("Error getting dashboard insights:", error);
@@ -124,7 +142,39 @@ export async function handleGetTaskSuggestions() {
       failedPaymentsCount,
     };
 
-    const result = await getTaskSuggestions(realInput);
+    let result;
+    try {
+      result = await getTaskSuggestions(realInput);
+    } catch (aiError) {
+      console.warn("AI task suggestions error, using calculated metrics fallback:", aiError);
+      const tasks = [];
+      if (failedPaymentsCount > 0) {
+        tasks.push({
+          title: "Resolve Failed Transactions",
+          description: `${failedPaymentsCount} transactions encountered payment issues. Review them to assist students.`,
+          actionLabel: "View Orders",
+          actionLink: "/dashboard/orders-payments"
+        });
+      }
+      if (inactiveUserCount > 0) {
+        tasks.push({
+          title: "Re-engage Inactive Students",
+          description: `${inactiveUserCount} students have not logged in over 30 days.`,
+          actionLabel: "View Students",
+          actionLink: "/dashboard/users"
+        });
+      }
+      if (unreviewedContentCount > 0) {
+        tasks.push({
+          title: "Review Course Curriculum",
+          description: `${unreviewedContentCount} courses have not received updates recently.`,
+          actionLabel: "View Courses",
+          actionLink: "/dashboard/courses"
+        });
+      }
+      result = { tasks };
+    }
+
     return { success: true, suggestions: result };
   } catch (error) {
     console.error("Error getting task suggestions:", error);

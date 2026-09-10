@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,9 +62,18 @@ interface PaginationInfo {
 
 export default function ArchivesPage() {
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ArchiveStats | null>(null);
-  const [activeTab, setActiveTab] = useState('classes');
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'classes');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['classes', 'assignments'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   const [liveClasses, setLiveClasses] = useState<ArchivedItem[]>([]);
   const [assignments, setAssignments] = useState<ArchivedItem[]>([]);

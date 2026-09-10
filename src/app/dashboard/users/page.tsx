@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2, GraduationCap, School } from "lucide-react";
 import { AssignCourseDialog, AssignCourseFormData } from "@/components/users/AssignCourseDialog";
 import { ManageSchoolDialog } from "@/components/users/ManageSchoolDialog";
@@ -295,6 +295,7 @@ export default function UsersPage() {
   const [assignSchoolLoading, setAssignSchoolLoading] = useState(false);
   const [makeIndependentLoading, setMakeIndependentLoading] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get('tab') || 'students';
 
@@ -727,7 +728,11 @@ export default function UsersPage() {
         </div>
       </div>
 
-      <Tabs defaultValue={activeTab} className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => router.push(`/dashboard/users?tab=${tab}`)}
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="students">
             Students ({studentStats?.total ?? studentsWithEnrollments.length})

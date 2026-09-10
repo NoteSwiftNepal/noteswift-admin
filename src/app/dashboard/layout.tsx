@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import {
   SidebarProvider,
@@ -22,9 +22,26 @@ import { LoadingBar } from "@/components/ui/loading-bar";
 import { PageNavigationHandler } from "@/components/page-navigation-handler";
 import { AdminProvider, useAdmin } from "@/context/admin-context";
 
+const FORBIDDEN_FOR_NORMAL_ADMIN = [
+  '/dashboard/admin-management',
+  '/dashboard/teacher-management',
+  '/dashboard/teacher-assignments',
+  '/dashboard/school-management',
+  '/dashboard/courses',
+  '/dashboard/recommendations',
+  '/dashboard/promo-banners',
+  '/dashboard/app-block',
+  '/dashboard/reports',
+  '/dashboard/notifications',
+  '/dashboard/archives',
+  '/dashboard/subject-groups',
+  '/dashboard/audit-log',
+];
+
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { admin, loading, error } = useAdmin();
   const router = useRouter();
+  const pathname = usePathname();
   const { toast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -35,12 +52,30 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     }
   }, [admin, loading, error, router]);
 
+  useEffect(() => {
+    if (admin && admin.role === 'admin' && !loading) {
+      const isForbidden = FORBIDDEN_FOR_NORMAL_ADMIN.some(
+        (forbiddenPath) => pathname === forbiddenPath || pathname.startsWith(`${forbiddenPath}/`)
+      );
+      if (isForbidden) {
+        toast({
+          title: "Access Denied",
+          description: "You do not have permission to view this section.",
+          variant: "destructive",
+        });
+        router.replace('/dashboard');
+      }
+    }
+  }, [admin, loading, pathname, router, toast]);
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
 
     try {
-      // Clear admin-specific localStorage and cookies
+      // Clear admin-specific localStorage, sessionStorage and cookies
       localStorage.removeItem('adminToken');
+      sessionStorage.removeItem('noteswift_dashboard_insights');
+      sessionStorage.removeItem('noteswift_dashboard_task_suggestions');
       document.cookie = 'admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
       toast({
@@ -57,6 +92,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       console.error('Logout failed:', error);
       // Force logout even if clearing fails
       localStorage.clear();
+      sessionStorage.clear();
       document.cookie = 'admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       router.push('/login');
     }

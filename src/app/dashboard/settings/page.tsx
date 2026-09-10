@@ -1,3 +1,6 @@
+"use client";
+
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MyAccountSettings } from "@/components/admin/my-account-settings";
@@ -11,6 +14,14 @@ import { SystemMaintenanceSettings } from "@/components/admin/system-maintenance
 import { Settings } from "lucide-react";
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'account';
+
+  const handleTabChange = (val: string) => {
+    router.push(`/dashboard/settings?tab=${val}`);
+  };
+
   return (
     <div className="flex flex-col gap-8">
 
@@ -21,7 +32,7 @@ export default function SettingsPage() {
                   </div>
           <p className="text-gray-600 mt-2">Configure and manage your NoteSwift platform settings</p>
         </div>
-      <Tabs defaultValue="account" className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="account">My Account</TabsTrigger>
           <TabsTrigger value="platform">Platform</TabsTrigger>
