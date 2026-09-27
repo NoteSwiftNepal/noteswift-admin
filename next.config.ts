@@ -19,6 +19,16 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Fix: Genkit pulls in @opentelemetry/sdk-node which depends on
+  // @opentelemetry/exporter-jaeger (uses native gRPC bindings).
+  // These cannot be bundled in Vercel's serverless environment.
+  serverExternalPackages: [
+    '@opentelemetry/exporter-jaeger',
+    '@opentelemetry/sdk-node',
+    'genkit',
+    '@genkit-ai/googleai',
+    '@genkit-ai/next',
+  ],
 };
 
 export default nextConfig;
