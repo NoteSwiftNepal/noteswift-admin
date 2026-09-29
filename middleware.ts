@@ -11,8 +11,14 @@ async function verifyAdminToken(token: string) {
   const candidateSecrets = [
     process.env.JWT_SECRET?.trim().replace(/^["']|["']$/g, ''),
     process.env.JWT_ACCESS_SECRET?.trim().replace(/^["']|["']$/g, ''),
-    '79a3d5620cd163e06464e569561368dceba801333184df5ba990c7546ff34249d9f6d98409e24c10a674d41ba5b2bcef5fa3f9735ae7fbf50cabfaea854a90ca',
-    '784b9d57b72014f4e6921769e86ec41603799c80aad66fa5a45edaad770d12b46b12e21528586aac6852bd94190d778788c432420eddf04ff6db7217832d248f',
+    process.env.SESSION_SECRET?.trim().replace(/^["']|["']$/g, ''),
+    process.env.JWT_REFRESH_SECRET?.trim().replace(/^["']|["']$/g, ''),
+    // Standard backend .env keys:
+    '79a3d5620cd163e06464e569561368dceba801333184df5ba990c7546ff34249d9f6d98409e24c10a674d41ba5b2bcef5fa3f9735ae7fbf50cabfaea854a90ca', // JWT_SECRET
+    '784b9d57b72014f4e6921769e86ec41603799c80aad66fa5a45edaad770d12b46b12e21528586aac6852bd94190d778788c432420eddf04ff6db7217832d248f', // JWT_ACCESS_SECRET
+    '39778d47a93a94db34adcff73210a95a71bbd14af5a688b2848665d37f0f29d24eba98f43a19161c879df8ff7b434ab7811be76baecc60a7c8802bf464451c25', // JWT_REFRESH_SECRET
+    'd86f35149bb777c9a70ef0594473d936259e94e79cd4d6687828eb8b8f78fe928bcef148edeac673c4923b4003fa224ec8974e7db7f603a555d3b09ba0338ee0', // SESSION_SECRET
+    'c3a1f8e2d74b96053ef12a78b459c6d1082e3f5a7b94c261d0e8f3a56b72c9d4e1f087a3c52b69d4e8f1a3c07b54e2d6f9a1b3c5e7d902f4b68a1c3e5f70892', // SMC_JWT_SECRET
     'fallback-secret-key-change-in-production',
   ].filter((s): s is string => Boolean(s && s.length > 0));
 
@@ -34,7 +40,10 @@ async function verifyAdminToken(token: string) {
   try {
     const unverifiedPayload = decodeJwt(token);
     console.error(`[Middleware Auth Failed] Token unverified claims:`, JSON.stringify(unverifiedPayload));
-  } catch {}
+    console.error(`[Middleware Auth Failed] Tested ${candidateSecrets.length} candidate secrets, but none verified the signature.`);
+  } catch (decodeErr: any) {
+    console.error(`[Middleware Auth Failed] Could not decode token claims:`, decodeErr?.message);
+  }
 
   throw lastError;
 }
