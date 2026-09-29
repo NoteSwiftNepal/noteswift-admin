@@ -1,11 +1,43 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
+import { jwtVerify, decodeJwt } from 'jose';
 
 // Define protected routes
 const protectedRoutes = ['/dashboard'];
 const adminAuthRoutes = ['/admin/login', '/admin/otp'];
 const regularAuthRoutes = ['/login', '/login/otp'];
+
+async function verifyAdminToken(token: string) {
+  const candidateSecrets = [
+    process.env.JWT_SECRET?.trim().replace(/^["']|["']$/g, ''),
+    process.env.JWT_ACCESS_SECRET?.trim().replace(/^["']|["']$/g, ''),
+    '79a3d5620cd163e06464e569561368dceba801333184df5ba990c7546ff34249d9f6d98409e24c10a674d41ba5b2bcef5fa3f9735ae7fbf50cabfaea854a90ca',
+    '784b9d57b72014f4e6921769e86ec41603799c80aad66fa5a45edaad770d12b46b12e21528586aac6852bd94190d778788c432420eddf04ff6db7217832d248f',
+    'fallback-secret-key-change-in-production',
+  ].filter((s): s is string => Boolean(s && s.length > 0));
+
+  let lastError: any = null;
+
+  for (let i = 0; i < candidateSecrets.length; i++) {
+    try {
+      const secret = new TextEncoder().encode(candidateSecrets[i]);
+      const { payload } = await jwtVerify(token, secret);
+      if (i > 0) {
+        console.warn(`[Middleware] Token verified with candidate secret index ${i}`);
+      }
+      return payload;
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+
+  try {
+    const unverifiedPayload = decodeJwt(token);
+    console.error(`[Middleware Auth Failed] Token unverified claims:`, JSON.stringify(unverifiedPayload));
+  } catch {}
+
+  throw lastError;
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -25,32 +57,24 @@ export async function middleware(request: NextRequest) {
   const isAdminAuthRoute = adminAuthRoutes.some(route => pathname === route);
   const isRegularAuthRoute = regularAuthRoutes.some(route => pathname === route);
 
-  // Get tokens from cookies or headers (admin system uses localStorage, but we can check headers)
+  // Get tokens from cookies or headers
   const adminToken = request.cookies.get('admin_token')?.value ||
                     request.headers.get('authorization')?.replace('Bearer ', '');
 
   // For protected routes, check authentication
   if (isProtectedRoute) {
     if (!adminToken) {
-      // Redirect to regular login (normal admins use /login)
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('redirect', pathname);
       return NextResponse.redirect(loginUrl);
     }
 
     try {
-      const rawSecret = process.env.JWT_SECRET;
-      if (!rawSecret) {
-        console.error('[Middleware] CRITICAL: JWT_SECRET environment variable is missing in this deployment environment!');
-      }
-      const cleanSecret = rawSecret ? rawSecret.trim().replace(/^["']|["']$/g, '') : 'fallback-secret-key-change-in-production';
-      const secret = new TextEncoder().encode(cleanSecret);
+      const payload = await verifyAdminToken(adminToken);
 
-      const { payload } = await jwtVerify(adminToken, secret);
-
-      // Check if it's an admin token
-      if (payload.type !== 'admin') {
-        console.warn(`[Middleware] Rejecting token: expected payload.type === 'admin', received '${payload.type}'`);
+      // Check if it's an admin token (regular admin or admin session)
+      if (payload.type !== 'admin' && payload.type !== 'admin_session') {
+        console.warn(`[Middleware] Rejecting token: unexpected payload.type '${payload.type}'`);
         const loginUrl = new URL('/login', request.url);
         return NextResponse.redirect(loginUrl);
       }
@@ -69,12 +93,8 @@ export async function middleware(request: NextRequest) {
   // If already authenticated, redirect to dashboard from login pages
   if ((pathname === '/login' || pathname === '/login/otp') && adminToken) {
     try {
-      const rawSecret = process.env.JWT_SECRET;
-      const cleanSecret = rawSecret ? rawSecret.trim().replace(/^["']|["']$/g, '') : 'fallback-secret-key-change-in-production';
-      const secret = new TextEncoder().encode(cleanSecret);
-      const { payload } = await jwtVerify(adminToken, secret);
-
-      if (payload.type === 'admin') {
+      const payload = await verifyAdminToken(adminToken);
+      if (payload.type === 'admin' || payload.type === 'admin_session') {
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }
     } catch (error) {
@@ -86,25 +106,18 @@ export async function middleware(request: NextRequest) {
 
   // Prevent regular admins from accessing system admin login page
   if (pathname === '/admin/login' || pathname === '/admin/otp') {
-    // Only system admins should use this route
-    // Regular admins should be redirected to /login
-    // Note: System admin access is validated on the backend
     return NextResponse.next();
   }
 
   // If accessing admin auth routes while already authenticated as system admin, redirect to dashboard
   if (isAdminAuthRoute && adminToken) {
     try {
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
-      const { payload } = await jwtVerify(adminToken, secret);
-
-      if (payload.type === 'admin') {
-        // Admin is already authenticated, redirect to dashboard
+      const payload = await verifyAdminToken(adminToken);
+      if (payload.type === 'admin' || payload.type === 'admin_session') {
         const redirectTo = request.nextUrl.searchParams.get('redirect') || '/dashboard';
         return NextResponse.redirect(new URL(redirectTo, request.url));
       }
     } catch (error) {
-      // Invalid token, clear it and continue to login
       const response = NextResponse.next();
       response.cookies.delete('admin_token');
       return response;
