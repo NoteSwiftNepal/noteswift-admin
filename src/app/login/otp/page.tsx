@@ -71,7 +71,11 @@ export default function OtpPage() {
         localStorage.setItem('adminToken', data.token);
 
         // Set cookie for middleware to detect
-        document.cookie = `admin_token=${data.token}; path=/; max-age=86400; samesite=lax`;
+        // NOTE: 'secure' flag is required in production (HTTPS) — without it the browser
+        // silently drops the cookie and middleware can't authenticate the user.
+        const isHttps = window.location.protocol === 'https:';
+        const securePart = isHttps ? '; secure' : '';
+        document.cookie = `admin_token=${data.token}; path=/; max-age=86400; samesite=lax${securePart}`;
 
         // Backup session info to localStorage for UI purposes
         localStorage.setItem('admin_session_backup', JSON.stringify({
