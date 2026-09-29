@@ -74,8 +74,8 @@ export default function OtpPage() {
         // NOTE: 'secure' flag is required in production (HTTPS) — without it the browser
         // silently drops the cookie and middleware can't authenticate the user.
         const isHttps = window.location.protocol === 'https:';
-        const securePart = isHttps ? '; secure' : '';
-        document.cookie = `admin_token=${data.token}; path=/; max-age=86400; samesite=lax${securePart}`;
+        const securePart = isHttps ? '; Secure' : '';
+        document.cookie = `admin_token=${data.token}; Path=/; Max-Age=86400; SameSite=Lax${securePart}`;
 
         // Backup session info to localStorage for UI purposes
         localStorage.setItem('admin_session_backup', JSON.stringify({

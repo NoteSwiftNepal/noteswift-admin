@@ -84,8 +84,8 @@ export default function LoginPage() {
         // Direct login without OTP (shouldn't happen for regular flow)
         localStorage.setItem('adminToken', loginData.token);
         const isHttps = window.location.protocol === 'https:';
-        const securePart = isHttps ? '; secure' : '';
-        document.cookie = `admin_token=${loginData.token}; path=/; max-age=86400; samesite=lax${securePart}`;
+        const securePart = isHttps ? '; Secure' : '';
+        document.cookie = `admin_token=${loginData.token}; Path=/; Max-Age=86400; SameSite=Lax${securePart}`;
         router.push("/dashboard");
       } else {
         setError(loginData.error || "Invalid username or password. Please try again.");

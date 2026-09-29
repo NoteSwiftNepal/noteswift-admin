@@ -39,21 +39,26 @@ export async function middleware(request: NextRequest) {
     }
 
     try {
-      // Verify the JWT token
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+      const rawSecret = process.env.JWT_SECRET;
+      if (!rawSecret) {
+        console.error('[Middleware] CRITICAL: JWT_SECRET environment variable is missing in this deployment environment!');
+      }
+      const cleanSecret = rawSecret ? rawSecret.trim().replace(/^["']|["']$/g, '') : 'fallback-secret-key-change-in-production';
+      const secret = new TextEncoder().encode(cleanSecret);
+
       const { payload } = await jwtVerify(adminToken, secret);
 
       // Check if it's an admin token
       if (payload.type !== 'admin') {
-        // Not an admin token, redirect to regular login
+        console.warn(`[Middleware] Rejecting token: expected payload.type === 'admin', received '${payload.type}'`);
         const loginUrl = new URL('/login', request.url);
         return NextResponse.redirect(loginUrl);
       }
 
       // Token is valid, allow access
       return NextResponse.next();
-    } catch (error) {
-      // Token is invalid or expired, redirect to regular login
+    } catch (error: any) {
+      console.error(`[Middleware Auth Failed] Route: ${pathname}, Reason: ${error?.message || error} (Code: ${error?.code || 'UNKNOWN'})`);
       const loginUrl = new URL('/login', request.url);
       const response = NextResponse.redirect(loginUrl);
       response.cookies.delete('admin_token');
@@ -64,15 +69,15 @@ export async function middleware(request: NextRequest) {
   // If already authenticated, redirect to dashboard from login pages
   if ((pathname === '/login' || pathname === '/login/otp') && adminToken) {
     try {
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+      const rawSecret = process.env.JWT_SECRET;
+      const cleanSecret = rawSecret ? rawSecret.trim().replace(/^["']|["']$/g, '') : 'fallback-secret-key-change-in-production';
+      const secret = new TextEncoder().encode(cleanSecret);
       const { payload } = await jwtVerify(adminToken, secret);
 
       if (payload.type === 'admin') {
-        // Already authenticated admin, redirect to dashboard
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }
     } catch (error) {
-      // Invalid token, clear it
       const response = NextResponse.next();
       response.cookies.delete('admin_token');
       return response;
