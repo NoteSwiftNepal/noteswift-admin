@@ -58,6 +58,7 @@ const links: NavLink[] = [
       { href: "/dashboard/admin-management?tab=hierarchy", label: "Admin Hierarchy" },
       { href: "/dashboard/admin-management?tab=list", label: "All Admins" },
       { href: "/dashboard/admin-management?tab=invite", label: "Invite Admin" },
+      { href: "/dashboard/admin-performance", label: "Admin Performance" },
     ],
   },
   {

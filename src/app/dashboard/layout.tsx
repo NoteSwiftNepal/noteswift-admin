@@ -24,6 +24,7 @@ import { AdminProvider, useAdmin } from "@/context/admin-context";
 
 const FORBIDDEN_FOR_NORMAL_ADMIN = [
   '/dashboard/admin-management',
+  '/dashboard/admin-performance',
   '/dashboard/teacher-management',
   '/dashboard/teacher-assignments',
   '/dashboard/school-management',

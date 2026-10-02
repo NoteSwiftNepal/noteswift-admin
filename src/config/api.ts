@@ -142,6 +142,9 @@ export const API_ENDPOINTS = {
     REMOVE: `${API_BASE_URL}/api/admin/admins/remove`,
     SET_SUPER_ADMIN: `${API_BASE_URL}/api/admin/admins/set-super-admin`,
     DEMOTE_SUPER_ADMIN: `${API_BASE_URL}/api/admin/admins/demote-super-admin`,
+    PERFORMANCE: `${API_BASE_URL}/api/admin/admin-performance`,
+    PERFORMANCE_TRANSACTIONS: (adminId: string) => `${API_BASE_URL}/api/admin/admin-performance/${adminId}/transactions`,
+    UPDATE_TRANSACTION_AMOUNT: (id: string) => `${API_BASE_URL}/api/admin/admin-performance/transactions/${id}`,
   },
 
   // ==================== SCHOOL MANAGEMENT ====================
