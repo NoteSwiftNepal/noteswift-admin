@@ -19,6 +19,7 @@ import {
   Archive,
   Image,
   School,
+  TicketPercent,
   ChevronDown,
   Link2,
 } from "lucide-react";
@@ -119,9 +120,10 @@ const links: NavLink[] = [
       { href: "/dashboard/orders-payments?tab=transactions", label: "Transactions" },
       { href: "/dashboard/orders-payments?tab=codes", label: "Unlock Codes" },
       { href: "/dashboard/orders-payments?tab=bulk-codes", label: "Bulk Codes", requiresSuperAdmin: true },
-      { href: "/dashboard/orders-payments?tab=esewa", label: "eSewa", requiresSuperAdmin: true },
+      { href: "/dashboard/orders-payments?tab=esewa", label: "Online Payments", requiresSuperAdmin: true },
     ],
   },
+  { href: "/dashboard/discount-codes", label: "Discount Codes", icon: TicketPercent },
   {
     href: "/dashboard/archives",
     label: "Archives",
@@ -178,6 +180,7 @@ const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
       "/dashboard/notifications",
       "/dashboard/revenue",
       "/dashboard/orders-payments",
+      "/dashboard/discount-codes",
     ],
   },
   {

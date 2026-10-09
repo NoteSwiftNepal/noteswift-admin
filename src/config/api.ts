@@ -120,6 +120,21 @@ export const API_ENDPOINTS = {
     SETTINGS: `${API_BASE_URL}/api/admin/homepage-settings`,
   },
 
+  // ==================== PRICING SETTINGS ====================
+  // VAT rate for the checkout price breakdown (prices are VAT-inclusive).
+  PRICING: {
+    SETTINGS: `${API_BASE_URL}/api/admin/settings/pricing`,
+  },
+
+  // ==================== DISCOUNT CODES ====================
+  // Percent-off codes applied at checkout after the course discount (any admin).
+  DISCOUNT_CODES: {
+    LIST: `${API_BASE_URL}/api/admin/discount-codes`,
+    CREATE: `${API_BASE_URL}/api/admin/discount-codes`,
+    UPDATE: (id: string) => `${API_BASE_URL}/api/admin/discount-codes/${id}`,
+    DELETE: (id: string) => `${API_BASE_URL}/api/admin/discount-codes/${id}`,
+  },
+
   // ==================== PROMO BANNERS ====================
   PROMO_BANNERS: {
     LIST: `${API_BASE_URL}/api/admin/promo-banners`,

@@ -190,7 +190,7 @@ export default function OrdersPaymentsPage() {
       setEsewaLoading(true);
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
       const response = await fetch(
-        `${API_ENDPOINTS.ORDERS_PAYMENTS.TRANSACTIONS.LIST}?limit=50&paymentMethod=esewa-gateway`,
+        `${API_ENDPOINTS.ORDERS_PAYMENTS.TRANSACTIONS.LIST}?limit=50&paymentMethod=esewa-gateway,fonepay`,
         createFetchOptions('GET')
       );
       const data = await response.json();
@@ -201,10 +201,10 @@ export default function OrdersPaymentsPage() {
         }
       }
     } catch (error) {
-      console.error('Failed to fetch eSewa transactions:', error);
+      console.error('Failed to fetch online payments:', error);
       toast({
         title: "Error",
-        description: "Failed to load eSewa transactions",
+        description: "Failed to load online payments",
         variant: "destructive",
       });
     } finally {
@@ -514,7 +514,7 @@ export default function OrdersPaymentsPage() {
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                eSewa Payments
+                Online Payments
               </button>
             </>
           )}
@@ -875,8 +875,8 @@ export default function OrdersPaymentsPage() {
         {activeTab === 'esewa' && (
           <Card>
             <CardHeader>
-              <CardTitle>eSewa Payments</CardTitle>
-              <CardDescription>Automated in-app eSewa gateway transactions (direct pay-to-enroll)</CardDescription>
+              <CardTitle>Online Payments</CardTitle>
+              <CardDescription>Fonepay and eSewa gateway payments (direct pay-to-enroll)</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -898,14 +898,14 @@ export default function OrdersPaymentsPage() {
                       <TableCell colSpan={8} className="text-center py-8">
                         <div className="flex items-center justify-center">
                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
-                          Loading eSewa transactions...
+                          Loading online payments...
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : esewaTransactions.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                        No eSewa transactions found
+                        No online payments found
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -920,7 +920,13 @@ export default function OrdersPaymentsPage() {
                             ? `${courseMap[transaction.courseId]} (${transaction.courseId})`
                             : transaction.courseId}
                         </TableCell>
-                        <TableCell>Rs. {transaction.amount}</TableCell>
+                        <TableCell>
+                          <div>Rs. {transaction.amount}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {transaction.paymentMethod === 'fonepay' ? 'Fonepay' : 'eSewa'}
+                            {transaction.pricing?.totalDiscount > 0 ? ` · Rs. ${transaction.pricing.totalDiscount} off` : ''}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={transaction.status === 'completed' ? 'default' : transaction.status === 'failed' || transaction.status === 'cancelled' ? 'destructive' : 'secondary'}>
                             {transaction.status}
@@ -929,8 +935,8 @@ export default function OrdersPaymentsPage() {
                         <TableCell>
                           {transaction.gatewayStatus ? (
                             <Badge variant={
-                              transaction.gatewayStatus === 'COMPLETE' ? 'default'
-                                : (transaction.gatewayStatus === 'PENDING' || transaction.gatewayStatus === 'AMBIGUOUS') ? 'secondary'
+                              transaction.gatewayStatus === 'COMPLETE' || transaction.gatewayStatus === 'success' ? 'default'
+                                : ['PENDING', 'AMBIGUOUS', 'pending', 'timeout'].includes(transaction.gatewayStatus) ? 'secondary'
                                 : 'destructive'
                             }>
                               {transaction.gatewayStatus}
@@ -940,8 +946,11 @@ export default function OrdersPaymentsPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <span className="font-mono text-xs" title={transaction.transactionUuid}>
-                            {transaction.transactionUuid ? `${transaction.transactionUuid.slice(0, 8)}…` : '—'}
+                          {/* eSewa's transaction UUID, or Fonepay's PRN (referenceId) */}
+                          <span className="font-mono text-xs" title={transaction.transactionUuid || transaction.referenceId}>
+                            {transaction.transactionUuid
+                              ? `${transaction.transactionUuid.slice(0, 8)}…`
+                              : transaction.referenceId || '—'}
                           </span>
                         </TableCell>
                         <TableCell>{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>

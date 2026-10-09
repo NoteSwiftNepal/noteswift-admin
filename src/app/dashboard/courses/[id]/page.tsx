@@ -37,6 +37,9 @@ interface Course {
   status: string;
   type: 'featured' | 'pro' | 'free' | 'recommended' | 'upcoming';
   price?: number;
+  // Discount on the price, in percent (0 to under 100). Students pay the
+  // discounted price; the backend computes the same numbers at checkout.
+  discountPercent?: number;
   program: string;
   duration?: string;
   rating?: number;
@@ -58,6 +61,19 @@ interface Course {
 }
 
 // This is now a full page, not just a box/modal. Route: /dashboard/courses/editor
+// Same rounding as the backend's pricingService: the discount is rounded to
+// whole rupees. Display only; the backend computes the real checkout price.
+function isValidDiscount(p?: number) {
+  const v = p ?? 0;
+  return Number.isFinite(v) && v >= 0 && v < 100;
+}
+function discountAmount(price: number, percent: number) {
+  return Math.round((price * percent) / 100);
+}
+function discountedPrice(price: number, percent: number) {
+  return price - discountAmount(price, percent);
+}
+
 export default function CourseEditorPage() {
   const params = useParams();
   const router = useRouter();
@@ -74,6 +90,7 @@ export default function CourseEditorPage() {
       status: 'Draft',
       type: typeParam || 'pro',
       price: 0,
+      discountPercent: 0,
       program: 'SEE',
       duration: '',
       rating: 0,
@@ -395,6 +412,16 @@ export default function CourseEditorPage() {
         return;
       }
 
+      // Discount must stay below 100% — a course is never free via discount.
+      if (formData.type === 'pro' && !isValidDiscount(formData.discountPercent)) {
+        toast({
+          title: "Invalid Discount",
+          description: "Discount must be at least 0% and below 100%",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Validate price for Pro courses
       if (formData.type === 'pro' && (!formData.price || formData.price <= 0)) {
         toast({
@@ -638,6 +665,29 @@ export default function CourseEditorPage() {
                         onChange={(e) => updateFormData('price', e.target.value ? Number(e.target.value) : 0)}
                         placeholder="Enter price"
                       />
+                      <p className="mt-1 text-xs text-gray-500">Including VAT. This is the price students see before any discount.</p>
+                    </div>
+                  )}
+                  {formData.type === 'pro' && (
+                    <div>
+                      <Label htmlFor="discountPercent">Discount (%)</Label>
+                      <Input
+                        id="discountPercent"
+                        type="number"
+                        min="0"
+                        max="99.99"
+                        step="0.01"
+                        value={formData.discountPercent ?? 0}
+                        onChange={(e) => updateFormData('discountPercent', e.target.value ? Number(e.target.value) : 0)}
+                        placeholder="0"
+                      />
+                      <p className={`mt-1 text-xs ${isValidDiscount(formData.discountPercent) ? 'text-gray-500' : 'text-red-600'}`}>
+                        {isValidDiscount(formData.discountPercent)
+                          ? (formData.price || 0) > 0
+                            ? `Students pay Rs. ${discountedPrice(formData.price || 0, formData.discountPercent || 0)} (Rs. ${discountAmount(formData.price || 0, formData.discountPercent || 0)} off)`
+                            : 'Set a price to see what students pay'
+                          : 'Must be at least 0% and below 100%'}
+                      </p>
                     </div>
                   )}
                   <div>
@@ -1025,7 +1075,11 @@ export default function CourseEditorPage() {
                       {/* Price */}
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-lg font-semibold">
-                          {formData.type === 'pro' ? `Rs. ${formData.price || 0}` : 'Free'}
+                          {formData.type === 'pro'
+                            ? (formData.discountPercent || 0) > 0 && isValidDiscount(formData.discountPercent)
+                              ? `Rs. ${discountedPrice(formData.price || 0, formData.discountPercent || 0)} (was Rs. ${formData.price || 0})`
+                              : `Rs. ${formData.price || 0}`
+                            : 'Free'}
                         </Badge>
                         <span className="text-sm text-gray-600">
                           {formData.type === 'pro' ? '• 1 year Premium Access' : '• Lifetime Access'}

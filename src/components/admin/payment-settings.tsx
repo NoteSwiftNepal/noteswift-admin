@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { VatSettings } from "@/components/admin/vat-settings";
 
 export function PaymentSettings() {
   const [minimumPayout, setMinimumPayout] = useState("1000");
@@ -17,6 +18,8 @@ export function PaymentSettings() {
 
   return (
     <div className="space-y-6">
+      <VatSettings />
+
       <div className="space-y-4">
         <Label>Commission Structure</Label>
         <div className="grid grid-cols-2 gap-4">
