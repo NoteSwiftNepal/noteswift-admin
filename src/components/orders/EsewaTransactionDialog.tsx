@@ -10,8 +10,9 @@ interface EsewaTransactionDialogProps {
 }
 
 function gatewayStatusVariant(status?: string) {
-  if (status === "COMPLETE") return "default";
-  if (status === "PENDING" || status === "AMBIGUOUS") return "secondary";
+  // eSewa uses upper-case codes; Fonepay lower-case.
+  if (status === "COMPLETE" || status === "success") return "default";
+  if (status === "PENDING" || status === "AMBIGUOUS" || status === "pending" || status === "timeout") return "secondary";
   return "destructive";
 }
 
@@ -29,7 +30,7 @@ export function EsewaTransactionDialog({ open, onOpenChange, transaction, course
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>eSewa Transaction Details</DialogTitle>
+          <DialogTitle>{transaction.paymentMethod === "fonepay" ? "Fonepay" : "eSewa"} Transaction Details</DialogTitle>
           <DialogDescription>Payment gateway record and verification history</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -55,14 +56,23 @@ export function EsewaTransactionDialog({ open, onOpenChange, transaction, course
                 </Badge>
               </div>
             </div>
-            <div>
-              <Label className="text-sm font-medium">Transaction UUID</Label>
-              <p className="text-xs font-mono mt-1 break-all">{transaction.transactionUuid || "—"}</p>
-            </div>
-            <div>
-              <Label className="text-sm font-medium">eSewa Ref ID</Label>
-              <p className="text-xs font-mono mt-1 break-all">{transaction.esewaRefId || "—"}</p>
-            </div>
+            {transaction.paymentMethod === "fonepay" ? (
+              <div>
+                <Label className="text-sm font-medium">Fonepay PRN</Label>
+                <p className="text-xs font-mono mt-1 break-all">{transaction.referenceId || "—"}</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label className="text-sm font-medium">Transaction UUID</Label>
+                  <p className="text-xs font-mono mt-1 break-all">{transaction.transactionUuid || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">eSewa Ref ID</Label>
+                  <p className="text-xs font-mono mt-1 break-all">{transaction.esewaRefId || "—"}</p>
+                </div>
+              </>
+            )}
             <div>
               <Label className="text-sm font-medium">Gateway Status</Label>
               <div className="mt-1">
@@ -83,6 +93,32 @@ export function EsewaTransactionDialog({ open, onOpenChange, transaction, course
             </div>
           </div>
 
+          {transaction.pricing && (
+            <div>
+              <Label className="text-sm font-medium">Price Breakdown</Label>
+              <div className="mt-1 rounded-md border text-sm">
+                {[
+                  ["List price", transaction.pricing.listPrice],
+                  [`Course discount (${transaction.pricing.courseDiscountPercent}%)`, -transaction.pricing.courseDiscountAmount],
+                  ...(transaction.pricing.discountCode
+                    ? [[`Code ${transaction.pricing.discountCode} (${transaction.pricing.codeDiscountPercent}%)`, -transaction.pricing.codeDiscountAmount]]
+                    : []),
+                  ["Taxable amount", transaction.pricing.taxableAmount],
+                  [`VAT (${transaction.pricing.vatRate}%)`, transaction.pricing.vatAmount],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="flex justify-between border-b px-3 py-1.5">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span>{Number(value) < 0 ? `− Rs. ${Math.abs(Number(value)).toFixed(2)}` : `Rs. ${Number(value).toFixed(2)}`}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between px-3 py-1.5 font-semibold">
+                  <span>Total paid (VAT included)</span>
+                  <span>Rs. {Number(transaction.pricing.total).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {transaction.gatewayVerifyAttempts?.length > 0 && (
             <div>
               <Label className="text-sm font-medium">Verify Attempts</Label>
@@ -99,7 +135,7 @@ export function EsewaTransactionDialog({ open, onOpenChange, transaction, course
 
           {transaction.gatewayRawStatusResponse && (
             <div>
-              <Label className="text-sm font-medium">Raw eSewa Status Response</Label>
+              <Label className="text-sm font-medium">Raw Gateway Status Response</Label>
               <pre className="mt-1 p-3 bg-gray-50 rounded-md text-xs overflow-x-auto">
                 {JSON.stringify(transaction.gatewayRawStatusResponse, null, 2)}
               </pre>

@@ -5,9 +5,8 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // No `eslint` key: Next 16 removed it (builds no longer run ESLint at all,
+  // which is what `ignoreDuringBuilds: true` used to ask for).
   allowedDevOrigins: ['192.168.0.106', 'localhost'],
   images: {
     remotePatterns: [
