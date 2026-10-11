@@ -20,6 +20,7 @@ import {
   Image,
   School,
   TicketPercent,
+  UserSearch,
   ChevronDown,
   Link2,
 } from "lucide-react";
@@ -124,6 +125,7 @@ const links: NavLink[] = [
     ],
   },
   { href: "/dashboard/discount-codes", label: "Discount Codes", icon: TicketPercent },
+  { href: "/dashboard/leads", label: "Leads", icon: UserSearch },
   {
     href: "/dashboard/archives",
     label: "Archives",
@@ -181,6 +183,7 @@ const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
       "/dashboard/revenue",
       "/dashboard/orders-payments",
       "/dashboard/discount-codes",
+      "/dashboard/leads",
     ],
   },
   {

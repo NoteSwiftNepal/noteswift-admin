@@ -134,6 +134,10 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `${API_BASE_URL}/api/admin/discount-codes/${id}`,
     DELETE: (id: string) => `${API_BASE_URL}/api/admin/discount-codes/${id}`,
   },
+  LEADS: {
+    LIST: `${API_BASE_URL}/api/admin/leads`,
+    UPDATE: (id: string) => `${API_BASE_URL}/api/admin/leads/${id}`,
+  },
 
   // ==================== PROMO BANNERS ====================
   PROMO_BANNERS: {
