@@ -40,6 +40,8 @@ interface Course {
   // Discount on the price, in percent (0 to under 100). Students pay the
   // discounted price; the backend computes the same numbers at checkout.
   discountPercent?: number;
+  // Why the discount is given; students see it in the "Apply discount" popup at checkout.
+  discountReason?: string;
   program: string;
   duration?: string;
   rating?: number;
@@ -91,6 +93,7 @@ export default function CourseEditorPage() {
       type: typeParam || 'pro',
       price: 0,
       discountPercent: 0,
+      discountReason: '',
       program: 'SEE',
       duration: '',
       rating: 0,
@@ -684,9 +687,24 @@ export default function CourseEditorPage() {
                       <p className={`mt-1 text-xs ${isValidDiscount(formData.discountPercent) ? 'text-gray-500' : 'text-red-600'}`}>
                         {isValidDiscount(formData.discountPercent)
                           ? (formData.price || 0) > 0
-                            ? `Students pay Rs. ${discountedPrice(formData.price || 0, formData.discountPercent || 0)} (Rs. ${discountAmount(formData.price || 0, formData.discountPercent || 0)} off)`
+                            ? `With the discount applied, students pay Rs. ${discountedPrice(formData.price || 0, formData.discountPercent || 0)} (Rs. ${discountAmount(formData.price || 0, formData.discountPercent || 0)} off). Students apply it themselves at checkout.`
                             : 'Set a price to see what students pay'
                           : 'Must be at least 0% and below 100%'}
+                      </p>
+                    </div>
+                  )}
+                  {formData.type === 'pro' && (formData.discountPercent || 0) > 0 && (
+                    <div className="col-span-3">
+                      <Label htmlFor="discountReason">Reason for the discount</Label>
+                      <Input
+                        id="discountReason"
+                        maxLength={300}
+                        value={formData.discountReason ?? ''}
+                        onChange={(e) => updateFormData('discountReason', e.target.value)}
+                        placeholder="e.g. Dashain offer: 20% off for students who join before Kartik 15"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Shown to students when they tap &quot;Apply discount&quot; at checkout. The discount is only applied when they press Apply.
                       </p>
                     </div>
                   )}

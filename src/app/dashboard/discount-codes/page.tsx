@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { API_ENDPOINTS, createFetchOptions } from "@/config/api";
 
-// Percent-off discount codes. At checkout the course's own discount applies
+// Percent-off promo codes ("discount codes" in the backend/API). At checkout the course's own discount applies
 // first, then the code; a course can never become free. A use is counted
 // only when a payment succeeds.
 
@@ -97,7 +97,7 @@ export default function DiscountCodesPage() {
       setCourseOptions(json.courseOptions || []);
       setCourseTitles(json.courseTitles || {});
     } catch (err: any) {
-      toast({ title: "Couldn't load discount codes", description: err.message, variant: "destructive" });
+      toast({ title: "Couldn't load promo codes", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -159,7 +159,7 @@ export default function DiscountCodesPage() {
       );
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.message || "Failed to save");
-      toast({ title: editing ? "Discount code updated" : "Discount code created", description: json.data.code });
+      toast({ title: editing ? "Promo code updated" : "Promo code created", description: json.data.code });
       setDialogOpen(false);
       await load();
     } catch (err: any) {
@@ -187,7 +187,7 @@ export default function DiscountCodesPage() {
       const res = await fetch(API_ENDPOINTS.DISCOUNT_CODES.DELETE(deleting._id), createFetchOptions("DELETE"));
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.message || "Failed to delete");
-      toast({ title: "Discount code deleted", description: deleting.code });
+      toast({ title: "Promo code deleted", description: deleting.code });
       await load();
     } catch (err: any) {
       toast({ title: "Couldn't delete the code", description: err.message, variant: "destructive" });
@@ -210,10 +210,10 @@ export default function DiscountCodesPage() {
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2 text-2xl">
-              <TicketPercent className="h-6 w-6" /> Discount Codes
+              <TicketPercent className="h-6 w-6" /> Promo Codes
             </CardTitle>
             <CardDescription>
-              Percent-off codes students enter at checkout. Applied after the course&apos;s own discount; a course can never become free.
+              Percent-off codes students enter at checkout. Applied after the course&apos;s own discount (if the student applied it); a course can never become free.
               A use is counted only when the payment succeeds.
             </CardDescription>
           </div>
@@ -242,7 +242,7 @@ export default function DiscountCodesPage() {
                 </TableRow>
               ) : codes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">No discount codes yet. Create one with &quot;New code&quot;.</TableCell>
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">No promo codes yet. Create one with &quot;New code&quot;.</TableCell>
                 </TableRow>
               ) : (
                 codes.map((c) => (
@@ -309,7 +309,7 @@ export default function DiscountCodesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{editing ? `Edit ${editing.code}` : "New discount code"}</DialogTitle>
+            <DialogTitle>{editing ? `Edit ${editing.code}` : "New promo code"}</DialogTitle>
             <DialogDescription>Percent off, applied after the course&apos;s own discount.</DialogDescription>
           </DialogHeader>
 

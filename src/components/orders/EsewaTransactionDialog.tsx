@@ -101,7 +101,7 @@ export function EsewaTransactionDialog({ open, onOpenChange, transaction, course
                   ["List price", transaction.pricing.listPrice],
                   [`Course discount (${transaction.pricing.courseDiscountPercent}%)`, -transaction.pricing.courseDiscountAmount],
                   ...(transaction.pricing.discountCode
-                    ? [[`Code ${transaction.pricing.discountCode} (${transaction.pricing.codeDiscountPercent}%)`, -transaction.pricing.codeDiscountAmount]]
+                    ? [[`Promo code ${transaction.pricing.discountCode} (${transaction.pricing.codeDiscountPercent}%)`, -transaction.pricing.codeDiscountAmount]]
                     : []),
                   ["Taxable amount", transaction.pricing.taxableAmount],
                   [`VAT (${transaction.pricing.vatRate}%)`, transaction.pricing.vatAmount],

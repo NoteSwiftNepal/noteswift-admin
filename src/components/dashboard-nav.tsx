@@ -124,7 +124,7 @@ const links: NavLink[] = [
       { href: "/dashboard/orders-payments?tab=esewa", label: "Online Payments", requiresSuperAdmin: true },
     ],
   },
-  { href: "/dashboard/discount-codes", label: "Discount Codes", icon: TicketPercent },
+  { href: "/dashboard/discount-codes", label: "Promo Codes", icon: TicketPercent },
   { href: "/dashboard/leads", label: "Leads", icon: UserSearch },
   {
     href: "/dashboard/archives",
