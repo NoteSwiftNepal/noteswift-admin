@@ -134,9 +134,11 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `${API_BASE_URL}/api/admin/discount-codes/${id}`,
     DELETE: (id: string) => `${API_BASE_URL}/api/admin/discount-codes/${id}`,
   },
+  // One row per student; one follow-up per student.
   LEADS: {
     LIST: `${API_BASE_URL}/api/admin/leads`,
-    UPDATE: (id: string) => `${API_BASE_URL}/api/admin/leads/${id}`,
+    STUDENT: (studentId: string) => `${API_BASE_URL}/api/admin/leads/students/${studentId}`,
+    FOLLOW_UP: (studentId: string) => `${API_BASE_URL}/api/admin/leads/students/${studentId}/follow-up`,
   },
 
   // ==================== PROMO BANNERS ====================
