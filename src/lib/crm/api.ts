@@ -240,6 +240,9 @@ export type Quote = {
   note?: string;
   createdAt: string;
   history: { from?: string; to: string; at: string; note?: string }[];
+  createdById: string;
+  // Whether you may approve or reject it (never your own quote, R18). The backend re-checks.
+  canDecide?: boolean;
 };
 export type CodeRow = {
   _id: string;

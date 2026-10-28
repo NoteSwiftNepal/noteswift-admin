@@ -38,7 +38,7 @@ export function PendingQuotesCard() {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Discounts waiting for approval</CardTitle>
-        <CardDescription>Sales quotes above the Sales discount limit (CRM settings).</CardDescription>
+        <CardDescription>Discounted quotes. Nobody can approve or reject their own quote.</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <DataState loading={loading} error={error} onRetry={load} empty={quotes.length === 0} emptyText="Nothing to approve.">
@@ -65,6 +65,9 @@ export function PendingQuotesCard() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{fmtDateTime(q.createdAt)}</TableCell>
                     <TableCell className="text-right">
+                      {!q.canDecide ? (
+                        <span className="text-xs text-muted-foreground">Your quote: another approver decides</span>
+                      ) : (
                       <div className="flex justify-end gap-2">
                         <Button
                           type="button"
@@ -82,6 +85,7 @@ export function PendingQuotesCard() {
                           Reject
                         </Button>
                       </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

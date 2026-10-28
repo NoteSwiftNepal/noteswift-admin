@@ -91,13 +91,13 @@ export function QuotesPanel({ leadId, interests, onChanged }: { leadId: string; 
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Created {fmtDateTime(q.createdAt)} · valid until {fmtDateTime(q.expiresAt)}
-                    {q.approval.required ? ` · needs approval above ${q.approval.limitPercent}%` : ""}
+                    {q.approval.required ? " · discount needs approval by someone other than its creator" : ""}
                     {q.approval.note ? ` · ${q.approval.note}` : ""}
                   </p>
                   {q.note && <p className="text-xs text-muted-foreground">{q.note}</p>}
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  {q.status === "pending_approval" && can("crm.approve_discounts") && (
+                  {q.status === "pending_approval" && q.canDecide && (
                     <>
                       <Button type="button" size="sm" onClick={() => crmApi.decideQuote(q._id, true).then(() => done("Quote approved"), (e) => toast({ title: "Not done", description: e?.message, variant: "destructive" }))}>
                         Approve
