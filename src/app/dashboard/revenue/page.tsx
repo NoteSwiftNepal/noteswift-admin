@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import { UnverifiedMetricsNotice } from "@/components/unverified-metrics-notice";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -186,6 +187,7 @@ export default function RevenuePage() {
             <CardTitle className="text-3xl font-bold text-gray-900">{pageTitle}</CardTitle>
           </div>
           <p className="text-gray-600 mt-2">{pageSubtitle}</p>
+          <UnverifiedMetricsNotice />
         </div>
         <div className="flex items-center gap-4">
           <Select value={period} onValueChange={handlePeriodChange}>

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowDown, ArrowLeft, ArrowUp, Download, RefreshCw, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
+import { UnverifiedMetricsNotice } from "@/components/unverified-metrics-notice";
 import { productRoleOf, ROLE_BADGES, ProductRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { AdminPerformanceDetail } from "@/components/admin/admin-performance-detail";
@@ -233,6 +234,7 @@ export default function AdminPerformancePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Admin Performance</h1>
         <p className="mt-1 text-sm text-gray-500">Sales, codes and student conversions by admin</p>
+        <UnverifiedMetricsNotice />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Select value={selectedAdminId} onValueChange={setSelectedAdminId} disabled={!data}>
