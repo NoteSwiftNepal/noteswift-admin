@@ -24,6 +24,9 @@ export type ProductRole = 'super_admin' | 'admin' | 'sales';
 // Pages and the permission needed to open them. First matching prefix wins,
 // so longer prefixes come first.
 const ROUTE_PERMISSIONS: [string, Permission][] = [
+  ['/dashboard/crm/team', 'crm.manage_reps'],
+  ['/dashboard/crm/tasks', 'crm.manage_tasks'],
+  ['/dashboard/crm', 'crm.view_assigned_leads'],
   ['/dashboard/admin-management', 'admins.manage'],
   ['/dashboard/admin-performance', 'admins.manage'],
   ['/dashboard/teacher-management', 'teachers.manage'],
@@ -39,7 +42,7 @@ const ROUTE_PERMISSIONS: [string, Permission][] = [
   ['/dashboard/revenue', 'revenue.view'],
   ['/dashboard/orders-payments', 'orders.view'],
   ['/dashboard/discount-codes', 'discount_codes.manage'],
-  ['/dashboard/leads', 'leads.legacy'],
+  ['/dashboard/leads', 'crm.view_assigned_leads'], // redirects to Sales & CRM
   ['/dashboard/archives', 'archives.manage'],
   ['/dashboard/subject-groups', 'subject_groups.manage'],
   ['/dashboard/audit-log', 'audit.view'],

@@ -20,9 +20,9 @@ import {
   Image,
   School,
   TicketPercent,
-  UserSearch,
   ChevronDown,
   Link2,
+  Target,
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -125,7 +125,17 @@ const links: NavLink[] = [
     ],
   },
   { href: "/dashboard/discount-codes", label: "Promo Codes", icon: TicketPercent },
-  { href: "/dashboard/leads", label: "Leads", icon: UserSearch },
+  {
+    href: "/dashboard/crm/leads",
+    label: "Sales & CRM",
+    icon: Target,
+    children: [
+      { href: "/dashboard/crm/leads", label: "Leads & Students" },
+      { href: "/dashboard/crm/pipeline", label: "Sales Pipeline" },
+      { href: "/dashboard/crm/tasks", label: "Follow-ups & Tasks" },
+      { href: "/dashboard/crm/team", label: "Sales Team & Allocation" },
+    ],
+  },
   {
     href: "/dashboard/archives",
     label: "Archives",
@@ -157,6 +167,7 @@ const links: NavLink[] = [
 
 const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
   { label: "Overview", hrefs: ["/dashboard"] },
+  { label: "Sales & CRM", hrefs: ["/dashboard/crm/leads"] },
   {
     label: "People",
     hrefs: [
@@ -183,7 +194,6 @@ const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
       "/dashboard/revenue",
       "/dashboard/orders-payments",
       "/dashboard/discount-codes",
-      "/dashboard/leads",
     ],
   },
   {
