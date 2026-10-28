@@ -25,13 +25,14 @@ export interface AssignCourseFormData {
 export type AssignCourseMode = "direct" | "pending";
 
 interface AssignCourseDialogProps {
-  mode: AssignCourseMode;
+  /** Modes this admin may use; when both, the dialog lets them choose (first is the default). */
+  modes: AssignCourseMode[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   studentName: string;
   courses: Course[];
   coursesLoading: boolean;
-  onSubmit: (formData: AssignCourseFormData) => Promise<void>;
+  onSubmit: (formData: AssignCourseFormData, mode: AssignCourseMode) => Promise<void>;
   loading: boolean;
 }
 
@@ -44,7 +45,7 @@ const EMPTY_FORM: AssignCourseFormData = {
 };
 
 export function AssignCourseDialog({
-  mode,
+  modes,
   open,
   onOpenChange,
   studentName,
@@ -54,10 +55,12 @@ export function AssignCourseDialog({
   loading,
 }: AssignCourseDialogProps) {
   const [formData, setFormData] = useState<AssignCourseFormData>(EMPTY_FORM);
+  const [chosenMode, setChosenMode] = useState<AssignCourseMode | null>(null);
+  const mode: AssignCourseMode = chosenMode && modes.includes(chosenMode) ? chosenMode : modes[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(formData);
+    await onSubmit(formData, mode);
     setFormData(EMPTY_FORM);
   };
 
@@ -73,6 +76,21 @@ export function AssignCourseDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {modes.length > 1 && (
+            <div>
+              <Label htmlFor="assign-mode">How</Label>
+              <Select value={mode} onValueChange={(value) => setChosenMode(value as AssignCourseMode)}>
+                <SelectTrigger id="assign-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="direct">Enroll now (record the payment)</SelectItem>
+                  <SelectItem value="pending">Payment pending (no access until paid)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <Label htmlFor="assign-course">Course</Label>
             <Select value={formData.course} onValueChange={(value) => setFormData({ ...formData, course: value })}>

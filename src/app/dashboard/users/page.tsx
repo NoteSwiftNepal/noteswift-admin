@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2, GraduationCap, School } from "lucide-react";
-import { AssignCourseDialog, AssignCourseFormData } from "@/components/users/AssignCourseDialog";
+import { AssignCourseDialog, AssignCourseFormData, AssignCourseMode } from "@/components/users/AssignCourseDialog";
 import { useAdmin } from "@/context/admin-context";
 import { ManageSchoolDialog } from "@/components/users/ManageSchoolDialog";
 import {
@@ -299,8 +299,11 @@ export default function UsersPage() {
   // payment, no access yet. Shown apart from enrollments on purpose.
   const [pendingAssignments, setPendingAssignments] = useState<any[]>([]);
   const { can } = useAdmin();
-  // Super Admin enrolls directly; Admin can only assign with payment pending.
-  const assignMode = can('enrollments.grant_direct') ? 'direct' : 'pending';
+  // Super Admin may enroll directly or assign with payment pending; Admin only the latter.
+  const assignModes: AssignCourseMode[] = [
+    ...(can('enrollments.grant_direct') ? ['direct' as const] : []),
+    ...(can('enrollments.assign_pending') ? ['pending' as const] : []),
+  ];
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -603,7 +606,7 @@ export default function UsersPage() {
     }
   };
 
-  const handleAssignCourseSubmit = async (formData: AssignCourseFormData) => {
+  const handleAssignCourseSubmit = async (formData: AssignCourseFormData, assignMode: AssignCourseMode) => {
     if (!selectedUser || selectedUser.type !== 'student') return;
     setAssignCourseLoading(true);
     try {
@@ -1032,9 +1035,11 @@ export default function UsersPage() {
                                         <GraduationCap className="h-4 w-4 text-muted-foreground" />
                                         <span className="text-sm font-medium">Course Access</span>
                                       </div>
-                                      <Button type="button" size="sm" onClick={() => setAssignCourseDialogOpen(true)}>
-                                        {assignMode === 'direct' ? 'Assign to Course' : 'Assign Course (payment pending)'}
-                                      </Button>
+                                      {assignModes.length > 0 && (
+                                        <Button type="button" size="sm" onClick={() => setAssignCourseDialogOpen(true)}>
+                                          {assignModes.includes('direct') ? 'Assign to Course' : 'Assign Course (payment pending)'}
+                                        </Button>
+                                      )}
                                     </div>
 
                                     {/* Pending course assignments — not enrollments: no access until payment is verified */}
@@ -1220,7 +1225,7 @@ export default function UsersPage() {
                                     </div>
 
                                     <AssignCourseDialog
-                                      mode={assignMode}
+                                      modes={assignModes}
                                       open={assignCourseDialogOpen}
                                       onOpenChange={setAssignCourseDialogOpen}
                                       studentName={selectedUser.full_name}
