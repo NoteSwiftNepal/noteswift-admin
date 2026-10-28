@@ -22,16 +22,18 @@ interface InviteAdminProps {
   onInvited?: () => void;
 }
 
-type InvitableRole = "admin" | "super_admin" | "system_admin";
+// Stored role values sent to the backend: system_admin is the Super Admin
+// (top level), admin is Admin, sales is Sales (lib/permissions.ts).
+type InvitableRole = "sales" | "admin" | "system_admin";
 
 const ROLE_LABELS: Record<InvitableRole, string> = {
+  sales: "Sales",
   admin: "Admin",
-  super_admin: "Super Admin",
-  system_admin: "System Admin",
+  system_admin: "Super Admin",
 };
 
 export function InviteAdmin({ schoolId, onInvited }: InviteAdminProps = {}) {
-  const { admin, canInviteAdmins, isSystemAdmin } = useAdmin();
+  const { admin, canInviteAdmins } = useAdmin();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InvitableRole>("admin");
   const [message, setMessage] = useState("You have been invited to join the NoteSwift admin team. Click the link below to accept the invitation and set up your account.");
@@ -39,9 +41,7 @@ export function InviteAdmin({ schoolId, onInvited }: InviteAdminProps = {}) {
   const [fallbackLink, setFallbackLink] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const availableRoles: InvitableRole[] = isSystemAdmin
-    ? ["admin", "super_admin", "system_admin"]
-    : ["admin"];
+  const availableRoles: InvitableRole[] = ["sales", "admin", "system_admin"];
 
   // Check if current admin can invite others
   if (!canInviteAdmins) {
@@ -50,7 +50,7 @@ export function InviteAdmin({ schoolId, onInvited }: InviteAdminProps = {}) {
         <ShieldX className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
         <h3 className="text-lg font-semibold text-muted-foreground mb-2">Access Restricted</h3>
         <p className="text-muted-foreground">
-          Only System Administrators and Super Administrators can invite new admins.
+          Only a Super Admin can invite new admins.
         </p>
       </div>
     );
@@ -167,9 +167,11 @@ export function InviteAdmin({ schoolId, onInvited }: InviteAdminProps = {}) {
           </SelectContent>
         </Select>
         <p className="text-sm text-muted-foreground mt-1">
-          {isSystemAdmin
-            ? "The account will be created with this role directly."
-            : "Only system administrators can invite someone as Super Admin or System Admin."}
+          {role === "sales"
+            ? "Sales accounts work only in Sales & CRM and see only the leads assigned to them. Use a different email from any existing admin account."
+            : role === "system_admin"
+              ? "Super Admins have every permission, including managing admins."
+              : "Admins manage the platform but cannot manage admins, App Block or platform settings."}
         </p>
       </div>
 

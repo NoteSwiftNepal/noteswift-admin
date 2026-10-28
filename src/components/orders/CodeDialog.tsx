@@ -46,21 +46,24 @@ export function CodeDialog({ open, onOpenChange, code, loading, courseMap, forma
           <div>
             <Label className="text-sm font-medium">Unlock Code</Label>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-lg font-mono font-bold">{code.code}</p>
-              <Button
-                onClick={() => {
-                  navigator.clipboard.writeText(code.code);
-                  toast({
-                    title: "Copied!",
-                    description: "Code copied to clipboard",
-                  });
-                }}
-                size="sm"
-                variant="outline"
-              >
-                <Copy className="w-4 h-4 mr-1" />
-                Copy
-              </Button>
+              {/* Admins without access to sensitive order data don't receive the code. */}
+              <p className="text-lg font-mono font-bold">{code.code || 'Hidden'}</p>
+              {code.code && (
+                <Button
+                  onClick={() => {
+                    navigator.clipboard.writeText(code.code);
+                    toast({
+                      title: "Copied!",
+                      description: "Code copied to clipboard",
+                    });
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  <Copy className="w-4 h-4 mr-1" />
+                  Copy
+                </Button>
+              )}
             </div>
           </div>
 

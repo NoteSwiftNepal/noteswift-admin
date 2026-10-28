@@ -26,8 +26,8 @@ export function SchoolList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const { isSystemAdmin, isSuperAdmin } = useAdmin();
-  const canManageSchools = isSystemAdmin || isSuperAdmin;
+  const { can } = useAdmin();
+  const canManageSchools = can('schools.manage');
   const { toast } = useToast();
 
   const handleViewDashboard = async (schoolId: string) => {

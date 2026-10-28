@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { permissionForPath } from "@/lib/permissions";
 import { Loader2 } from "lucide-react";
 import {
   SidebarProvider,
@@ -22,22 +23,31 @@ import { LoadingBar } from "@/components/ui/loading-bar";
 import { PageNavigationHandler } from "@/components/page-navigation-handler";
 import { AdminProvider, useAdmin } from "@/context/admin-context";
 
-const FORBIDDEN_FOR_NORMAL_ADMIN = [
-  '/dashboard/admin-management',
-  '/dashboard/admin-performance',
-  '/dashboard/teacher-management',
-  '/dashboard/teacher-assignments',
-  '/dashboard/school-management',
-  '/dashboard/courses',
-  '/dashboard/recommendations',
-  '/dashboard/promo-banners',
-  '/dashboard/app-block',
-  '/dashboard/reports',
-  '/dashboard/notifications',
-  '/dashboard/archives',
-  '/dashboard/subject-groups',
-  '/dashboard/audit-log',
-];
+// Sends an admin away from a page (or ?tab=) their permissions don't cover
+// (lib/permissions.ts). Convenience only: the backend refuses the data anyway.
+function PermissionGuard() {
+  const { admin, loading, can } = useAdmin();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
+  const tab = searchParams.get('tab');
+
+  useEffect(() => {
+    if (!admin || loading) return;
+    const permission = permissionForPath(pathname, tab);
+    if (permission && !can(permission)) {
+      toast({
+        title: "Access Denied",
+        description: "You do not have permission to view this section.",
+        variant: "destructive",
+      });
+      router.replace(can('dashboard.view') ? '/dashboard' : '/dashboard/settings?tab=account');
+    }
+  }, [admin, loading, pathname, tab, can, router, toast]);
+
+  return null;
+}
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { admin, loading, error } = useAdmin();
@@ -53,21 +63,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     }
   }, [admin, loading, error, router]);
 
-  useEffect(() => {
-    if (admin && admin.role === 'admin' && !loading) {
-      const isForbidden = FORBIDDEN_FOR_NORMAL_ADMIN.some(
-        (forbiddenPath) => pathname === forbiddenPath || pathname.startsWith(`${forbiddenPath}/`)
-      );
-      if (isForbidden) {
-        toast({
-          title: "Access Denied",
-          description: "You do not have permission to view this section.",
-          variant: "destructive",
-        });
-        router.replace('/dashboard');
-      }
-    }
-  }, [admin, loading, pathname, router, toast]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -143,6 +138,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             </SidebarHeader>
 
             <SidebarContent>
+              <Suspense fallback={null}>
+                <PermissionGuard />
+              </Suspense>
               <DashboardNav />
             </SidebarContent>
 

@@ -6,7 +6,7 @@ export interface AuditLogData {
   userName: string;
   userEmail?: string;
   action: string;
-  category: 'authentication' | 'user_management' | 'course_content' | 'enrollment' | 'payment' | 'communication' | 'system' | 'archive';
+  category: 'authentication' | 'user_management' | 'course_content' | 'enrollment' | 'payment' | 'communication' | 'system' | 'archive' | 'crm';
   resourceType?: string;
   resourceId?: string;
   resourceName?: string;

@@ -13,7 +13,7 @@ import { Smartphone, Send, Shield, AlertTriangle } from "lucide-react";
 import { useAdmin } from "@/context/admin-context";
 
 export default function AppUpdatePage() {
-  const { admin } = useAdmin();
+  const { admin, can } = useAdmin();
   const { toast } = useToast();
 
   const [title, setTitle] = useState("");
@@ -34,7 +34,7 @@ export default function AppUpdatePage() {
   const [loadingStatus, setLoadingStatus] = useState(true);
 
   // Check if current admin is system admin
-  const isSystemAdmin = admin?.role === 'system_admin';
+  const isSystemAdmin = can('app_block.manage');
 
   const fetchAppUpdateStatus = async () => {
     if (!isSystemAdmin) return;
@@ -269,7 +269,7 @@ export default function AppUpdatePage() {
             System Admin Only
           </CardTitle>
           <CardDescription>
-            This feature requires system admin privileges and email verification for security.
+            This feature requires Super Admin privileges and email verification for security.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -280,7 +280,7 @@ export default function AppUpdatePage() {
                 <span className="font-medium text-yellow-800">Access Restricted</span>
               </div>
               <p className="text-yellow-700 mt-1">
-                Only System Admin can trigger app Block. Your current role: {admin?.role || 'Unknown'}
+                Only a Super Admin can trigger App Block. Your current role: {admin?.roleLabel || 'Unknown'}
               </p>
             </div>
           )}

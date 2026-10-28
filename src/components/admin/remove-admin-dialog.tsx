@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { productRoleOf, ROLE_BADGES } from "@/lib/permissions";
 
 interface RemoveAdminDialogProps {
   open: boolean;
@@ -83,7 +84,7 @@ export function RemoveAdminDialog({
               <div className="font-medium">{admin.name}</div>
               <div className="text-sm text-muted-foreground">{admin.email}</div>
               <div className="text-xs text-muted-foreground mt-1">
-                Role: {admin.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                Role: {ROLE_BADGES[productRoleOf(admin.role) ?? 'admin'].text}
               </div>
             </div>
           )}

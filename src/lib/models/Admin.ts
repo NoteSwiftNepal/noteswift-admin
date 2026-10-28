@@ -5,7 +5,7 @@ export interface IAdmin {
   email: string;
   name: string;
   password: string;
-  role: 'system_admin' | 'super_admin' | 'admin';
+  role: 'system_admin' | 'super_admin' | 'admin' | 'sales';
   isActive: boolean;
   invitedBy?: string;
   invitationToken?: string;
@@ -37,7 +37,7 @@ const adminSchema = new Schema<IAdmin>({
   },
   role: {
     type: String,
-    enum: ['system_admin', 'super_admin', 'admin'],
+    enum: ['system_admin', 'super_admin', 'admin', 'sales'],
     default: 'admin'
   },
   isActive: {

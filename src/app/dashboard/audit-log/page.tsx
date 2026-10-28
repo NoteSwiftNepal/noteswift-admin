@@ -31,9 +31,12 @@ import {
   Clock,
   Eye,
   RefreshCw,
-  Database
+  Database,
+  Archive,
+  Target,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAdmin } from '@/context/admin-context';
 
 interface AuditLog {
   _id: string;
@@ -42,7 +45,7 @@ interface AuditLog {
   userName: string;
   userEmail?: string;
   action: string;
-  category: 'authentication' | 'user_management' | 'course_content' | 'enrollment' | 'payment' | 'communication' | 'system' | 'archive';
+  category: 'authentication' | 'user_management' | 'course_content' | 'enrollment' | 'payment' | 'communication' | 'system' | 'archive' | 'crm';
   resourceType?: string;
   resourceId?: string;
   resourceName?: string;
@@ -91,7 +94,9 @@ const CATEGORY_CONFIG = {
   enrollment: { icon: UserCheck, label: 'Enrollment', color: 'bg-blue-100 text-blue-800' },
   payment: { icon: CreditCard, label: 'Payment', color: 'bg-blue-100 text-blue-800' },
   communication: { icon: MessageSquare, label: 'Communication', color: 'bg-blue-100 text-blue-800' },
-  system: { icon: Settings, label: 'System', color: 'bg-blue-100 text-blue-800' }
+  system: { icon: Settings, label: 'System', color: 'bg-blue-100 text-blue-800' },
+  archive: { icon: Archive, label: 'Archive', color: 'bg-blue-100 text-blue-800' },
+  crm: { icon: Target, label: 'Sales & CRM', color: 'bg-blue-100 text-blue-800' }
 };
 
 const STATUS_CONFIG = {
@@ -108,6 +113,8 @@ const USER_TYPE_CONFIG = {
 };
 
 export default function AuditLogPage() {
+  const { can } = useAdmin();
+  const canExport = can('exports.sensitive');
   const { toast } = useToast();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -296,10 +303,13 @@ export default function AuditLogPage() {
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+            {/* Exporting is Super Admin only; the backend caps everyone else's page size. */}
+            {canExport && (
             <Button onClick={handleExport} variant="outline">
               <Download className="w-4 h-4 mr-2" />
               Export CSV
             </Button>
+            )}
           </div>
         </div>
 

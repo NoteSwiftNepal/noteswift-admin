@@ -36,11 +36,11 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLoading } from "@/context/loading-context";
 import { useAdmin } from "@/context/admin-context";
+import { canOpenHref, ROLE_BADGES } from "@/lib/permissions";
 
 interface NavChild {
   href: string;
   label: string;
-  requiresSuperAdmin?: boolean;
 }
 
 interface NavLink {
@@ -120,8 +120,8 @@ const links: NavLink[] = [
     children: [
       { href: "/dashboard/orders-payments?tab=transactions", label: "Transactions" },
       { href: "/dashboard/orders-payments?tab=codes", label: "Unlock Codes" },
-      { href: "/dashboard/orders-payments?tab=bulk-codes", label: "Bulk Codes", requiresSuperAdmin: true },
-      { href: "/dashboard/orders-payments?tab=esewa", label: "Online Payments", requiresSuperAdmin: true },
+      { href: "/dashboard/orders-payments?tab=bulk-codes", label: "Bulk Codes" },
+      { href: "/dashboard/orders-payments?tab=esewa", label: "Online Payments" },
     ],
   },
   { href: "/dashboard/discount-codes", label: "Promo Codes", icon: TicketPercent },
@@ -223,9 +223,8 @@ export function DashboardNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { startLoading } = useLoading();
-  const { admin } = useAdmin();
+  const { admin, can } = useAdmin();
 
-  const isNormalAdmin = admin?.role === 'admin';
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
@@ -255,19 +254,6 @@ export function DashboardNav() {
     setExpanded((prev) => ({ ...prev, [href]: !prev[href] }));
   };
 
-  const getRoleDisplay = (role: string) => {
-    switch (role) {
-      case "system_admin":
-        return { text: "System Admin", variant: "destructive" as const, className: "" };
-      case "super_admin":
-        return { text: "Super Admin", variant: "default" as const, className: "bg-purple-500 text-white" };
-      case "admin":
-        return { text: "Admin", variant: "secondary" as const, className: "bg-blue-500 text-white" };
-      default:
-        return { text: "Admin", variant: "secondary" as const, className: "bg-blue-500 text-white" };
-    }
-  };
-
   const isLinkActive = (childHref: string, parentHref: string) => {
     const [childPath, childQuery] = childHref.split('?');
     if (pathname !== childPath) return false;
@@ -286,31 +272,22 @@ export function DashboardNav() {
     return !currentTab;
   };
 
-  const roleDisplay = admin ? getRoleDisplay(admin.role) : { text: "Loading...", variant: "secondary" as const, className: "" };
+  const roleBadge = admin?.productRole ? ROLE_BADGES[admin.productRole] : null;
 
-  const NORMAL_ADMIN_ALLOWED_HREFS = new Set([
-    "/dashboard",
-    "/dashboard/users",
-    "/dashboard/revenue",
-    "/dashboard/orders-payments",
-    "/dashboard/settings",
-    "/dashboard/about"
-  ]);
-
+  // Every link and child is shown only if the admin's permissions cover it
+  // (lib/permissions.ts); the backend enforces the same rules.
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
-    hrefs: isNormalAdmin
-      ? section.hrefs.filter((href) => NORMAL_ADMIN_ALLOWED_HREFS.has(href))
-      : section.hrefs,
+    hrefs: section.hrefs.filter((href) => canOpenHref(href, can)),
   })).filter((section) => section.hrefs.length > 0);
 
   return (
     <nav className="flex flex-col h-full select-none">
       <div className="px-4 py-4 shrink-0">
-        {admin?.role && (
+        {roleBadge && (
           <div className="mb-2">
-            <Badge variant={roleDisplay.variant} className={cn("text-xs", roleDisplay.className)}>
-              {roleDisplay.text}
+            <Badge variant="default" className={cn("text-xs", roleBadge.className)}>
+              {roleBadge.text}
             </Badge>
           </div>
         )}
@@ -332,10 +309,7 @@ export function DashboardNav() {
               </div>
               <SidebarMenu className="space-y-0.5">
                 {sectionLinks.map((link) => {
-                  const filteredChildren = link.children?.filter((child) => {
-                    if (isNormalAdmin && child.requiresSuperAdmin) return false;
-                    return true;
-                  });
+                  const filteredChildren = link.children?.filter((child) => canOpenHref(child.href, can));
 
                   const hasChildren = !!filteredChildren && filteredChildren.length > 0;
                   const active = isParentActive(link.href, filteredChildren, pathname);

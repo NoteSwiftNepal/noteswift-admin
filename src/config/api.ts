@@ -113,6 +113,9 @@ export const API_ENDPOINTS = {
     LIST: `${API_BASE_URL}/api/admin/enrollments`,
     CREATE: `${API_BASE_URL}/api/admin/enrollments`,
     REMOVE: (enrollmentId: string) => `${API_BASE_URL}/api/admin/enrollments/${enrollmentId}`,
+    // Pending course assignments (awaiting payment; not enrollments)
+    ASSIGNMENTS: `${API_BASE_URL}/api/admin/enrollments/assignments`,
+    CANCEL_ASSIGNMENT: (assignmentId: string) => `${API_BASE_URL}/api/admin/enrollments/assignments/${assignmentId}/cancel`,
   },
 
   // ==================== HOMEPAGE SETTINGS ====================

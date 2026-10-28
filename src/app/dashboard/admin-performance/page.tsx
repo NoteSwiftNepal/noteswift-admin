@@ -9,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowDown, ArrowLeft, ArrowUp, Download, RefreshCw, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
+import { productRoleOf, ROLE_BADGES, ProductRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { AdminPerformanceDetail } from "@/components/admin/admin-performance-detail";
 
-type Role = 'system_admin' | 'super_admin' | 'admin';
+type Role = 'system_admin' | 'super_admin' | 'admin' | 'sales';
 
 interface AdminRow {
   _id: string;
@@ -54,10 +55,13 @@ interface PerformanceData {
 
 type SortKey = 'name' | 'paymentCollected' | 'studentsConverted' | 'codesUsed' | 'redemptionRate' | 'lastActivity';
 
+// Stored role → product label (lib/permissions.ts): system_admin is the
+// Super Admin; super_admin and admin are both Admin.
 const ROLE_LABEL: Record<Role, string> = {
-  system_admin: 'System Admin',
-  super_admin: 'Super Admin',
-  admin: 'Admin',
+  system_admin: ROLE_BADGES.super_admin.text,
+  super_admin: ROLE_BADGES.admin.text,
+  admin: ROLE_BADGES.admin.text,
+  sales: ROLE_BADGES.sales.text,
 };
 
 const PERIODS = [
@@ -119,13 +123,14 @@ function StatStrip({ stats }: { stats: { label: string; value: string | number; 
 
 export default function AdminPerformancePage() {
   const { toast } = useToast();
-  const { admin } = useAdmin();
+  const { admin, can } = useAdmin();
+  const allowed = can('admins.manage');
   const [data, setData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState('all');
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | Role>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | ProductRole>('all');
   const [showIdle, setShowIdle] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('paymentCollected');
   const [sortDesc, setSortDesc] = useState(true);
@@ -163,8 +168,8 @@ export default function AdminPerformancePage() {
   };
 
   useEffect(() => {
-    if (admin && admin.role !== 'admin') fetchData();
-  }, [admin]);
+    if (allowed) fetchData();
+  }, [allowed]);
 
   const handlePeriodChange = (value: string) => {
     setPeriod(value);
@@ -183,7 +188,7 @@ export default function AdminPerformancePage() {
     if (!data) return { activeRows: [], idleRows: [] };
     const term = search.trim().toLowerCase();
     const filtered = data.admins.filter((a) =>
-      (roleFilter === 'all' || a.role === roleFilter) &&
+      (roleFilter === 'all' || productRoleOf(a.role) === roleFilter) &&
       (!term || a.name?.toLowerCase().includes(term) || a.email?.toLowerCase().includes(term))
     );
     const value = (a: AdminRow) =>
@@ -218,8 +223,8 @@ export default function AdminPerformancePage() {
     URL.revokeObjectURL(url);
   };
 
-  // Layout already redirects normal admins away; render nothing in the meantime
-  if (!admin || admin.role === 'admin') return null;
+  // The layout redirects anyone without admins.manage; render nothing in the meantime
+  if (!admin || !allowed) return null;
 
   const selected = data?.admins.find((a) => a._id === selectedAdminId);
 
@@ -370,15 +375,15 @@ export default function AdminPerformancePage() {
                 className="h-9 w-56 pl-8"
               />
             </div>
-            <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as 'all' | Role)}>
+            <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as 'all' | ProductRole)}>
               <SelectTrigger className="h-9 w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All roles</SelectItem>
-                <SelectItem value="system_admin">System Admin</SelectItem>
                 <SelectItem value="super_admin">Super Admin</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="sales">Sales</SelectItem>
               </SelectContent>
             </Select>
           </div>
