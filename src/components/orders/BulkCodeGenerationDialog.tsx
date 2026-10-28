@@ -195,6 +195,7 @@ export function BulkCodeGenerationDialog({
             <Input
               id="amount"
               type="number"
+              min="0"
               step="0.01"
               placeholder="Enter total amount paid"
               value={formData.amount}

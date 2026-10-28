@@ -182,6 +182,7 @@ export function AddOfflineSaleDialog({
             <Input
               id="amount"
               type="number"
+              min="0"
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
               required
