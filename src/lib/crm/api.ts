@@ -207,6 +207,85 @@ export const crmApi = {
   inviteRep: (email: string, message?: string) => request<{ emailSent: boolean; invitationUrl: string; message: string }>("POST", `/reps/invite`, { email, message }),
   updateRepProfile: (adminId: string, body: Record<string, unknown>) => request("PUT", `/reps/${adminId}/profile`, body),
   deactivateRep: (adminId: string, reason: string, reassignTo?: string | null) => request<{ leadsMoved: number }>("POST", `/reps/${adminId}/deactivate`, { reason, reassignTo }),
+
+  // Phase 4: quotes, codes, payments
+  quotes: (leadId: string) => request<Quote[]>("GET", `/leads/${leadId}/quotes`),
+  createQuote: (interestId: string, body: { applyCourseDiscount?: boolean; discountCode?: string; note?: string; validDays?: number }) =>
+    request<Quote>("POST", `/interests/${interestId}/quotes`, body),
+  decideQuote: (quoteId: string, approve: boolean, note?: string) => request<Quote>("POST", `/quotes/${quoteId}/decision`, { approve, note }),
+  cancelQuote: (quoteId: string, reason: string) => request<Quote>("POST", `/quotes/${quoteId}/cancel`, { reason }),
+  pendingQuotes: () => request<Quote[]>("GET", `/quotes/pending`),
+  codesForAllocation: (params: { courseId?: string; allocatedTo?: string }) => request<CodeRow[]>("GET", `/codes${qs(params)}`),
+  allocateCodes: (codeIds: string[], toAdminId: string, reason?: string) =>
+    request<{ allocated: string[]; skipped: { codeId: string; reason: string }[] }>("POST", `/codes/allocate`, { codeIds, toAdminId, reason }),
+  revokeCode: (codeId: string, reason: string) => request("POST", `/codes/${codeId}/revoke`, { reason }),
+  myCodes: (courseId?: string) => request<CodeRow[]>("GET", `/my-codes${qs({ courseId })}`),
+  enrollWithCode: (leadId: string, codeId: string) => request<{ enrollmentId: string; courseId: string }>("POST", `/leads/${leadId}/enroll-with-code`, { codeId }),
+  payments: (leadId: string) => request<LeadPayment[]>("GET", `/leads/${leadId}/payments`),
+};
+
+export type QuoteStatus = "pending_approval" | "active" | "rejected" | "cancelled" | "superseded" | "expired";
+export type Quote = {
+  _id: string;
+  leadId: string;
+  interestId: string;
+  courseId: string;
+  applyCourseDiscount: boolean;
+  discountCode?: string;
+  price: { listPrice: number; courseDiscountAmount: number; codeDiscountAmount: number; totalDiscount: number; total: number; vatRate: number; vatAmount: number };
+  discountPercent: number;
+  approval: { required: boolean; limitPercent: number; decidedAt?: string; note?: string };
+  status: QuoteStatus;
+  expiresAt: string;
+  note?: string;
+  createdAt: string;
+  history: { from?: string; to: string; at: string; note?: string }[];
+};
+export type CodeRow = {
+  _id: string;
+  last4: string | null;
+  courseId: string;
+  courseTitle?: string;
+  kind: "prepaid_batch" | "single_sale";
+  expiresOn?: string;
+  isUsed: boolean;
+  allocatedToAdminId?: string | null;
+  allocatedAt?: string;
+};
+export type LeadPayment = {
+  _id: string;
+  courseId: string;
+  courseTitle?: string;
+  status: string;
+  path: "online" | "single_code" | "bulk_codes" | "direct_grant" | "other_offline";
+  kind: "qualifying" | "complimentary" | "bulk" | "invalidated" | "not_applicable";
+  countsAsSale: boolean;
+  date: string;
+  creditedToMe: boolean;
+  invalidated: boolean;
+  // Admin and Super Admin only:
+  amount?: number;
+  paymentMethod?: string;
+  creditedToAdminId?: string | null;
+  creditReason?: string;
+  duplicatePaymentOf?: string;
+  invalidation?: { at: string; byName?: string; reason: string };
+};
+
+export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+  pending_approval: "Waiting for approval",
+  active: "Active",
+  rejected: "Rejected",
+  cancelled: "Cancelled",
+  superseded: "Replaced",
+  expired: "Expired",
+};
+export const PAYMENT_PATH_LABELS: Record<LeadPayment["path"], string> = {
+  online: "Online payment",
+  single_code: "Code from a recorded sale",
+  bulk_codes: "Prepaid organization code",
+  direct_grant: "Enrolled by a Super Admin",
+  other_offline: "Recorded payment",
 };
 
 /** Course titles and prices (courses.view_catalog). */

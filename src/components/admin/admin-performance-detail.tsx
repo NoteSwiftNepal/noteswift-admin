@@ -184,7 +184,9 @@ export function AdminPerformanceDetail({
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
       const response = await fetch(
         API_ENDPOINTS.ADMINS.UPDATE_TRANSACTION_AMOUNT(editing._id),
-        createFetchOptions('PATCH', { amount: parsedAmount, note })
+        // expectedAmount: the backend only applies the change if the amount is
+        // still what this screen showed (D20); otherwise it answers 409.
+        createFetchOptions('PATCH', { amount: parsedAmount, expectedAmount: editing.amount, note })
       );
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.message || 'Update failed');

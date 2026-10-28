@@ -13,7 +13,7 @@ export type Permission =
   | 'courses.view_catalog' | 'courses.manage'
   | 'recommendations.view' | 'recommendations.manage'
   | 'promo_banners.manage' | 'app_block.manage' | 'notifications.manage'
-  | 'reports.view' | 'revenue.view' | 'orders.view' | 'orders.view_sensitive' | 'orders.manage'
+  | 'reports.view' | 'revenue.view' | 'orders.view' | 'orders.view_sensitive' | 'orders.manage' | 'transactions.invalidate'
   | 'discount_codes.manage' | 'archives.manage' | 'subject_groups.manage' | 'audit.view'
   | 'settings.platform' | 'live_classes.view' | 'leads.legacy'
   | 'refunds.view' | 'refunds.manage' | 'exports.sensitive'

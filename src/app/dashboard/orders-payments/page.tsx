@@ -19,6 +19,7 @@ import { EsewaTransactionDialog } from "@/components/orders/EsewaTransactionDial
 import { exportCodesListToPDF } from "@/lib/pdf-utils";
 import { useAdmin } from "@/context/admin-context";
 import { productRoleOf, ROLE_BADGES } from "@/lib/permissions";
+import { InvalidBadge, InvalidateTransactionButton } from "@/components/orders/transaction-invalidation";
 
 export default function OrdersPaymentsPage() {
   const { toast } = useToast();
@@ -577,12 +578,14 @@ export default function OrdersPaymentsPage() {
                         <TableCell>Rs. {transaction.amount}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">{transaction.status}</Badge>
+                          <InvalidBadge transaction={transaction} />
                         </TableCell>
                         <TableCell>{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <Button variant="ghost" size="sm">
                             <Eye className="w-4 h-4" />
                           </Button>
+                          <InvalidateTransactionButton transaction={transaction} onDone={fetchTransactions} />
                         </TableCell>
                       </TableRow>
                     ))
@@ -936,6 +939,7 @@ export default function OrdersPaymentsPage() {
                           <Badge variant={transaction.status === 'completed' ? 'default' : transaction.status === 'failed' || transaction.status === 'cancelled' ? 'destructive' : 'secondary'}>
                             {transaction.status}
                           </Badge>
+                          <InvalidBadge transaction={transaction} />
                         </TableCell>
                         <TableCell>
                           {transaction.gatewayStatus ? (
@@ -970,6 +974,7 @@ export default function OrdersPaymentsPage() {
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
+                          <InvalidateTransactionButton transaction={transaction} onDone={fetchEsewaTransactions} />
                         </TableCell>
                       </TableRow>
                     ))

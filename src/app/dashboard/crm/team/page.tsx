@@ -18,6 +18,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { DataState } from "@/components/crm/crm-ui";
+import { CodeAllocationCard, PendingQuotesCard } from "@/components/crm/team-panels";
+import { useAdmin } from "@/context/admin-context";
 import { Rep, crmApi, fetchCourseCatalog, fmtDateTime } from "@/lib/crm/api";
 
 const STATUS_BADGE: Record<Rep["status"], { label: string; className: string }> = {
@@ -29,6 +31,7 @@ const STATUS_BADGE: Record<Rep["status"], { label: string; className: string }> 
 
 export default function SalesTeamPage() {
   const { toast } = useToast();
+  const { can } = useAdmin();
   const [reps, setReps] = useState<Rep[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +159,9 @@ export default function SalesTeamPage() {
           </DataState>
         </CardContent>
       </Card>
+
+      {can("crm.approve_discounts") && <PendingQuotesCard />}
+      {can("crm.allocate_codes") && <CodeAllocationCard reps={reps} courses={courses} />}
 
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} onDone={(msg) => { toast({ title: msg }); load(); }} />
       <ProfileDialog rep={editRep} courses={courses} onClose={() => setEditRep(null)} onDone={() => { toast({ title: "Allocation updated" }); load(); }} />

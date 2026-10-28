@@ -22,6 +22,7 @@ import { useAdmin } from "@/context/admin-context";
 import { DataState, DoNotContactBadge, InterestStageBadge, LeadStageBadge, LeadStatusBadge, ReasonDialog } from "@/components/crm/crm-ui";
 import { ContactDialog } from "@/components/crm/contact-dialog";
 import { CompleteTaskDialog, CreateTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-dialogs";
+import { EnrollWithCodeDialog, PaymentsPanel, QuotesPanel } from "@/components/crm/sales-panels";
 import {
   CHANNEL_LABELS,
   Channel,
@@ -61,6 +62,7 @@ export default function LeadProfilePage() {
   const [activityOpen, setActivityOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [courseAction, setCourseAction] = useState<null | "add" | "assign">(null);
+  const [codeOpen, setCodeOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -161,6 +163,11 @@ export default function LeadProfilePage() {
                 <RotateCcw className="mr-2 h-4 w-4" /> Reopen
               </Button>
             )}
+            {lead.kind === "student" && can("crm.enroll_with_code") && (
+              <Button type="button" variant="outline" onClick={() => setCodeOpen(true)}>
+                Enroll with code
+              </Button>
+            )}
             {!lead.doNotContact.flag ? (
               <Button type="button" variant="outline" onClick={() => askReason({ title: "Do not contact", description: "Blocks every contact and cancels open contact tasks.", confirmLabel: "Set do not contact", destructive: true, run: (r) => crmApi.setDoNotContact(leadId, true, r) })}>
                 <Ban className="mr-2 h-4 w-4" /> Do not contact
@@ -182,8 +189,14 @@ export default function LeadProfilePage() {
           <TabsTrigger value="courses">Courses ({lead.interests.filter((i) => i.status === "open").length})</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
           <TabsTrigger value="tasks">Tasks ({openTasks.length})</TabsTrigger>
+          <TabsTrigger value="sales">Quotes &amp; payments</TabsTrigger>
           {isAdmin && <TabsTrigger value="history">History</TabsTrigger>}
         </TabsList>
+
+        <TabsContent value="sales" className="mt-4 space-y-4">
+          <QuotesPanel leadId={leadId} interests={lead.interests} onChanged={load} />
+          <PaymentsPanel leadId={leadId} />
+        </TabsContent>
 
         <TabsContent value="overview" className="mt-4 grid gap-4 lg:grid-cols-2">
           <Card>
@@ -483,6 +496,7 @@ export default function LeadProfilePage() {
       <CompleteTaskDialog taskId={completeId} onOpenChange={(v) => !v && setCompleteId(null)} onDone={load} />
       <RescheduleTaskDialog task={rescheduleTask} onOpenChange={(v) => !v && setRescheduleTask(null)} onDone={load} />
       <LogActivityDialog open={activityOpen} onOpenChange={setActivityOpen} leadId={leadId} interests={lead.interests} onDone={load} />
+      <EnrollWithCodeDialog leadId={leadId} open={codeOpen} onOpenChange={setCodeOpen} onDone={() => { toast({ title: "Enrolled with the code" }); load(); }} />
       <AssignOwnerDialog open={assignOpen} onOpenChange={setAssignOpen} reps={reps} current={lead.ownerId} onSubmit={(ownerId, reason) => act(() => crmApi.assign(leadId, ownerId, reason), ownerId ? "Lead assigned" : "Lead unassigned")} />
       <CourseDialog
         mode={courseAction}
