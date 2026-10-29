@@ -142,7 +142,7 @@ export function ContactDialog({
                   <Loader2 className="h-4 w-4 animate-spin" /> Checking…
                 </span>
               ) : decision.allowed ? (
-                <span className="flex items-start gap-2 text-green-800">
+                <span className="flex items-start gap-2 text-[var(--crm-good)]">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
                     Allowed
@@ -150,7 +150,7 @@ export function ContactDialog({
                   </span>
                 </span>
               ) : (
-                <div className="flex items-start gap-2 text-red-800">
+                <div className="flex items-start gap-2 text-[var(--crm-bad)]">
                   <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
                   <ul className="list-disc pl-4">
                     {decision.reasons.map((r) => (
@@ -166,7 +166,7 @@ export function ContactDialog({
             <p className="text-sm">
               Contact started.{" "}
               {attempt.link && (
-                <a className="text-blue-700 underline" href={attempt.link} target={channel === "whatsapp" ? "_blank" : undefined} rel="noreferrer">
+                <a className="crm-link underline" href={attempt.link} target={channel === "whatsapp" ? "_blank" : undefined} rel="noreferrer">
                   Open {CHANNEL_LABELS[channel]} again
                 </a>
               )}
@@ -185,7 +185,7 @@ export function ContactDialog({
                   ))}
                 </SelectContent>
               </Select>
-              {outcome === "asked_not_to_contact" && <p className="mt-1 text-xs text-red-700">This sets do-not-contact on the lead right away.</p>}
+              {outcome === "asked_not_to_contact" && <p className="mt-1 text-xs text-destructive">This sets do-not-contact on the lead right away.</p>}
             </div>
             <div>
               <Label htmlFor="crm-outcome-notes">Notes</Label>
@@ -193,7 +193,7 @@ export function ContactDialog({
             </div>
           </div>
         )}
-        {error && <p className="text-sm text-red-700">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           {!attempt ? (
             <>

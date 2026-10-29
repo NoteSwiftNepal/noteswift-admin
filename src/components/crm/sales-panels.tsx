@@ -8,7 +8,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,12 +17,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
 import { DataState, ReasonDialog } from "@/components/crm/crm-ui";
+import { CrmPill, GOOD_BUTTON, Tone } from "@/components/crm/ui";
 import { CodeRow, Interest, LeadPayment, PAYMENT_PATH_LABELS, QUOTE_STATUS_LABELS, Quote, crmApi, fmtDateTime, rs } from "@/lib/crm/api";
 
-const QUOTE_BADGE: Record<string, string> = {
-  active: "bg-green-100 text-green-800 hover:bg-green-100",
-  pending_approval: "bg-amber-100 text-amber-800 hover:bg-amber-100",
-};
+const QUOTE_TONE: Record<string, Tone> = { active: "good", pending_approval: "warn" };
 
 /** Quotes on the lead's opportunities, with create / approve / reject / cancel. */
 export function QuotesPanel({ leadId, interests, onChanged }: { leadId: string; interests: Interest[]; onChanged: () => void }) {
@@ -78,13 +75,11 @@ export function QuotesPanel({ leadId, interests, onChanged }: { leadId: string; 
         <DataState loading={loading} error={error} onRetry={load} empty={quotes.length === 0} emptyText="No quotes yet.">
           <div className="space-y-2">
             {quotes.map((q) => (
-              <div key={q._id} className="flex flex-col gap-2 rounded-md border p-3 text-sm md:flex-row md:items-start md:justify-between">
+              <div key={q._id} className="flex flex-col gap-2 rounded-xl border bg-[var(--crm-surface-2)] p-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{titleOf(q.interestId)}</span>
-                    <Badge variant="outline" className={QUOTE_BADGE[q.status] || ""}>
-                      {QUOTE_STATUS_LABELS[q.status]}
-                    </Badge>
+                    <span className="font-semibold">{titleOf(q.interestId)}</span>
+                    <CrmPill tone={QUOTE_TONE[q.status] ?? "neutral"}>{QUOTE_STATUS_LABELS[q.status]}</CrmPill>
                   </div>
                   <p className="mt-1">
                     {rs(q.price.total)} <span className="text-muted-foreground">(list {rs(q.price.listPrice)}, {q.discountPercent}% off{q.discountCode ? `, promo code ${q.discountCode}` : q.applyCourseDiscount ? ", course discount" : ""})</span>
@@ -99,7 +94,7 @@ export function QuotesPanel({ leadId, interests, onChanged }: { leadId: string; 
                 <div className="flex shrink-0 flex-wrap gap-2">
                   {q.status === "pending_approval" && q.canDecide && (
                     <>
-                      <Button type="button" size="sm" onClick={() => crmApi.decideQuote(q._id, true).then(() => done("Quote approved"), (e) => toast({ title: "Not done", description: e?.message, variant: "destructive" }))}>
+                      <Button type="button" size="sm" className={GOOD_BUTTON} onClick={() => crmApi.decideQuote(q._id, true).then(() => done("Quote approved"), (e) => toast({ title: "Not done", description: e?.message, variant: "destructive" }))}>
                         Approve
                       </Button>
                       <Button type="button" size="sm" variant="outline" onClick={() => setReason({ title: "Reject quote", confirmLabel: "Reject", destructive: true, run: (r) => crmApi.decideQuote(q._id, false, r).then(() => done("Quote rejected")) })}>
@@ -202,7 +197,7 @@ function CreateQuoteDialog({ interest, onClose, onDone }: { interest: Interest |
             <Label htmlFor="quote-note">Note (optional)</Label>
             <Textarea id="quote-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />
           </div>
-          {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
+          {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
@@ -268,11 +263,11 @@ export function PaymentsPanel({ leadId }: { leadId: string }) {
                     <TableCell>{PAYMENT_PATH_LABELS[p.path]}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        <Badge variant={p.status === "completed" ? "default" : p.status === "failed" ? "destructive" : "secondary"}>{p.status}</Badge>
-                        {p.invalidated && <Badge variant="destructive">Invalid</Badge>}
-                        {p.countsAsSale && <Badge variant="outline">Sale</Badge>}
-                        {p.kind === "complimentary" && <Badge variant="outline">Free</Badge>}
-                        {p.duplicatePaymentOf && <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Paid twice: refund candidate</Badge>}
+                        <CrmPill tone={p.status === "completed" ? "good" : p.status === "failed" ? "bad" : "warn"}>{p.status}</CrmPill>
+                        {p.invalidated && <CrmPill tone="bad">Invalid</CrmPill>}
+                        {p.countsAsSale && <CrmPill tone="accent">Sale</CrmPill>}
+                        {p.kind === "complimentary" && <CrmPill>Free</CrmPill>}
+                        {p.duplicatePaymentOf && <CrmPill tone="warn">Paid twice: refund candidate</CrmPill>}
                       </div>
                     </TableCell>
                     {full && <TableCell>{p.amount !== undefined ? rs(p.amount) : "—"}</TableCell>}
@@ -352,7 +347,7 @@ export function EnrollWithCodeDialog({ leadId, open, onOpenChange, onDone }: { l
             </Select>
           </div>
         )}
-        {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
+        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel

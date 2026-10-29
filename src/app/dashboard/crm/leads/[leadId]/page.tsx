@@ -7,9 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Ban, CheckCircle2, Loader2, MessageSquarePlus, Phone, Plus, RotateCcw, ShieldCheck, UserPlus, XCircle } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,7 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
-import { DataState, DoNotContactBadge, InterestStageBadge, LeadStageBadge, LeadStatusBadge, ReasonDialog } from "@/components/crm/crm-ui";
+import { DataState, DoNotContactBadge, InterestStageBadge, LeadStageBadge, LeadStatusBadge, OutcomeBadge, ReasonDialog, TaskStatusBadge } from "@/components/crm/crm-ui";
+import { CrmCard, CrmEvent, CrmFacts, CrmPill, CrmTimeline, GOOD_BUTTON } from "@/components/crm/ui";
 import { ContactDialog } from "@/components/crm/contact-dialog";
 import { CompleteTaskDialog, CreateTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-dialogs";
 import { EnrollWithCodeDialog, PaymentsPanel, QuotesPanel } from "@/components/crm/sales-panels";
@@ -96,13 +95,11 @@ export default function LeadProfilePage() {
     return (
       <div className="flex flex-col gap-4">
         <BackLink />
-        <Card>
-          <CardContent>
-            <DataState loading={loading} error={error} onRetry={load}>
-              {null}
-            </DataState>
-          </CardContent>
-        </Card>
+        <CrmCard>
+          <DataState loading={loading} error={error} onRetry={load}>
+            {null}
+          </DataState>
+        </CrmCard>
       </div>
     );
   }
@@ -116,30 +113,30 @@ export default function LeadProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <BackLink />
 
-      <Card>
-        <CardContent className="flex flex-col gap-4 p-6 md:flex-row md:items-start md:justify-between">
+      <CrmCard>
+        <div className="flex flex-col gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold text-gray-900">{p?.name || "Unnamed"}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{[p?.phone, p?.email].filter(Boolean).join(" · ") || "No contact details"}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <h1 className="truncate text-[22px] font-semibold max-[520px]:text-[19px]">{p?.name || "Unnamed"}</h1>
+            <p className="crm-muted crm-small mt-1">{[p?.phone, p?.email].filter(Boolean).join(" · ") || "No contact details"}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <LeadStatusBadge status={lead.status} />
               <LeadStageBadge stage={lead.stage} />
-              {lead.kind === "prospect" && <Badge variant="outline">Prospect</Badge>}
+              {lead.kind === "prospect" && <CrmPill>Prospect</CrmPill>}
               {lead.doNotContact.flag && <DoNotContactBadge />}
-              <Badge variant="outline">Owner: {lead.ownerName || "Unassigned"}</Badge>
+              <CrmPill tone={lead.ownerName ? "neutral" : "warn"}>Owner: {lead.ownerName || "Unassigned"}</CrmPill>
             </div>
-            {lead.status === "lost" && lead.lostReason && <p className="mt-2 text-sm text-gray-600">Lost: {lead.lostReason}</p>}
+            {lead.status === "lost" && lead.lostReason && <p className="crm-muted crm-small mt-2">Lost: {lead.lostReason}</p>}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => setContactFor({ open: true, interest: null })} disabled={lead.doNotContact.flag}>
-              <Phone className="mr-2 h-4 w-4" /> Contact
+          <div className="crm-actions">
+            <Button type="button" size="sm" onClick={() => setContactFor({ open: true, interest: null })} disabled={lead.doNotContact.flag}>
+              <Phone className="mr-1 h-4 w-4" /> Contact
             </Button>
             {can("crm.assign_leads") && (
-              <Button type="button" variant="outline" onClick={() => setAssignOpen(true)}>
-                <UserPlus className="mr-2 h-4 w-4" /> {lead.ownerId ? "Reassign" : "Assign"}
+              <Button type="button" size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
+                <UserPlus className="mr-1 h-4 w-4" /> {lead.ownerId ? "Reassign" : "Assign"}
               </Button>
             )}
             {lead.status !== "lost" ? (
@@ -156,41 +153,51 @@ export default function LeadProfilePage() {
                   })
                 }
               >
-                <XCircle className="mr-2 h-4 w-4" /> Mark lost
+                <XCircle className="mr-1 h-4 w-4" /> Mark lost
               </Button>
             ) : (
-              <Button type="button" variant="outline" onClick={() => askReason({ title: "Reopen lead", confirmLabel: "Reopen", optional: true, run: (r) => crmApi.reopenLead(leadId, r || "reopened by hand") })}>
-                <RotateCcw className="mr-2 h-4 w-4" /> Reopen
+              <Button type="button" size="sm" variant="outline" onClick={() => askReason({ title: "Reopen lead", confirmLabel: "Reopen", optional: true, run: (r) => crmApi.reopenLead(leadId, r || "reopened by hand") })}>
+                <RotateCcw className="mr-1 h-4 w-4" /> Reopen
               </Button>
             )}
             {lead.kind === "student" && can("crm.enroll_with_code") && (
-              <Button type="button" variant="outline" onClick={() => setCodeOpen(true)}>
+              <Button type="button" size="sm" variant="outline" onClick={() => setCodeOpen(true)}>
                 Enroll with code
               </Button>
             )}
             {!lead.doNotContact.flag ? (
-              <Button type="button" variant="outline" onClick={() => askReason({ title: "Do not contact", description: "Blocks every contact and cancels open contact tasks.", confirmLabel: "Set do not contact", destructive: true, run: (r) => crmApi.setDoNotContact(leadId, true, r) })}>
-                <Ban className="mr-2 h-4 w-4" /> Do not contact
+              <Button type="button" size="sm" variant="outline" onClick={() => askReason({ title: "Do not contact", description: "Blocks every contact and cancels open contact tasks.", confirmLabel: "Set do not contact", destructive: true, run: (r) => crmApi.setDoNotContact(leadId, true, r) })}>
+                <Ban className="mr-1 h-4 w-4" /> Do not contact
               </Button>
             ) : (
               can("crm.clear_do_not_contact") && (
-                <Button type="button" variant="outline" onClick={() => askReason({ title: "Allow contact again", confirmLabel: "Clear do not contact", run: (r) => crmApi.setDoNotContact(leadId, false, r) })}>
-                  <ShieldCheck className="mr-2 h-4 w-4" /> Clear do not contact
+                <Button type="button" size="sm" variant="outline" onClick={() => askReason({ title: "Allow contact again", confirmLabel: "Clear do not contact", run: (r) => crmApi.setDoNotContact(leadId, false, r) })}>
+                  <ShieldCheck className="mr-1 h-4 w-4" /> Clear do not contact
                 </Button>
               )
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CrmCard>
 
       <Tabs defaultValue="overview">
-        <TabsList className="flex h-auto flex-wrap">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="courses">Courses ({lead.interests.filter((i) => i.status === "open").length})</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="tasks">Tasks ({openTasks.length})</TabsTrigger>
-          <TabsTrigger value="sales">Quotes &amp; payments</TabsTrigger>
-          {isAdmin && <TabsTrigger value="history">History</TabsTrigger>}
+        <TabsList className="crm-tabs -mx-0 w-full rounded-none bg-transparent p-0 px-1">
+          <TabsTrigger className="crm-tab" value="overview">Overview</TabsTrigger>
+          <TabsTrigger className="crm-tab" value="courses">
+            Courses<span className="crm-tab-n">{lead.interests.filter((i) => i.status === "open").length}</span>
+          </TabsTrigger>
+          <TabsTrigger className="crm-tab" value="activity">
+            Activity<span className="crm-tab-n">{lead.activities.pagination?.total ?? lead.activities.items.length}</span>
+          </TabsTrigger>
+          <TabsTrigger className="crm-tab" value="tasks">
+            Tasks<span className="crm-tab-n">{openTasks.length}</span>
+          </TabsTrigger>
+          <TabsTrigger className="crm-tab" value="sales">Quotes &amp; payments</TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger className="crm-tab" value="history">
+              History
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="sales" className="mt-4 space-y-4">
@@ -199,16 +206,19 @@ export default function LeadProfilePage() {
         </TabsContent>
 
         <TabsContent value="overview" className="mt-4 grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Student</CardTitle>
-              {lead.kind === "student" && <CardDescription>From the student&apos;s own account.</CardDescription>}
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3 text-sm">
-              <Info label="Grade" value={p?.grade ?? "—"} />
-              <Info label="District" value={p?.district || "—"} />
-              <Info label="School" value={p?.school || "—"} />
-              <Info label="Last contact" value={timeAgo(lead.lastContactAt)} />
+          <CrmCard title="Student" aside={lead.kind === "student" ? <span className="crm-muted crm-small">From the student&apos;s own account</span> : undefined} bodyClassName="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <CrmFacts
+                  items={[
+                    { label: "Phone", value: p?.phone || "—" },
+                    { label: "Email", value: p?.email || "—" },
+                    { label: "Grade", value: p?.grade ?? "—" },
+                    { label: "District", value: p?.district || "—" },
+                    { label: "School", value: p?.school || "—" },
+                    { label: "Last contact", value: lead.lastContactAt ? timeAgo(lead.lastContactAt) : "Not contacted yet" },
+                  ]}
+                />
+              </div>
               <div className="col-span-2">
                 <Label htmlFor="lead-priority">Priority</Label>
                 <Select value={lead.priority} onValueChange={(v) => act(() => crmApi.updateLead(leadId, { priority: v }), "Priority updated")}>
@@ -237,28 +247,23 @@ export default function LeadProfilePage() {
                   </SelectContent>
                 </Select>
               </div>
-            </CardContent>
-          </Card>
+          </CrmCard>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Enrollment</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
+          <CrmCard title="Enrollment" bodyClassName="space-y-3">
               <div>
-                <div className="font-medium">Enrolled courses</div>
-                {lead.enrollment.enrolledCourses.length === 0 ? <p className="text-muted-foreground">None</p> : <ul className="list-disc pl-5">{lead.enrollment.enrolledCourses.map((c) => <li key={c.courseId}>{c.title}</li>)}</ul>}
+                <div className="crm-facts-label">Enrolled courses</div>
+                {lead.enrollment.enrolledCourses.length === 0 ? <p className="crm-muted">None</p> : <ul className="list-disc pl-5">{lead.enrollment.enrolledCourses.map((c) => <li key={c.courseId}>{c.title}</li>)}</ul>}
               </div>
               <div>
-                <div className="font-medium">Assigned, payment pending</div>
+                <div className="crm-facts-label">Assigned, payment pending</div>
                 {lead.enrollment.pendingCourseAssignments.length === 0 ? (
-                  <p className="text-muted-foreground">None</p>
+                  <p className="crm-muted">None</p>
                 ) : (
                   <ul className="space-y-1">
                     {lead.enrollment.pendingCourseAssignments.map((a) => (
                       <li key={a._id} className="flex items-center justify-between gap-2">
                         <span>
-                          {a.title} <span className="text-muted-foreground">({fmtDateTime(a.assignedAt)})</span>
+                          {a.title} <span className="crm-muted">({fmtDateTime(a.assignedAt)})</span>
                         </span>
                         {a.fromThisLead && can("enrollments.cancel_pending") && (
                           <Button type="button" variant="ghost" size="sm" onClick={() => askReason({ title: "Cancel course assignment", confirmLabel: "Cancel assignment", destructive: true, run: (r) => crmApi.cancelCourseAssignment(a._id, r) })}>
@@ -270,8 +275,7 @@ export default function LeadProfilePage() {
                   </ul>
                 )}
               </div>
-            </CardContent>
-          </Card>
+          </CrmCard>
 
           <ContactControls lead={lead} onChanged={load} askReason={askReason} canEnable={can("crm.clear_do_not_contact")} />
         </TabsContent>
@@ -290,21 +294,20 @@ export default function LeadProfilePage() {
             )}
           </div>
           {lead.interests.length === 0 ? (
-            <Card>
-              <CardContent className="py-10 text-center text-sm text-muted-foreground">No course opportunities yet.</CardContent>
-            </Card>
+            <CrmCard flush>
+              <div className="crm-empty">No course opportunities yet.</div>
+            </CrmCard>
           ) : (
             lead.interests.map((i) => (
-              <Card key={i._id} className={i.status === "closed" ? "opacity-80" : ""}>
-                <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between">
+              <CrmCard key={i._id} className={i.status === "closed" ? "opacity-80" : ""} bodyClassName="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{i.title}</span>
-                      {i.status === "open" ? <InterestStageBadge stage={i.stage} /> : <Badge variant="outline">{i.outcome === "lost" ? `Lost: ${i.lostReason}` : i.outcome}</Badge>}
-                      {i.enrolled && <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Enrolled</Badge>}
-                      {i.reopenedFromInterestId && <Badge variant="outline">Reopened</Badge>}
+                      <span className="font-semibold">{i.title}</span>
+                      {i.status === "open" ? <InterestStageBadge stage={i.stage} /> : <OutcomeBadge outcome={i.outcome} lostReason={i.lostReason} />}
+                      {i.enrolled && <CrmPill tone="good">Enrolled</CrmPill>}
+                      {i.reopenedFromInterestId && <CrmPill>Reopened</CrmPill>}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="crm-muted mt-1 text-xs">
                       List price {rs(i.listPrice)} · viewed {timeAgo(i.signals?.lastViewedAt)}
                       {i.signals?.lastCheckoutAt ? ` · checkout ${timeAgo(i.signals.lastCheckoutAt)}` : ""}
                       {i.closedAt ? ` · closed ${fmtDateTime(i.closedAt)}` : ""}
@@ -339,76 +342,72 @@ export default function LeadProfilePage() {
                       </Button>
                     )
                   )}
-                </CardContent>
-              </Card>
+              </CrmCard>
             ))
           )}
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4 space-y-3">
           <Button type="button" variant="outline" onClick={() => setActivityOpen(true)}>
-            <MessageSquarePlus className="mr-2 h-4 w-4" /> Log activity
+            <MessageSquarePlus className="mr-1 h-4 w-4" /> Log activity
           </Button>
-          <Card>
-            <CardContent className="p-0">
+          <CrmCard title="Activity" aside={<span className="crm-muted crm-small">Newest first</span>}>
               {lead.activities.items.length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted-foreground">No activity yet.</p>
+                <div className="crm-empty">No activity yet.</div>
               ) : (
-                <ol className="divide-y">
+                <CrmTimeline>
                   {lead.activities.items.map((a) => (
-                    <li key={a._id} className="flex flex-col gap-1 p-4 text-sm">
+                    <CrmEvent key={a._id} tone={activityTone(a)}>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">{activityTitle(a)}</span>
-                        {a.policyException && <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Policy exception</Badge>}
-                        {a.correctsActivityId && <Badge variant="outline">Correction</Badge>}
-                        <span className="text-xs text-muted-foreground">
-                          {a.actorName} · {fmtDateTime(a.occurredAt)}
-                        </span>
+                        <span className="font-semibold">{activityTitle(a)}</span>
+                        {a.policyException && <CrmPill tone="bad">Policy exception</CrmPill>}
+                        {a.correctsActivityId && <CrmPill>Correction</CrmPill>}
                       </div>
-                      {a.summary && <p className="whitespace-pre-wrap text-gray-700">{a.summary}</p>}
-                      {a.basis && <p className="text-xs text-muted-foreground">Because of a {a.basis.signalType.replace(/_/g, " ")} on {fmtDateTime(a.basis.signalAt)}</p>}
-                    </li>
+                      {a.summary && <p className="whitespace-pre-wrap">{a.summary}</p>}
+                      {a.basis && <p className="crm-muted crm-small">Because of a {a.basis.signalType.replace(/_/g, " ")} on {fmtDateTime(a.basis.signalAt)}</p>}
+                      <span className="crm-muted crm-small">
+                        {a.actorName} · {fmtDateTime(a.occurredAt)}
+                      </span>
+                    </CrmEvent>
                   ))}
-                </ol>
+                </CrmTimeline>
               )}
-            </CardContent>
-          </Card>
+          </CrmCard>
         </TabsContent>
 
         <TabsContent value="tasks" className="mt-4 space-y-3">
           {lead.status !== "lost" && (
             <Button type="button" variant="outline" onClick={() => setTaskOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> New task
+              <Plus className="mr-1 h-4 w-4" /> New task
             </Button>
           )}
-          <Card>
-            <CardContent className="p-0">
+          <CrmCard title="Tasks">
               {lead.tasks.length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted-foreground">No tasks.</p>
+                <div className="crm-empty">No tasks.</div>
               ) : (
-                <ul className="divide-y">
+                <ul className="crm-list">
                   {lead.tasks.map((t) => {
                     const overdue = t.status === "open" && new Date(t.dueAt) < new Date();
                     return (
-                      <li key={t._id} className="flex flex-col gap-2 p-4 text-sm md:flex-row md:items-center md:justify-between">
-                        <div>
+                      <li key={t._id} className="crm-li">
+                        <div className="crm-who">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium">{TASK_TYPE_LABELS[t.type] || t.type}</span>
-                            {t.purpose && <Badge variant="outline">{PURPOSE_LABELS[t.purpose]}</Badge>}
-                            <Badge variant={t.status === "open" ? "default" : "outline"}>{t.status}</Badge>
+                            <span className="font-semibold">{TASK_TYPE_LABELS[t.type] || t.type}</span>
+                            {t.purpose && <CrmPill tone="accent">{PURPOSE_LABELS[t.purpose]}</CrmPill>}
+                            <TaskStatusBadge status={t.status} overdue={overdue} />
                           </div>
-                          <p className={`text-xs ${overdue ? "font-medium text-red-700" : "text-muted-foreground"}`}>
+                          <p className={`text-xs ${overdue ? "crm-late" : "crm-muted"}`}>
                             Due {fmtDateTime(t.dueAt)}
                             {overdue ? " (overdue)" : ""} · {t.assigneeName || "Unassigned"}
                             {t.rescheduleHistory && t.rescheduleHistory.length > 0 ? ` · rescheduled ${t.rescheduleHistory.length}×` : ""}
                           </p>
-                          {t.notes && <p className="text-gray-700">{t.notes}</p>}
-                          {t.outcome && <p className="text-gray-700">Outcome: {t.outcome}</p>}
-                          {t.cancelReason && <p className="text-muted-foreground">Cancelled: {t.cancelReason}</p>}
+                          {t.notes && <p>{t.notes}</p>}
+                          {t.outcome && <p>Outcome: {t.outcome}</p>}
+                          {t.cancelReason && <p className="crm-muted">Cancelled: {t.cancelReason}</p>}
                         </div>
                         {t.status === "open" && (
-                          <div className="flex gap-2">
-                            <Button type="button" size="sm" onClick={() => setCompleteId(t._id)}>
+                          <div className="crm-actions">
+                            <Button type="button" size="sm" className={GOOD_BUTTON} onClick={() => setCompleteId(t._id)}>
                               <CheckCircle2 className="mr-1 h-4 w-4" /> Done
                             </Button>
                             <Button type="button" size="sm" variant="outline" onClick={() => setRescheduleTask({ _id: t._id, dueAt: t.dueAt })}>
@@ -424,53 +423,39 @@ export default function LeadProfilePage() {
                   })}
                 </ul>
               )}
-            </CardContent>
-          </Card>
+          </CrmCard>
         </TabsContent>
 
         {isAdmin && (
           <TabsContent value="history" className="mt-4 grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Ownership</CardTitle>
-                <CardDescription>
-                  {lead.createdByName ? `Created by ${lead.createdByName}` : `Created from ${lead.source}`} · {fmtDateTime(lead.createdAt)}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-sm">
+            <CrmCard title="Ownership" aside={<span className="crm-muted crm-small">{lead.createdByName ? `Created by ${lead.createdByName}` : `Created from ${lead.source}`} · {fmtDateTime(lead.createdAt)}</span>}>
                 {(lead.assignmentHistory || []).length === 0 ? (
-                  <p className="text-muted-foreground">Never assigned.</p>
+                  <p className="crm-muted">Never assigned.</p>
                 ) : (
                   <ol className="space-y-2">
                     {lead.assignmentHistory!.map((h, idx) => (
                       <li key={idx}>
-                        {h.from || "Unassigned"} → {h.to || "Unassigned"} <span className="text-muted-foreground">by {h.by}, {h.method.replace(/_/g, " ")}, {fmtDateTime(h.at)}</span>
-                        {h.reason && <div className="text-muted-foreground">{h.reason}</div>}
+                        {h.from || "Unassigned"} → {h.to || "Unassigned"} <span className="crm-muted">by {h.by}, {h.method.replace(/_/g, " ")}, {fmtDateTime(h.at)}</span>
+                        {h.reason && <div className="crm-muted">{h.reason}</div>}
                       </li>
                     ))}
                   </ol>
                 )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Status changes</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm">
+            </CrmCard>
+            <CrmCard title="Status changes">
                 {(lead.statusHistory || []).length === 0 ? (
-                  <p className="text-muted-foreground">No changes.</p>
+                  <p className="crm-muted">No changes.</p>
                 ) : (
                   <ol className="space-y-2">
                     {lead.statusHistory!.map((h, idx) => (
                       <li key={idx}>
-                        {h.from} → {h.to} <span className="text-muted-foreground">{fmtDateTime(h.at)}</span>
-                        {h.reason && <div className="text-muted-foreground">{h.reason}</div>}
+                        {h.from} → {h.to} <span className="crm-muted">{fmtDateTime(h.at)}</span>
+                        {h.reason && <div className="crm-muted">{h.reason}</div>}
                       </li>
                     ))}
                   </ol>
                 )}
-              </CardContent>
-            </Card>
+            </CrmCard>
           </TabsContent>
         )}
       </Tabs>
@@ -520,18 +505,9 @@ export default function LeadProfilePage() {
 
 function BackLink() {
   return (
-    <Link href="/dashboard/crm/leads" className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-gray-900">
+    <Link href="/dashboard/crm/leads" className="crm-crumb flex w-fit items-center gap-1 hover:text-foreground">
       <ArrowLeft className="h-4 w-4" /> Leads &amp; Students
     </Link>
-  );
-}
-
-function Info({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div>{value}</div>
-    </div>
   );
 }
 
@@ -543,15 +519,22 @@ function activityTitle(a: LeadDetail["activities"]["items"][number]) {
   return a.type.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
+// Timeline dot colour: successful contact green, policy exceptions and losses red,
+// system events grey, everything else accent.
+function activityTone(a: LeadDetail["activities"]["items"][number]): "good" | "bad" | "muted" | undefined {
+  if (a.policyException) return "bad";
+  if (a.type === "outreach_outcome") return a.outcome === "connected" || a.outcome === "message_sent" ? "good" : a.outcome === "asked_not_to_contact" || a.outcome === "wrong_number" ? "bad" : "muted";
+  if (/lost|invalidated|do_not_contact/.test(a.type)) return "bad";
+  if (/won|payment|enrolled/.test(a.type)) return "good";
+  if (["note", "call", "whatsapp", "sms", "email", "meeting", "enquiry", "outreach_started"].includes(a.type)) return undefined;
+  return "muted";
+}
+
 function ContactControls({ lead, onChanged, askReason, canEnable }: { lead: LeadDetail; onChanged: () => void; askReason: (a: NonNullable<ReasonAction>) => void; canEnable: boolean }) {
   const [consentOpen, setConsentOpen] = useState(false);
   return (
-    <Card className="lg:col-span-2">
-      <CardHeader>
-        <CardTitle className="text-base">Contact preferences</CardTitle>
-        <CardDescription>Turning a channel off blocks it at once and cancels open tasks on it. Only an Admin can turn it back on.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm">
+    <CrmCard className="lg:col-span-2" title="Contact preferences" bodyClassName="space-y-4">
+        <p className="crm-muted crm-small">Turning a channel off blocks it at once and cancels open tasks on it. Only an Admin can turn it back on.</p>
         <div className="flex flex-wrap gap-6">
           {(Object.keys(CHANNEL_LABELS) as Channel[]).map((c) => (
             <div key={c} className="flex items-center gap-2">
@@ -577,7 +560,7 @@ function ContactControls({ lead, onChanged, askReason, canEnable }: { lead: Lead
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <span className="font-medium">Consent records</span>
+            <span className="font-semibold">Consent records</span>
             <Button type="button" variant="outline" size="sm" onClick={() => setConsentOpen(true)}>
               Record consent
             </Button>
@@ -597,9 +580,8 @@ function ContactControls({ lead, onChanged, askReason, canEnable }: { lead: Lead
             </ul>
           )}
         </div>
-      </CardContent>
       <ConsentDialog open={consentOpen} onOpenChange={setConsentOpen} leadId={lead._id} onDone={onChanged} />
-    </Card>
+    </CrmCard>
   );
 }
 
@@ -662,7 +644,7 @@ function ConsentDialog({ open, onOpenChange, leadId, onDone }: { open: boolean; 
             <Input id="consent-source" value={source} onChange={(e) => setSource(e.target.value)} maxLength={100} />
           </div>
         </div>
-        {error && <p className="text-sm text-red-700">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
@@ -812,8 +794,8 @@ function LogActivityDialog({ open, onOpenChange, leadId, interests, onDone }: { 
             <Textarea id="act-summary" value={summary} onChange={(e) => setSummary(e.target.value)} rows={3} maxLength={2000} />
           </div>
           {needsException && (
-            <div className="sm:col-span-2 rounded-md border border-red-200 bg-red-50 p-3">
-              <p className="text-sm text-red-800">{needsException}</p>
+            <div className="sm:col-span-2 rounded-md border border-destructive/30 bg-[var(--crm-bad-soft)] p-3">
+              <p className="text-sm text-destructive">{needsException}</p>
               <Label htmlFor="act-exception" className="mt-2 block">
                 Reason (recorded as a policy exception and audited)
               </Label>
@@ -821,7 +803,7 @@ function LogActivityDialog({ open, onOpenChange, leadId, interests, onDone }: { 
             </div>
           )}
         </div>
-        {error && <p className="text-sm text-red-700">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
@@ -923,7 +905,7 @@ function CourseDialog({ mode, onClose, courses, onSubmit }: { mode: null | "add"
             </SelectContent>
           </Select>
           {mode === "assign" && <Input aria-label="Note" placeholder="Note (optional), e.g. pays on Friday" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />}
-          {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>

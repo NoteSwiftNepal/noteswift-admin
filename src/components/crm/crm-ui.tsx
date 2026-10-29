@@ -4,47 +4,56 @@
 // error/empty/loading frame, and a dialog that asks for a reason.
 import { ReactNode, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { CrmPill, Tone } from "@/components/crm/ui";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { INTEREST_STAGE_LABELS, InterestStage, LEAD_STAGE_LABELS, LeadStage, LeadStatus } from "@/lib/crm/api";
 
+// Status → pill tone (docs/crm-prototype/UI_SPEC.md §5). Labels are unchanged.
 export function LeadStatusBadge({ status }: { status: LeadStatus }) {
-  const cls = status === "lost" ? "bg-gray-200 text-gray-700 hover:bg-gray-200" : "bg-green-100 text-green-800 hover:bg-green-100";
-  return <Badge className={cls}>{status === "lost" ? "Lost" : status === "nurture" ? "Nurture" : "Active"}</Badge>;
+  return <CrmPill tone={status === "lost" ? "bad" : status === "nurture" ? "neutral" : "good"}>{status === "lost" ? "Lost" : status === "nurture" ? "Nurture" : "Active"}</CrmPill>;
 }
 
+const LEAD_STAGE_TONE: Record<LeadStage, Tone> = { new: "accent", contact_attempted: "neutral", contacted: "neutral", qualified: "accent" };
 export function LeadStageBadge({ stage }: { stage: LeadStage }) {
-  return (
-    <Badge variant="outline" className="whitespace-nowrap">
-      {LEAD_STAGE_LABELS[stage] ?? stage}
-    </Badge>
-  );
+  return <CrmPill tone={LEAD_STAGE_TONE[stage] ?? "neutral"}>{LEAD_STAGE_LABELS[stage] ?? stage}</CrmPill>;
 }
 
+const INTEREST_STAGE_TONE: Record<InterestStage, Tone> = { interested: "neutral", contacted: "neutral", qualified: "accent", quoted: "accent", payment_pending: "warn" };
 export function InterestStageBadge({ stage }: { stage: InterestStage }) {
-  const cls = stage === "payment_pending" ? "bg-amber-100 text-amber-800 hover:bg-amber-100" : "bg-blue-100 text-blue-800 hover:bg-blue-100";
-  return <Badge className={`${cls} whitespace-nowrap`}>{INTEREST_STAGE_LABELS[stage] ?? stage}</Badge>;
+  return <CrmPill tone={INTEREST_STAGE_TONE[stage] ?? "neutral"}>{INTEREST_STAGE_LABELS[stage] ?? stage}</CrmPill>;
+}
+
+export function OutcomeBadge({ outcome, lostReason }: { outcome: "won" | "granted" | "lost" | null; lostReason?: string | null }) {
+  if (outcome === "won") return <CrmPill tone="good">Won</CrmPill>;
+  if (outcome === "lost") return <CrmPill tone="bad">{lostReason ? `Lost: ${lostReason}` : "Lost"}</CrmPill>;
+  return <CrmPill>{outcome === "granted" ? "Granted" : "Closed"}</CrmPill>;
 }
 
 export function DoNotContactBadge() {
-  return <Badge className="bg-red-100 text-red-800 hover:bg-red-100 whitespace-nowrap">Do not contact</Badge>;
+  return <CrmPill tone="bad">Do not contact</CrmPill>;
+}
+
+/** Task status: open (accent), overdue (bad), completed (good), cancelled (neutral). */
+export function TaskStatusBadge({ status, overdue }: { status: string; overdue?: boolean }) {
+  if (status === "open" && overdue) return <CrmPill tone="bad">overdue</CrmPill>;
+  return <CrmPill tone={status === "open" ? "accent" : status === "completed" ? "good" : "neutral"}>{status}</CrmPill>;
 }
 
 /** Loading / error / empty states around a section. */
 export function DataState({ loading, error, empty, emptyText, onRetry, children }: { loading: boolean; error?: string | null; empty?: boolean; emptyText?: string; onRetry?: () => void; children: ReactNode }) {
   if (loading)
     return (
-      <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+      <div className="crm-empty flex items-center justify-center gap-2" role="status">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading…
       </div>
     );
   if (error)
     return (
-      <div className="flex flex-col items-center gap-3 py-10 text-sm">
-        <div className="flex items-center gap-2 text-red-700">
+      <div className="crm-empty flex flex-col items-center gap-3" role="alert">
+        <div className="flex items-center gap-2 text-destructive">
           <AlertTriangle className="h-4 w-4" /> {error}
         </div>
         {onRetry && (
@@ -54,7 +63,7 @@ export function DataState({ loading, error, empty, emptyText, onRetry, children 
         )}
       </div>
     );
-  if (empty) return <div className="py-10 text-center text-sm text-muted-foreground">{emptyText || "Nothing here yet."}</div>;
+  if (empty) return <div className="crm-empty">{emptyText || "Nothing here yet."}</div>;
   return <>{children}</>;
 }
 
@@ -104,7 +113,7 @@ export function ReasonDialog({
         <div className="space-y-2">
           <Label htmlFor="crm-reason">Reason{optional ? " (optional)" : ""}</Label>
           <Textarea id="crm-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={3} />
-          {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && <p className="text-sm text-red-700 [.crm-scope_&]:text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>

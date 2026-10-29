@@ -7,15 +7,13 @@
 // reason when it refuses. Totals are course list prices, never revenue.
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Columns3, KanbanSquare, Rows3 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Columns3, Rows3 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
 import { DataState, DoNotContactBadge } from "@/components/crm/crm-ui";
+import { CrmCard, CrmPageHeader, CrmPill } from "@/components/crm/ui";
 import { INTEREST_STAGE_LABELS, InterestStage, Pipeline, PipelineCard, Rep, crmApi, fetchCourseCatalog, rs, timeAgo } from "@/lib/crm/api";
 
 const ANY = "any";
@@ -72,29 +70,27 @@ export default function PipelinePage() {
   const rows = (data?.stages || []).flatMap((s) => s.cards.map((c) => ({ ...c, stage: s.stage })));
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <KanbanSquare className="h-6 w-6 text-primary" />
-            <h1 className="text-3xl font-bold text-gray-900">Sales Pipeline</h1>
+    <div className="flex flex-col gap-4">
+      <CrmPageHeader
+        crumb="Sales Pipeline"
+        title="Sales Pipeline"
+        subtitle="Open course opportunities by stage. Values are list prices, not revenue. An opportunity is won only when a payment is verified."
+        actions={
+          <div className="crm-seg" role="group" aria-label="Layout">
+            <button type="button" className={view === "board" ? "on" : ""} onClick={() => setView("board")} aria-pressed={view === "board"}>
+              <Columns3 className="mr-1 inline h-4 w-4" /> Board
+            </button>
+            <button type="button" className={view === "table" ? "on" : ""} onClick={() => setView("table")} aria-pressed={view === "table"}>
+              <Rows3 className="mr-1 inline h-4 w-4" /> Table
+            </button>
           </div>
-          <p className="mt-2 text-gray-600">Open course opportunities by stage. Values are list prices, not revenue. An opportunity is won only when a payment is verified.</p>
-        </div>
-        <div className="flex gap-2" role="group" aria-label="Layout">
-          <Button type="button" variant={view === "board" ? "default" : "outline"} size="sm" onClick={() => setView("board")} aria-pressed={view === "board"}>
-            <Columns3 className="mr-1 h-4 w-4" /> Board
-          </Button>
-          <Button type="button" variant={view === "table" ? "default" : "outline"} size="sm" onClick={() => setView("table")} aria-pressed={view === "table"}>
-            <Rows3 className="mr-1 h-4 w-4" /> Table
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="flex flex-wrap gap-3">
+      <div className="crm-toolbar">
         {isAdmin && reps.length > 0 && (
           <Select value={ownerId} onValueChange={setOwnerId}>
-            <SelectTrigger className="w-full sm:w-[200px]" aria-label="Owner">
+            <SelectTrigger className="w-full bg-[var(--crm-surface)] sm:w-[200px]" aria-label="Owner">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -109,7 +105,7 @@ export default function PipelinePage() {
           </Select>
         )}
         <Select value={courseId} onValueChange={setCourseId}>
-          <SelectTrigger className="w-full sm:w-[240px]" aria-label="Course">
+          <SelectTrigger className="w-full bg-[var(--crm-surface)] sm:w-[240px]" aria-label="Course">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -125,12 +121,12 @@ export default function PipelinePage() {
 
       <DataState loading={loading} error={error} onRetry={load} empty={!!data && rows.length === 0} emptyText="No open opportunities.">
         {view === "board" ? (
-          <div className="grid gap-4 overflow-x-auto pb-2 md:grid-cols-5">
+          <div className="grid gap-4 overflow-x-auto pb-2 md:grid-cols-[repeat(5,minmax(220px,1fr))]">
             {data?.stages.map((s) => (
               <section
                 key={s.stage}
                 aria-label={INTEREST_STAGE_LABELS[s.stage]}
-                className={`min-w-[220px] rounded-lg border bg-gray-50 p-3 ${dragOver === s.stage ? "ring-2 ring-primary" : ""}`}
+                className={`crm-col ${dragOver === s.stage ? "over" : ""}`}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragOver(s.stage);
@@ -145,39 +141,37 @@ export default function PipelinePage() {
                   move(card, from, s.stage);
                 }}
               >
-                <div className="mb-3">
-                  <h2 className="text-sm font-semibold">{INTEREST_STAGE_LABELS[s.stage]}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {s.count} · {rs(s.listPriceTotal)}
-                  </p>
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div>
+                    <h2>{INTEREST_STAGE_LABELS[s.stage]}</h2>
+                    <p className="crm-muted crm-small">{rs(s.listPriceTotal)} list price</p>
+                  </div>
+                  <span className="crm-tab-n !ml-0">{s.count}</span>
                 </div>
                 <div className="flex flex-col gap-2">
                   {s.cards.map((c) => (
-                    <Card
+                    <div
                       key={c.interestId}
                       draggable
                       onDragStart={(e) => e.dataTransfer.setData("application/json", JSON.stringify({ card: c, from: s.stage }))}
-                      className={`cursor-grab bg-white ${moving === c.interestId ? "opacity-50" : ""}`}
+                      className={`crm-tile ${moving === c.interestId ? "opacity-50" : ""}`}
                     >
-                      <CardContent className="space-y-1 p-3 text-sm">
-                        <Link href={`/dashboard/crm/leads/${c.leadId}`} className="font-medium hover:underline">
+                        <Link href={`/dashboard/crm/leads/${c.leadId}`} className="font-semibold hover:underline">
                           {c.name || "Unnamed"}
                         </Link>
-                        <div className="text-xs text-muted-foreground">{c.courseTitle}</div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="crm-muted text-xs">{c.courseTitle}</div>
+                        <div className="crm-muted text-xs">
                           {rs(c.listPrice)} · activity {timeAgo(c.lastSignalAt)}
                         </div>
-                        {isAdmin && <div className="text-xs">{c.ownerName || "Unassigned"}</div>}
-                        <div className="flex flex-wrap gap-1">
-                          {c.overdue && (
-                            <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
-                              <AlertTriangle className="mr-1 h-3 w-3" /> Overdue
-                            </Badge>
-                          )}
-                          {c.doNotContact && <DoNotContactBadge />}
-                        </div>
+                        {isAdmin && <div className="text-xs">{c.ownerName || <CrmPill tone="warn">Unassigned</CrmPill>}</div>}
+                        {(c.overdue || c.doNotContact) && (
+                          <div className="flex flex-wrap gap-1">
+                            {c.overdue && <CrmPill tone="bad">Overdue</CrmPill>}
+                            {c.doNotContact && <DoNotContactBadge />}
+                          </div>
+                        )}
                         <Select value={s.stage} onValueChange={(v) => move(c, s.stage, v as InterestStage)}>
-                          <SelectTrigger className="mt-1 h-8 text-xs" aria-label={`Move ${c.name || "lead"} (${c.courseTitle}) to`}>
+                          <SelectTrigger className="mt-1 h-8 bg-[var(--crm-surface)] text-xs" aria-label={`Move ${c.name || "lead"} (${c.courseTitle}) to`}>
                             <SelectValue placeholder="Move to" />
                           </SelectTrigger>
                           <SelectContent>
@@ -188,20 +182,17 @@ export default function PipelinePage() {
                             ))}
                           </SelectContent>
                         </Select>
-                      </CardContent>
-                    </Card>
+                    </div>
                   ))}
-                  {s.count > s.cards.length && <p className="text-xs text-muted-foreground">+{s.count - s.cards.length} more (filter to narrow)</p>}
+                  {s.count === 0 && <p className="crm-muted crm-small py-2 text-center">None</p>}
+                  {s.count > s.cards.length && <p className="crm-muted text-xs">+{s.count - s.cards.length} more (filter to narrow)</p>}
                 </div>
               </section>
             ))}
           </div>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{rows.length} open opportunities</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-x-auto p-0">
+          <CrmCard title={`${rows.length} open opportunities`} flush>
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -217,10 +208,10 @@ export default function PipelinePage() {
                   {rows.map((c) => (
                     <TableRow key={c.interestId}>
                       <TableCell>
-                        <Link href={`/dashboard/crm/leads/${c.leadId}`} className="font-medium hover:underline">
+                        <Link href={`/dashboard/crm/leads/${c.leadId}`} className="font-semibold hover:underline">
                           {c.name || "Unnamed"}
                         </Link>
-                        {c.overdue && <span className="ml-2 text-xs text-red-700">overdue</span>}
+                        {c.overdue && <CrmPill tone="bad" className="ml-2">Overdue</CrmPill>}
                       </TableCell>
                       <TableCell>{c.courseTitle}</TableCell>
                       <TableCell>
@@ -244,8 +235,8 @@ export default function PipelinePage() {
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </div>
+          </CrmCard>
         )}
       </DataState>
     </div>

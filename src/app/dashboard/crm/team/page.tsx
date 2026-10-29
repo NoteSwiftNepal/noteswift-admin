@@ -5,10 +5,8 @@
 // accounts; other admin accounts are managed only in Admin Management.
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Mail, Settings2, UserMinus, Users } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2, Mail, Settings2, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -18,15 +16,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { DataState } from "@/components/crm/crm-ui";
+import { CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmPill, Tone } from "@/components/crm/ui";
 import { CodeAllocationCard, PendingQuotesCard } from "@/components/crm/team-panels";
 import { useAdmin } from "@/context/admin-context";
 import { Rep, crmApi, fetchCourseCatalog, fmtDateTime } from "@/lib/crm/api";
 
-const STATUS_BADGE: Record<Rep["status"], { label: string; className: string }> = {
-  active: { label: "Active", className: "bg-green-100 text-green-800 hover:bg-green-100" },
-  invited: { label: "Invited", className: "bg-blue-100 text-blue-800 hover:bg-blue-100" },
-  invite_expired: { label: "Invite expired", className: "bg-amber-100 text-amber-800 hover:bg-amber-100" },
-  inactive: { label: "Deactivated", className: "bg-gray-200 text-gray-700 hover:bg-gray-200" },
+const STATUS_BADGE: Record<Rep["status"], { label: string; tone: Tone }> = {
+  active: { label: "Active", tone: "good" },
+  invited: { label: "Invited", tone: "accent" },
+  invite_expired: { label: "Invite expired", tone: "warn" },
+  inactive: { label: "Deactivated", tone: "neutral" },
 };
 
 export default function SalesTeamPage() {
@@ -62,45 +61,31 @@ export default function SalesTeamPage() {
   const active = reps.filter((r) => r.status === "active");
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" />
-            <h1 className="text-3xl font-bold text-gray-900">Sales Team &amp; Allocation</h1>
-          </div>
-          <p className="mt-2 text-gray-600">Sales accounts, their availability and what leads they take.</p>
-        </div>
-        <Button type="button" onClick={() => setInviteOpen(true)}>
-          <Mail className="mr-2 h-4 w-4" /> Invite salesperson
-        </Button>
-      </div>
+    <div className="flex flex-col gap-4">
+      <CrmPageHeader
+        crumb="Sales Team & Allocation"
+        title="Sales Team & Allocation"
+        subtitle="Sales accounts, their availability and what leads they take."
+        actions={
+          <Button type="button" onClick={() => setInviteOpen(true)}>
+            <Mail className="mr-1 h-4 w-4" /> Invite salesperson
+          </Button>
+        }
+      />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Active salespeople</CardDescription>
-            <CardTitle className="text-3xl">{loading ? "—" : active.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Available for new leads</CardDescription>
-            <CardTitle className="text-3xl">{loading ? "—" : active.filter((r) => r.profile.isAvailable).length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Unassigned leads</CardDescription>
-            <CardTitle className="text-3xl">
-              {unassigned === null ? "—" : <Link href="/dashboard/crm/leads?view=unassigned" className="hover:underline">{unassigned}</Link>}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      <CrmKpis>
+        <CrmKpi label="Active salespeople" value={loading ? "—" : active.length} caption="Sales accounts that can sign in" />
+        <CrmKpi label="Available for new leads" value={loading ? "—" : active.filter((r) => r.profile.isAvailable).length} caption="Taking automatic assignment" />
+        <CrmKpi
+          label="Unassigned leads"
+          value={unassigned === null ? "—" : unassigned}
+          caption={unassigned ? "Waiting for an owner" : "Every lead has an owner"}
+          tone={unassigned ? "warn" : undefined}
+          href={unassigned === null ? undefined : "/dashboard/crm/leads?view=unassigned"}
+        />
+      </CrmKpis>
 
-      <Card>
-        <CardContent className="p-0">
+      <CrmCard title="Salespeople" aside={<span className="crm-muted crm-small">{reps.length} account{reps.length === 1 ? "" : "s"}</span>} flush>
           <DataState loading={loading} error={error} onRetry={load} empty={reps.length === 0} emptyText="No Sales accounts yet. Invite your first salesperson.">
             <div className="overflow-x-auto">
               <Table>
@@ -118,11 +103,11 @@ export default function SalesTeamPage() {
                   {reps.map((r) => (
                     <TableRow key={r._id}>
                       <TableCell>
-                        <div className="font-medium">{r.name}</div>
+                        <div className="font-semibold">{r.name}</div>
                         <div className="text-xs text-muted-foreground">{r.email}</div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={STATUS_BADGE[r.status].className}>{STATUS_BADGE[r.status].label}</Badge>
+                        <CrmPill tone={STATUS_BADGE[r.status].tone}>{STATUS_BADGE[r.status].label}</CrmPill>
                         {r.status === "active" && !r.profile.isAvailable && <div className="mt-1 text-xs text-muted-foreground">Not taking new leads</div>}
                       </TableCell>
                       <TableCell>
@@ -157,8 +142,7 @@ export default function SalesTeamPage() {
               </Table>
             </div>
           </DataState>
-        </CardContent>
-      </Card>
+      </CrmCard>
 
       {can("crm.approve_discounts") && <PendingQuotesCard />}
       {can("crm.allocate_codes") && <CodeAllocationCard reps={reps} courses={courses} />}
@@ -206,7 +190,7 @@ function InviteDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenCha
               <Label htmlFor="invite-message">Message (optional)</Label>
               <Textarea id="invite-message" value={message} onChange={(e) => setMessage(e.target.value)} rows={3} maxLength={1000} />
             </div>
-            {error && <p className="text-sm text-red-700">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
         )}
         <DialogFooter>
@@ -329,7 +313,7 @@ function ProfileDialog({ rep, courses, onClose, onDone }: { rep: Rep | null; cou
               ))}
             </div>
           </div>
-          {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
@@ -385,7 +369,7 @@ function DeactivateDialog({ rep, others, onClose, onDone }: { rep: Rep | null; o
             <Label htmlFor="deact-reason">Reason</Label>
             <Textarea id="deact-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500} />
           </div>
-          {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>

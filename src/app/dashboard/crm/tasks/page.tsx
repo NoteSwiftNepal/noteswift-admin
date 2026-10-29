@@ -5,16 +5,13 @@
 // viewer's time zone; "today" is the Kathmandu day (backend).
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ListChecks } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
-import { DataState, ReasonDialog } from "@/components/crm/crm-ui";
+import { DataState, ReasonDialog, TaskStatusBadge } from "@/components/crm/crm-ui";
+import { CrmCard, CrmPageHeader, CrmPill, CrmTabs, GOOD_BUTTON } from "@/components/crm/ui";
 import { CompleteTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-dialogs";
 import { PURPOSE_LABELS, Pagination, Rep, TASK_TYPE_LABELS, Task, crmApi, fmtDateTime } from "@/lib/crm/api";
 
@@ -64,112 +61,109 @@ export default function TasksPage() {
     if (can("crm.manage_reps")) crmApi.reps().then((r) => setReps(r.filter((x) => x.status === "active"))).catch(() => setReps([]));
   }, [can]);
 
+  // Counts per tab (one small request per view, limit 1). Display only.
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(
+      VIEWS.map((v) =>
+        crmApi
+          .tasks({ view: v.value, page: 1, limit: 1, assigneeId: assigneeId === "any" ? undefined : assigneeId })
+          .then((d) => [v.value, d.pagination.total] as const)
+          .catch(() => null)
+      )
+    ).then((res) => {
+      if (cancelled) return;
+      const next: Record<string, number> = {};
+      for (const r of res) if (r) next[r[0]] = r[1];
+      setCounts(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [assigneeId, items]);
+
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <div className="flex items-center gap-2">
-          <ListChecks className="h-6 w-6 text-primary" />
-          <h1 className="text-3xl font-bold text-gray-900">Follow-ups &amp; Tasks</h1>
-        </div>
-        <p className="mt-2 text-gray-600">{isAdmin ? "Everyone's follow-ups." : "Follow-ups on your leads."}</p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <CrmPageHeader
+        crumb="Follow-ups & Tasks"
+        title="Follow-ups & Tasks"
+        subtitle={isAdmin ? "Everyone's follow-ups." : "Follow-ups on your leads."}
+        actions={
+          isAdmin && reps.length > 0 ? (
+            <Select value={assigneeId} onValueChange={(v) => { setAssigneeId(v); setPage(1); }}>
+              <SelectTrigger className="w-full bg-[var(--crm-surface)] sm:w-[200px]" aria-label="Assigned to">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Everyone</SelectItem>
+                <SelectItem value="none">Unassigned</SelectItem>
+                {reps.map((r) => (
+                  <SelectItem key={r._id} value={r._id}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : undefined
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Tabs value={view} onValueChange={(v) => { setView(v); setPage(1); }}>
-          <TabsList className="flex h-auto flex-wrap">
-            {VIEWS.map((v) => (
-              <TabsTrigger key={v.value} value={v.value}>
-                {v.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-        {isAdmin && reps.length > 0 && (
-          <Select value={assigneeId} onValueChange={(v) => { setAssigneeId(v); setPage(1); }}>
-            <SelectTrigger className="w-full sm:w-[200px]" aria-label="Assigned to">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="any">Everyone</SelectItem>
-              <SelectItem value="none">Unassigned</SelectItem>
-              {reps.map((r) => (
-                <SelectItem key={r._id} value={r._id}>
-                  {r.name}
-                </SelectItem>
+      <CrmCard flush>
+        <CrmTabs label="Tasks" value={view} onChange={(v) => { setView(v); setPage(1); }} tabs={VIEWS.map((v) => ({ value: v.value, label: v.label, count: counts[v.value] ?? null }))} />
+        <div className="crm-card-b">
+          <DataState loading={loading} error={error} onRetry={load} empty={items.length === 0} emptyText={view === "overdue" ? "No overdue follow-ups. Good work." : "No tasks here."}>
+            <ul className="crm-list">
+              {items.map((t) => (
+                <li key={t._id} className="crm-li">
+                  <div className="crm-who">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link href={`/dashboard/crm/leads/${t.leadId}`} className="font-semibold hover:underline">
+                        {TASK_TYPE_LABELS[t.type] || t.type}
+                      </Link>
+                      {t.purpose && <CrmPill tone="accent">{PURPOSE_LABELS[t.purpose]}</CrmPill>}
+                      <TaskStatusBadge status={t.status} overdue={t.overdue} />
+                    </div>
+                    {t.notes && <span className="block max-w-xl truncate">{t.notes}</span>}
+                    <span className={`crm-small block ${t.overdue ? "crm-late" : "crm-muted"}`}>
+                      Due {fmtDateTime(t.dueAt)}
+                      {t.rescheduleCount ? ` · rescheduled ${t.rescheduleCount}×` : ""}
+                      {isAdmin ? ` · ${t.assigneeName || "Unassigned"}` : ""}
+                    </span>
+                    {t.outcome && <span className="crm-sub">Outcome: {t.outcome}</span>}
+                    {t.cancelReason && <span className="crm-sub">Cancelled: {t.cancelReason}</span>}
+                  </div>
+                  <div className="crm-actions">
+                    {t.status === "open" && (
+                      <>
+                        <Button type="button" size="sm" className={GOOD_BUTTON} onClick={() => setCompleteId(t._id)}>
+                          <CheckCircle2 className="mr-1 h-4 w-4" /> Done
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setRescheduleTask({ _id: t._id, dueAt: t.dueAt })}>
+                          Reschedule
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setCancelId(t._id)}>
+                          Cancel
+                        </Button>
+                      </>
+                    )}
+                    <Button type="button" size="sm" variant="outline" asChild>
+                      <Link href={`/dashboard/crm/leads/${t.leadId}`}>Open lead</Link>
+                    </Button>
+                  </div>
+                </li>
               ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <DataState loading={loading} error={error} onRetry={load} empty={items.length === 0} emptyText="No tasks here.">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Task</TableHead>
-                    <TableHead>Due</TableHead>
-                    {isAdmin && <TableHead>Assigned to</TableHead>}
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((t) => (
-                    <TableRow key={t._id}>
-                      <TableCell>
-                        <Link href={`/dashboard/crm/leads/${t.leadId}`} className="font-medium hover:underline">
-                          {TASK_TYPE_LABELS[t.type] || t.type}
-                        </Link>
-                        {t.purpose && (
-                          <Badge variant="outline" className="ml-2">
-                            {PURPOSE_LABELS[t.purpose]}
-                          </Badge>
-                        )}
-                        {t.notes && <div className="max-w-md truncate text-xs text-muted-foreground">{t.notes}</div>}
-                      </TableCell>
-                      <TableCell className={t.overdue ? "font-medium text-red-700" : ""}>
-                        {fmtDateTime(t.dueAt)}
-                        {t.rescheduleCount ? <div className="text-xs text-muted-foreground">rescheduled {t.rescheduleCount}×</div> : null}
-                      </TableCell>
-                      {isAdmin && <TableCell>{t.assigneeName || "Unassigned"}</TableCell>}
-                      <TableCell>
-                        <Badge variant={t.status === "open" ? "default" : "outline"}>{t.overdue ? "overdue" : t.status}</Badge>
-                        {t.outcome && <div className="text-xs text-muted-foreground">{t.outcome}</div>}
-                        {t.cancelReason && <div className="text-xs text-muted-foreground">{t.cancelReason}</div>}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {t.status === "open" && (
-                          <div className="flex justify-end gap-2">
-                            <Button type="button" size="sm" onClick={() => setCompleteId(t._id)}>
-                              <CheckCircle2 className="mr-1 h-4 w-4" /> Done
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={() => setRescheduleTask({ _id: t._id, dueAt: t.dueAt })}>
-                              Reschedule
-                            </Button>
-                            <Button type="button" size="sm" variant="ghost" onClick={() => setCancelId(t._id)}>
-                              Cancel
-                            </Button>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            </ul>
           </DataState>
-        </CardContent>
-      </Card>
+        </div>
+      </CrmCard>
 
       {pagination && pagination.pages > 1 && (
         <div className="flex items-center justify-end gap-2">
           <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
             Previous
           </Button>
-          <span className="text-sm text-muted-foreground">
+          <span className="crm-muted crm-small">
             Page {page} of {pagination.pages}
           </span>
           <Button type="button" variant="outline" size="sm" disabled={page >= pagination.pages} onClick={() => setPage(page + 1)}>

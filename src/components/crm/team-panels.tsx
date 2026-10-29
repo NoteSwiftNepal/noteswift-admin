@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { DataState, ReasonDialog } from "@/components/crm/crm-ui";
+import { GOOD_BUTTON } from "@/components/crm/ui";
 import { CodeRow, Quote, Rep, crmApi, fmtDateTime, rs } from "@/lib/crm/api";
 
 export function PendingQuotesCard() {
@@ -72,6 +73,7 @@ export function PendingQuotesCard() {
                         <Button
                           type="button"
                           size="sm"
+                          className={GOOD_BUTTON}
                           onClick={() =>
                             crmApi.decideQuote(q._id, true).then(
                               () => (toast({ title: "Approved" }), load()),

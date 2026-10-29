@@ -181,7 +181,7 @@ export function CreateTaskDialog({
             <Textarea id="task-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} />
           </div>
         </div>
-        {error && <p className="text-sm text-red-700">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
@@ -222,7 +222,7 @@ export function CompleteTaskDialog({ taskId, onOpenChange, onDone }: { taskId: s
             <Label htmlFor="task-complete-notes">Notes (optional)</Label>
             <Textarea id="task-complete-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} />
           </div>
-          {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
@@ -275,7 +275,7 @@ export function RescheduleTaskDialog({ task, onOpenChange, onDone }: { task: { _
             <Label htmlFor="task-resched-reason">Reason (optional)</Label>
             <Input id="task-resched-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
           </div>
-          {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
