@@ -24,7 +24,7 @@ export type ProductRole = 'super_admin' | 'admin' | 'sales';
 // Pages and the permission needed to open them. First matching prefix wins,
 // so longer prefixes come first.
 const ROUTE_PERMISSIONS: [string, Permission][] = [
-  ['/dashboard/crm/team', 'crm.manage_reps'],
+  ['/dashboard/crm/team', 'crm.view_own_reports'], // Team & Targets: Sales see "My target"; team content checks crm.manage_reps / crm.view_team_reports
   ['/dashboard/crm/tasks', 'crm.manage_tasks'],
   ['/dashboard/crm', 'crm.view_assigned_leads'],
   ['/dashboard/admin-management', 'admins.manage'],

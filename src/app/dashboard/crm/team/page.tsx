@@ -1,9 +1,10 @@
 "use client";
 
-// Sales & CRM → Sales Team & Allocation (Super Admin and Admin, crm.manage_reps).
+// Team & allocation tab (Super Admin and Admin, crm.manage_reps).
 // Lists Sales accounts only. Invitations made here always create Sales
 // accounts; other admin accounts are managed only in Admin Management.
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Mail, Settings2, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,10 +17,53 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { DataState } from "@/components/crm/crm-ui";
-import { CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmPill, Tone } from "@/components/crm/ui";
+import { CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmPill, CrmTabs, Tone } from "@/components/crm/ui";
+import { MyTargetView, TargetsTab } from "@/components/crm/targets";
 import { CodeAllocationCard, PendingQuotesCard } from "@/components/crm/team-panels";
 import { useAdmin } from "@/context/admin-context";
 import { Rep, crmApi, fetchCourseCatalog, fmtDateTime } from "@/lib/crm/api";
+
+// Sales & CRM → Team & Targets (Phase S5). Admin and Super Admin: tabs
+// Targets and Team & allocation (the earlier Sales Team page, unchanged and
+// behind crm.manage_reps). Sales: their "My target" view only. The backend
+// enforces every permission; this only picks what to show.
+export default function TeamAndTargetsPage() {
+  return (
+    <Suspense fallback={null}>
+      <TeamAndTargetsInner />
+    </Suspense>
+  );
+}
+
+function TeamAndTargetsInner() {
+  const { can } = useAdmin();
+  const router = useRouter();
+  const params = useSearchParams();
+  const team = can("crm.view_team_reports");
+  const tab = params.get("tab") === "team" && can("crm.manage_reps") ? "team" : "targets";
+  if (!team) {
+    return (
+      <div className="flex flex-col gap-4">
+        <CrmPageHeader crumb="Team & Targets" title="My target" subtitle="Your monthly target, progress and bonus." />
+        <MyTargetView />
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      <CrmPageHeader crumb="Team & Targets" title="Team & Targets" subtitle="Targets, bonuses and the sales team." />
+      <CrmCard flush>
+        <CrmTabs
+          label="Team & Targets"
+          value={tab}
+          onChange={(v) => router.replace(`/dashboard/crm/team${v === "team" ? "?tab=team" : ""}`)}
+          tabs={[{ value: "targets", label: "Targets" }, ...(can("crm.manage_reps") ? [{ value: "team" as const, label: "Team & allocation" }] : [])]}
+        />
+      </CrmCard>
+      {tab === "targets" ? <TargetsTab /> : <TeamAllocation />}
+    </div>
+  );
+}
 
 const STATUS_BADGE: Record<Rep["status"], { label: string; tone: Tone }> = {
   active: { label: "Active", tone: "good" },
@@ -28,7 +72,7 @@ const STATUS_BADGE: Record<Rep["status"], { label: string; tone: Tone }> = {
   inactive: { label: "Deactivated", tone: "neutral" },
 };
 
-export default function SalesTeamPage() {
+function TeamAllocation() {
   const { toast } = useToast();
   const { can } = useAdmin();
   const [reps, setReps] = useState<Rep[]>([]);
@@ -62,16 +106,12 @@ export default function SalesTeamPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <CrmPageHeader
-        crumb="Sales Team & Allocation"
-        title="Sales Team & Allocation"
-        subtitle="Sales accounts, their availability and what leads they take."
-        actions={
-          <Button type="button" onClick={() => setInviteOpen(true)}>
-            <Mail className="mr-1 h-4 w-4" /> Invite salesperson
-          </Button>
-        }
-      />
+      <div className="crm-page-head">
+        <p className="!m-0">Sales accounts, their availability and what leads they take.</p>
+        <Button type="button" onClick={() => setInviteOpen(true)}>
+          <Mail className="mr-1 h-4 w-4" /> Invite salesperson
+        </Button>
+      </div>
 
       <CrmKpis>
         <CrmKpi label="Active salespeople" value={loading ? "—" : active.length} caption="Sales accounts that can sign in" />

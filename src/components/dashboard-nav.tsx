@@ -131,11 +131,12 @@ const links: NavLink[] = [
     label: "Sales & CRM",
     icon: Target,
     children: [
+      { href: "/dashboard/crm", label: "CRM Dashboard" },
       { href: "/dashboard/crm/leads", label: "Leads & Students" },
       { href: "/dashboard/crm/pipeline", label: "Sales Pipeline" },
       { href: "/dashboard/crm/tasks", label: "Follow-ups & Tasks" },
       { href: "/dashboard/crm/sales", label: "Sales & Bills" },
-      { href: "/dashboard/crm/team", label: "Sales Team & Allocation" },
+      { href: "/dashboard/crm/team", label: "Team & Targets" },
     ],
   },
   {
@@ -418,7 +419,7 @@ export function DashboardNav() {
                       {hasChildren && isOpen && (
                         <SidebarMenuSub className={cn("mx-3.5 mt-1 pl-2.5 space-y-0.5", crm ? "border-l border-[#DDE4EF]" : "border-l-2 border-gray-200")}>
                           {filteredChildren.map((child) => {
-                            const isChildActive = isLinkActive(child.href, link.href) || (crm && pathname.startsWith(`${child.href}/`));
+                            const isChildActive = isLinkActive(child.href, link.href) || (crm && child.href !== "/dashboard/crm" && pathname.startsWith(`${child.href}/`));
                             const badge = !crm ? null : child.href === CRM_TASKS && overdueTasks ? overdueTasks : child.href === CRM_SALES && waitingPayments ? waitingPayments : null;
                             return (
                               <SidebarMenuSubItem key={child.href}>

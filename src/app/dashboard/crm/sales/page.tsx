@@ -4,7 +4,7 @@
 // scopes the list (Sales: payments they recorded or are credited with;
 // Admin / Super Admin: all), redacts it per role, counts the tabs, sums the
 // tiles and says which actions each row allows.
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { useAdmin } from "@/context/admin-context";
 import { CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmTable, CrmTabs, GOOD_BUTTON } from "@/components/crm/ui";
 import { DataState, ReasonDialog } from "@/components/crm/crm-ui";
 import { BillDialog, BillStatusPill, ConfirmPaymentDialog } from "@/components/crm/bill-dialogs";
+import { MonthSelect, useTargetMonths } from "@/components/crm/targets";
+import { useSearchParams } from "next/navigation";
 import { BillRow, BillSummaryItem, BillTab, Pagination, Rep, crmApi, fmtDateTime, rs } from "@/lib/crm/api";
 
 const TABS: { value: BillTab; label: string }[] = [
@@ -43,6 +45,14 @@ const PATHS = [
 const ANY = "any";
 
 export default function SalesBillsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SalesBillsInner />
+    </Suspense>
+  );
+}
+
+function SalesBillsInner() {
   const { toast } = useToast();
   const { can } = useAdmin();
   const isAdmin = can("crm.view_all_leads");
@@ -54,6 +64,13 @@ export default function SalesBillsPage() {
   const [path, setPath] = useState(ANY);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  // Nepali month (S5): default the current month (or ?bsMonth= from a dashboard link); a date range clears it and vice versa.
+  const searchParams = useSearchParams();
+  const { months } = useTargetMonths();
+  const [bsMonth, setBsMonth] = useState<string | null>(searchParams.get("bsMonth"));
+  useEffect(() => {
+    if (bsMonth === null && months.length) setBsMonth(months[0].key);
+  }, [months, bsMonth]);
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<BillRow[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
@@ -74,7 +91,7 @@ export default function SalesBillsPage() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  const filters = { q: q || undefined, repId: repId === ANY ? undefined : repId, method: method === ANY ? undefined : method, path: path === ANY ? undefined : path, from: from || undefined, to: to || undefined };
+  const filters = { q: q || undefined, repId: repId === ANY ? undefined : repId, method: method === ANY ? undefined : method, path: path === ANY ? undefined : path, from: from || undefined, to: to || undefined, bsMonth: bsMonth || undefined };
   const filterKey = JSON.stringify(filters);
 
   const load = useCallback(async () => {
@@ -166,10 +183,24 @@ export default function SalesBillsPage() {
               ))}
             </SelectContent>
           </Select>
+          <MonthSelect
+            months={months}
+            value={bsMonth ?? ""}
+            anyLabel="Any month"
+            onChange={(v) =>
+              setFilter(() => {
+                setBsMonth(v);
+                if (v) {
+                  setFrom("");
+                  setTo("");
+                }
+              })
+            }
+          />
           <div className="flex w-full items-center gap-2 sm:w-auto">
-            <Input type="date" aria-label="From" value={from} max={to || undefined} onChange={(e) => setFilter(() => setFrom(e.target.value))} className="w-full sm:w-[150px]" />
+            <Input type="date" aria-label="From" value={from} max={to || undefined} onChange={(e) => setFilter(() => { setFrom(e.target.value); setBsMonth(""); })} className="w-full sm:w-[150px]" />
             <span className="crm-muted">–</span>
-            <Input type="date" aria-label="To" value={to} min={from || undefined} onChange={(e) => setFilter(() => setTo(e.target.value))} className="w-full sm:w-[150px]" />
+            <Input type="date" aria-label="To" value={to} min={from || undefined} onChange={(e) => setFilter(() => { setTo(e.target.value); setBsMonth(""); })} className="w-full sm:w-[150px]" />
           </div>
         </div>
         <CrmTabs label="Status" value={tab} onChange={(v) => { setTab(v); setPage(1); }} tabs={TABS.map((t) => ({ ...t, count: counts[t.value] ?? null }))} />

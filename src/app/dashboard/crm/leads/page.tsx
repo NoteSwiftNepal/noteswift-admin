@@ -3,7 +3,7 @@
 // Sales & CRM → Leads & Students. The backend returns only leads the admin may
 // see (Sales: leads they currently own). Filters live in the URL so they
 // survive going into a lead and back.
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Plus, Search, UserPlus } from "lucide-react";
@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
 import { CrmCard, CrmPageHeader, CrmPill, CrmSelectionBar, CrmTable, CrmTabs } from "@/components/crm/ui";
+import { ProspectDialog } from "@/components/crm/prospect-dialog";
 import { DataState, DoNotContactBadge, InterestStageBadge, LeadStageBadge, LeadStatusBadge } from "@/components/crm/crm-ui";
 import { LeadRow, Pagination, Rep, crmApi, fetchCourseCatalog, fmtDateTime, timeAgo } from "@/lib/crm/api";
 
@@ -367,106 +368,6 @@ function BulkAssignDialog({ open, onOpenChange, leadIds, reps, onDone }: { open:
           <Button type="button" onClick={submit} disabled={busy}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Assign
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ProspectDialog({ open, onOpenChange, reps, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; reps: Rep[]; onCreated: (id: string) => void }) {
-  const empty = { name: "", phone: "", email: "", grade: "", school: "", district: "", ownerId: "none" };
-  const [form, setForm] = useState(empty);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (open) {
-      setForm(empty);
-      setError(null);
-    }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-  const field = (k: keyof typeof empty) => ({ value: form[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value }) });
-  const valid = useMemo(() => form.name.trim().length >= 2 && (form.phone.trim() || form.email.trim()), [form]);
-  const submit = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await crmApi.createProspect({
-        name: form.name.trim(),
-        phone: form.phone.trim() || undefined,
-        email: form.email.trim() || undefined,
-        grade: form.grade ? Number(form.grade) : undefined,
-        school: form.school.trim() || undefined,
-        district: form.district.trim() || undefined,
-        ownerId: form.ownerId === "none" ? undefined : form.ownerId,
-      });
-      onOpenChange(false);
-      onCreated(r.lead._id);
-    } catch (e: any) {
-      setError(e?.message || "Could not create");
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Add prospect</DialogTitle>
-          <DialogDescription>Someone who hasn&apos;t registered. When they register with the same phone or email, the lead is linked to their account.</DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Label htmlFor="p-name">Name</Label>
-            <Input id="p-name" {...field("name")} maxLength={200} />
-          </div>
-          <div>
-            <Label htmlFor="p-phone">Phone</Label>
-            <Input id="p-phone" inputMode="tel" {...field("phone")} maxLength={30} />
-          </div>
-          <div>
-            <Label htmlFor="p-email">Email</Label>
-            <Input id="p-email" type="email" {...field("email")} maxLength={200} />
-          </div>
-          <div>
-            <Label htmlFor="p-grade">Grade</Label>
-            <Input id="p-grade" type="number" min={1} max={12} {...field("grade")} />
-          </div>
-          <div>
-            <Label htmlFor="p-district">District</Label>
-            <Input id="p-district" {...field("district")} maxLength={100} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="p-school">School</Label>
-            <Input id="p-school" {...field("school")} maxLength={200} />
-          </div>
-          {reps.length > 0 && (
-            <div className="sm:col-span-2">
-              <Label htmlFor="p-owner">Owner</Label>
-              <Select value={form.ownerId} onValueChange={(v) => setForm({ ...form, ownerId: v })}>
-                <SelectTrigger id="p-owner">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Unassigned</SelectItem>
-                  {reps.map((r) => (
-                    <SelectItem key={r._id} value={r._id}>
-                      {r.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={submit} disabled={busy || !valid}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Add
           </Button>
         </DialogFooter>
       </DialogContent>

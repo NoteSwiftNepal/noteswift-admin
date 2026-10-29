@@ -237,6 +237,18 @@ export const crmApi = {
   billCounts: (params: Record<string, string | number | undefined> = {}) => request<Record<BillTab, number>>("GET", `/payments/counts${qs(params)}`),
   billSummary: (params: Record<string, string | number | undefined> = {}) => request<{ items: BillSummaryItem[] }>("GET", `/payments/summary${qs(params)}`),
   bill: (id: string) => request<Bill>("GET", `/payments/${id}/bill`),
+  // Phase S4 / S5: targets, salaries, month close, dashboard
+  dashboard: (month?: string) => request<Dashboard>("GET", `/dashboard${qs({ month })}`),
+  targets: (month?: string) => request<TargetsView>("GET", `/targets${qs({ month })}`),
+  targetMonths: () => request<MonthInfo[]>("GET", `/targets/months`),
+  targetSales: (adminId: string, month?: string) => request<TargetSales>("GET", `/targets/${adminId}/sales${qs({ month })}`),
+  closeMonth: (year: number, month: number) => request<{ month: MonthInfo; statements: number }>("POST", `/targets/months/${year}/${month}/close`),
+  salaryHistory: (adminId: string) => request<SalaryHistory>("GET", `/reps/${adminId}/salary-history`),
+  mySalaryHistory: () => request<SalaryHistory>("GET", `/me/salary-history`),
+  setSalary: (adminId: string, body: { amount: number; reason: string; expectedCurrentAmount: number | null }) => request<unknown>("PUT", `/reps/${adminId}/salary`, body),
+  /** CRM settings (Super Admin); the endpoint answers { settings }. */
+  settings: async () => ((await request<any>("GET", `/settings`)).settings as { targets: TargetSchedule }),
+  updateTargetRules: async (targets: Partial<TargetRules>) => ((await request<any>("PUT", `/settings`, { targets })).settings as { targets: TargetSchedule }),
   /** Downloads the PDF receipt (R46) and saves it with the server's file name. */
   downloadReceipt: async (id: string) => {
     const res = await fetch(`${CRM}/payments/${id}/receipt.pdf`, { ...createFetchOptions("GET"), cache: "no-store" });
@@ -451,3 +463,76 @@ export const timeAgo = (iso?: string | null) => {
 export const fmtDateTime = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 export const rs = (n?: number | null) => (n == null ? "—" : `Rs. ${Number(n).toLocaleString("en-IN")}`);
+
+// ---------- targets (Phase S4 / S5) ----------
+export type TargetRules = { multiplier: number; bonusThreshold: number; bonusRatePercent: number; onTrackPercent: number };
+export type MonthLabel = { bsYear: number; bsMonth: number; label: string };
+export type MonthInfo = { bsYear: number; bsMonth: number; key: string; label: string; start: string; end: string; days: number; elapsed: number; ended: boolean; closed: boolean; closedAt: string | null };
+export type TargetStatus = "no_salary" | "not_selling" | "ahead" | "on_track" | "behind" | "target_met" | "missed";
+export const TARGET_STATUS_TONE: Record<TargetStatus, "good" | "accent" | "warn" | "bad" | "neutral"> = {
+  ahead: "good",
+  on_track: "accent",
+  behind: "warn",
+  not_selling: "bad",
+  no_salary: "neutral",
+  target_met: "good",
+  missed: "bad",
+};
+export type TargetRow = {
+  adminId: string;
+  name: string;
+  deactivated: boolean;
+  month: MonthInfo;
+  salary: number | null;
+  target: number | null;
+  dailyTarget: number | null;
+  weeklyTarget: number | null;
+  credited: number;
+  creditedCount: number;
+  refunds: number;
+  adjustments: number;
+  achieved: number;
+  progress: number | null;
+  expected: number | null;
+  remaining: number | null;
+  daysLeft: number;
+  neededPerDay: number | null;
+  status: TargetStatus;
+  statusLabel: string;
+  bonus: number;
+  toBonus: number;
+  waiting: { total: number; count: number };
+  rules: TargetRules;
+  frozen: boolean;
+};
+export type TargetSchedule = { nextMonth: MonthLabel; current: TargetRules & { month: MonthLabel }; scheduled: (TargetRules & { effectiveFrom: MonthLabel }) | null };
+export type TargetsView = { month: MonthInfo; rules: TargetRules; rows: TargetRow[]; totals?: { target: number; credited: number; achieved: number; bonus: number; reps: number }; schedule: TargetSchedule };
+export type TargetSales = {
+  month: MonthInfo;
+  payments: { _id: string; receiptNumber: string | null; date: string; studentName: string; courseTitle: string; pathLabel: string; amount: number; invalidatedAfterClose: boolean; leadId: string | null }[];
+  adjustments: { _id: string; transactionId: string; amount: number; reason: string; originalMonth: { bsYear: number; bsMonth: number }; at: string }[];
+};
+export type SalaryHistory = {
+  adminId: string;
+  name: string;
+  active: boolean;
+  current: { amount: number; entryId: string } | null;
+  scheduled: { amount: number; effectiveFrom: MonthLabel } | null;
+  latestAmount: number | null;
+  appliesFrom: MonthLabel;
+  entries: { _id: string; amount: number; effectiveFrom: MonthLabel; setAt: string; setByName: string; reason: string; replacesEntryId: string | null }[];
+};
+export type DashboardTile = { key: string; label: string; value: number; count?: number; includes: string; tone?: "good" | "warn" | "bad"; link: string };
+export type Dashboard = {
+  month: MonthInfo;
+  tiles: DashboardTile[];
+  target: { row?: TargetRow; rows?: { adminId: string; name: string; deactivated: boolean; achieved: number; target: number | null; progress: number | null; status: TargetStatus; statusLabel: string }[]; totals?: TargetsView["totals"] };
+  pipeline: { stages: { stage: string; label: string; count: number }[]; wonThisMonth: number; lostThisMonth: number };
+  attention: {
+    overdueTasks: { _id: string; leadId: string; leadName: string | null; type: string; notes: string | null; dueAt: string; assigneeName?: string | null }[];
+    overdueTotal: number;
+    uncontactedNewLeads: number;
+    waitingConfirmation?: number;
+    rejectedThisMonth?: number | null;
+  };
+};
