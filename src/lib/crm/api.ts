@@ -82,6 +82,9 @@ export type Interest = {
 export type Task = {
   _id: string;
   leadId?: string;
+  // Task list only (GET /crm/tasks): the lead's name and phone.
+  leadName?: string | null;
+  leadPhone?: string | null;
   interestId: string | null;
   type: string;
   channel: Channel | null;

@@ -119,8 +119,12 @@ export default function TasksPage() {
                   <div className="crm-who">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href={`/dashboard/crm/leads/${t.leadId}`} className="font-semibold hover:underline">
-                        {TASK_TYPE_LABELS[t.type] || t.type}
+                        {t.leadName || "Unnamed"}
                       </Link>
+                      <span className="crm-muted crm-small">
+                        · {TASK_TYPE_LABELS[t.type] || t.type}
+                        {t.leadPhone ? ` · ${t.leadPhone}` : ""}
+                      </span>
                       {t.purpose && <CrmPill tone="accent">{PURPOSE_LABELS[t.purpose]}</CrmPill>}
                       <TaskStatusBadge status={t.status} overdue={t.overdue} />
                     </div>
