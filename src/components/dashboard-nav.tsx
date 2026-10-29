@@ -134,6 +134,7 @@ const links: NavLink[] = [
       { href: "/dashboard/crm/leads", label: "Leads & Students" },
       { href: "/dashboard/crm/pipeline", label: "Sales Pipeline" },
       { href: "/dashboard/crm/tasks", label: "Follow-ups & Tasks" },
+      { href: "/dashboard/crm/sales", label: "Sales & Bills" },
       { href: "/dashboard/crm/team", label: "Sales Team & Allocation" },
     ],
   },
@@ -225,6 +226,7 @@ function isParentActive(linkHref: string, children: NavChild[] | undefined, path
 // out because the sidebar sits outside the CRM's scoped tokens.
 const CRM_GROUP = "/dashboard/crm/leads";
 const CRM_TASKS = "/dashboard/crm/tasks";
+const CRM_SALES = "/dashboard/crm/sales";
 
 const DEFAULT_TABS: Record<string, string> = {
   '/dashboard/admin-management': 'hierarchy',
@@ -282,6 +284,22 @@ export function DashboardNav() {
       cancelled = true;
     };
   }, [pathname, canTasks]);
+
+  // Waiting-confirmation badge on "Sales & Bills": everything waiting for
+  // Admin / Super Admin, the user's own for Sales (the backend scopes the count).
+  const canBills = can("crm.view_assigned_leads");
+  const [waitingPayments, setWaitingPayments] = useState<number | null>(null);
+  useEffect(() => {
+    if (!canBills) return;
+    let cancelled = false;
+    crmApi
+      .billCounts()
+      .then((c) => !cancelled && setWaitingPayments(c.waiting ?? 0))
+      .catch(() => !cancelled && setWaitingPayments(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, canBills]);
 
   const toggleExpanded = (href: string) => {
     setExpanded((prev) => ({ ...prev, [href]: !prev[href] }));
@@ -401,7 +419,7 @@ export function DashboardNav() {
                         <SidebarMenuSub className={cn("mx-3.5 mt-1 pl-2.5 space-y-0.5", crm ? "border-l border-[#DDE4EF]" : "border-l-2 border-gray-200")}>
                           {filteredChildren.map((child) => {
                             const isChildActive = isLinkActive(child.href, link.href) || (crm && pathname.startsWith(`${child.href}/`));
-                            const badge = crm && child.href === CRM_TASKS && overdueTasks ? overdueTasks : null;
+                            const badge = !crm ? null : child.href === CRM_TASKS && overdueTasks ? overdueTasks : child.href === CRM_SALES && waitingPayments ? waitingPayments : null;
                             return (
                               <SidebarMenuSubItem key={child.href}>
                                 <SidebarMenuSubButton
@@ -432,7 +450,7 @@ export function DashboardNav() {
                                   >
                                     {child.label}
                                     {badge != null && (
-                                      <span className="ml-auto rounded-full bg-[#FBE6E4] px-[7px] py-px text-[11px] font-bold text-[#B8322A]" aria-label={`${badge} overdue`}>
+                                      <span className="ml-auto rounded-full bg-[#FBE6E4] px-[7px] py-px text-[11px] font-bold text-[#B8322A]" aria-label={child.href === CRM_SALES ? `${badge} waiting confirmation` : `${badge} overdue`}>
                                         {badge}
                                       </span>
                                     )}

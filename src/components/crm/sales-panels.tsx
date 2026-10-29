@@ -18,7 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
 import { DataState, ReasonDialog } from "@/components/crm/crm-ui";
 import { CrmPill, GOOD_BUTTON, Tone } from "@/components/crm/ui";
-import { CodeRow, Interest, LeadPayment, PAYMENT_PATH_LABELS, QUOTE_STATUS_LABELS, Quote, crmApi, fmtDateTime, rs } from "@/lib/crm/api";
+import { CodeRow, Interest, LeadPayment, PAYMENT_METHOD_LABELS, PAYMENT_PATH_LABELS, QUOTE_STATUS_LABELS, Quote, crmApi, fmtDateTime, rs } from "@/lib/crm/api";
+import { BillDialog } from "@/components/crm/bill-dialogs";
 
 const QUOTE_TONE: Record<string, Tone> = { active: "good", pending_approval: "warn" };
 
@@ -213,12 +214,25 @@ function CreateQuoteDialog({ interest, onClose, onDone }: { interest: Interest |
 }
 
 /** The lead's payments. Sales get status only; Admin also amounts and credit. */
-export function PaymentsPanel({ leadId }: { leadId: string }) {
+const PAYMENT_STATUS: Record<string, { label: string; tone: Tone }> = {
+  completed: { label: "completed", tone: "good" },
+  failed: { label: "failed", tone: "bad" },
+  "pending-gateway": { label: "pending", tone: "warn" },
+  "pending-confirmation": { label: "Waiting confirmation", tone: "warn" },
+};
+function paymentStatus(p: LeadPayment): { label: string; tone: Tone } {
+  if (p.status === "cancelled") return p.rejection ? { label: "Rejected", tone: "bad" } : { label: "Cancelled", tone: "neutral" };
+  return PAYMENT_STATUS[p.status] ?? { label: p.status, tone: "warn" };
+}
+
+/** The lead's payments. Sales get status only, plus amounts on their own rows (R26); Admin also amounts and credit. */
+export function PaymentsPanel({ leadId, refreshKey = 0 }: { leadId: string; refreshKey?: number }) {
   const { can } = useAdmin();
   const full = can("crm.view_all_leads");
   const [rows, setRows] = useState<LeadPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [billId, setBillId] = useState<string | null>(null);
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -231,13 +245,17 @@ export function PaymentsPanel({ leadId }: { leadId: string }) {
   }, [leadId]);
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshKey]);
+  const showAmount = full || rows.some((r) => r.amount !== undefined);
+  // The bill exists for rows in Sales & Bills (the backend re-checks).
+  const hasBill = (p: LeadPayment) =>
+    full ? p.path === "sales_recorded" || (p.status === "completed" && (p.kind === "qualifying" || p.kind === "bulk" || p.invalidated)) : !!(p.recordedByMe || p.creditedToMe);
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Payments</CardTitle>
         <CardDescription>
-          Only verified payments above Rs 0 count as sales. Free grants and prepaid organization codes never do.
+          Only verified payments above Rs 0 count as sales. Free grants and prepaid organization codes never do. A payment recorded by a salesperson counts once an Admin confirms it.
           {full ? " Credit is decided once and never moves." : ""}
         </CardDescription>
       </CardHeader>
@@ -251,34 +269,52 @@ export function PaymentsPanel({ leadId }: { leadId: string }) {
                   <TableHead>Course</TableHead>
                   <TableHead>How</TableHead>
                   <TableHead>Status</TableHead>
-                  {full && <TableHead>Amount</TableHead>}
+                  {showAmount && <TableHead>Amount</TableHead>}
                   <TableHead>Credit</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Bill</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((p) => (
-                  <TableRow key={p._id}>
-                    <TableCell className="whitespace-nowrap">{fmtDateTime(p.date)}</TableCell>
-                    <TableCell>{p.courseTitle || "Course"}</TableCell>
-                    <TableCell>{PAYMENT_PATH_LABELS[p.path]}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        <CrmPill tone={p.status === "completed" ? "good" : p.status === "failed" ? "bad" : "warn"}>{p.status}</CrmPill>
-                        {p.invalidated && <CrmPill tone="bad">Invalid</CrmPill>}
-                        {p.countsAsSale && <CrmPill tone="accent">Sale</CrmPill>}
-                        {p.kind === "complimentary" && <CrmPill>Free</CrmPill>}
-                        {p.duplicatePaymentOf && <CrmPill tone="warn">Paid twice: refund candidate</CrmPill>}
-                      </div>
-                    </TableCell>
-                    {full && <TableCell>{p.amount !== undefined ? rs(p.amount) : "—"}</TableCell>}
-                    <TableCell className="text-xs">{p.creditedToMe ? "You" : full ? p.creditReason?.replace(/_/g, " ") || "not decided yet" : "—"}</TableCell>
-                  </TableRow>
-                ))}
+                {rows.map((p) => {
+                  const st = paymentStatus(p);
+                  return (
+                    <TableRow key={p._id}>
+                      <TableCell className="whitespace-nowrap">{fmtDateTime(p.date)}</TableCell>
+                      <TableCell>{p.courseTitle || "Course"}</TableCell>
+                      <TableCell>
+                        {PAYMENT_PATH_LABELS[p.path] ?? p.path}
+                        {p.paymentMethod && <span className="crm-sub">{PAYMENT_METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</span>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          <CrmPill tone={st.tone}>{st.label}</CrmPill>
+                          {p.invalidated && <CrmPill tone="bad">Invalid</CrmPill>}
+                          {p.countsAsSale && <CrmPill tone="accent">Sale</CrmPill>}
+                          {p.kind === "complimentary" && <CrmPill>Free</CrmPill>}
+                          {p.duplicatePaymentOf && <CrmPill tone="warn">Paid twice: refund candidate</CrmPill>}
+                        </div>
+                        {(p.rejection || p.cancellation) && <span className="crm-sub">{(p.rejection ?? p.cancellation)!.reason}</span>}
+                      </TableCell>
+                      {showAmount && <TableCell>{p.amount !== undefined ? rs(p.amount) : "—"}</TableCell>}
+                      <TableCell className="text-xs">{p.creditedToMe ? "You" : full ? p.creditReason?.replace(/_/g, " ") || "not decided yet" : "—"}</TableCell>
+                      <TableCell>
+                        {hasBill(p) && (
+                          <Button type="button" size="sm" variant="outline" onClick={() => setBillId(p._id)}>
+                            Bill
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
         </DataState>
       </CardContent>
+      <BillDialog paymentId={billId} onOpenChange={(v) => !v && setBillId(null)} />
     </Card>
   );
 }

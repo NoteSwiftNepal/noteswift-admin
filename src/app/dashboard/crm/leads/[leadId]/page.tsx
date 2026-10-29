@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Ban, CheckCircle2, Loader2, MessageSquarePlus, Phone, Plus, RotateCcw, ShieldCheck, UserPlus, XCircle } from "lucide-react";
+import { ArrowLeft, Ban, Banknote, CheckCircle2, Loader2, MessageSquarePlus, Phone, Plus, RotateCcw, ShieldCheck, UserPlus, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,7 @@ import { CrmCard, CrmEvent, CrmFacts, CrmPill, CrmTimeline, GOOD_BUTTON } from "
 import { ContactDialog } from "@/components/crm/contact-dialog";
 import { CompleteTaskDialog, CreateTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-dialogs";
 import { EnrollWithCodeDialog, PaymentsPanel, QuotesPanel } from "@/components/crm/sales-panels";
+import { RecordPaymentDialog } from "@/components/crm/bill-dialogs";
 import {
   CHANNEL_LABELS,
   Channel,
@@ -62,6 +63,10 @@ export default function LeadProfilePage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [courseAction, setCourseAction] = useState<null | "add" | "assign">(null);
   const [codeOpen, setCodeOpen] = useState(false);
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [paymentsKey, setPaymentsKey] = useState(0);
+  // Sales: whether a payment can be recorded on any open opportunity (preview per course).
+  const [recordable, setRecordable] = useState<{ ok: boolean; reason: string | null; interestId: string | null } | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -73,6 +78,23 @@ export default function LeadProfilePage() {
       setLoading(false);
     }
   }, [leadId]);
+
+  const openInterestKey = (lead?.interests || []).filter((i) => i.status === "open").map((i) => i._id).join(",");
+  useEffect(() => {
+    if (!can("crm.record_payments") || !lead) return;
+    const open = lead.interests.filter((i) => i.status === "open");
+    if (lead.kind !== "student") return setRecordable({ ok: false, reason: "Payments can be recorded only for a registered student.", interestId: null });
+    if (open.length === 0) return setRecordable({ ok: false, reason: "No open course opportunity.", interestId: null });
+    let cancelled = false;
+    Promise.all(open.map((i) => crmApi.paymentPreview(leadId, i._id).catch((e) => ({ canRecord: false, reason: e?.message || "Can't price this course", interestId: i._id }) as any))).then((previews) => {
+      if (cancelled) return;
+      const ok = previews.find((p) => p.canRecord);
+      setRecordable(ok ? { ok: true, reason: null, interestId: ok.interestId } : { ok: false, reason: previews[0]?.reason || "Recording isn't possible right now.", interestId: null });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lead?.kind, openInterestKey, leadId, can]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     load();
@@ -160,6 +182,11 @@ export default function LeadProfilePage() {
                 <RotateCcw className="mr-1 h-4 w-4" /> Reopen
               </Button>
             )}
+            {can("crm.record_payments") && (
+              <Button type="button" size="sm" variant="outline" onClick={() => setRecordOpen(true)} disabled={!recordable?.ok} title={recordable && !recordable.ok ? recordable.reason ?? undefined : undefined}>
+                <Banknote className="mr-1 h-4 w-4" /> Record payment
+              </Button>
+            )}
             {lead.kind === "student" && can("crm.enroll_with_code") && (
               <Button type="button" size="sm" variant="outline" onClick={() => setCodeOpen(true)}>
                 Enroll with code
@@ -201,8 +228,16 @@ export default function LeadProfilePage() {
         </TabsList>
 
         <TabsContent value="sales" className="mt-4 space-y-4">
+          {can("crm.record_payments") && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="button" onClick={() => setRecordOpen(true)} disabled={!recordable?.ok}>
+                <Banknote className="mr-1 h-4 w-4" /> Record payment
+              </Button>
+              {recordable && !recordable.ok && <span className="crm-muted crm-small">{recordable.reason}</span>}
+            </div>
+          )}
           <QuotesPanel leadId={leadId} interests={lead.interests} onChanged={load} />
-          <PaymentsPanel leadId={leadId} />
+          <PaymentsPanel leadId={leadId} refreshKey={paymentsKey} />
         </TabsContent>
 
         <TabsContent value="overview" className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -481,6 +516,17 @@ export default function LeadProfilePage() {
       <CompleteTaskDialog taskId={completeId} onOpenChange={(v) => !v && setCompleteId(null)} onDone={load} />
       <RescheduleTaskDialog task={rescheduleTask} onOpenChange={(v) => !v && setRescheduleTask(null)} onDone={load} />
       <LogActivityDialog open={activityOpen} onOpenChange={setActivityOpen} leadId={leadId} interests={lead.interests} onDone={load} />
+      <RecordPaymentDialog
+        open={recordOpen}
+        onOpenChange={setRecordOpen}
+        leadId={leadId}
+        interests={lead.interests}
+        initialInterestId={recordable?.interestId}
+        onDone={() => {
+          setPaymentsKey((k) => k + 1);
+          load();
+        }}
+      />
       <EnrollWithCodeDialog leadId={leadId} open={codeOpen} onOpenChange={setCodeOpen} onDone={() => { toast({ title: "Enrolled with the code" }); load(); }} />
       <AssignOwnerDialog open={assignOpen} onOpenChange={setAssignOpen} reps={reps} current={lead.ownerId} onSubmit={(ownerId, reason) => act(() => crmApi.assign(leadId, ownerId, reason), ownerId ? "Lead assigned" : "Lead unassigned")} />
       <CourseDialog

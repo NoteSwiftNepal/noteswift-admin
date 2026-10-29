@@ -225,7 +225,108 @@ export const crmApi = {
   myCodes: (courseId?: string) => request<CodeRow[]>("GET", `/my-codes${qs({ courseId })}`),
   enrollWithCode: (leadId: string, codeId: string) => request<{ enrollmentId: string; courseId: string }>("POST", `/leads/${leadId}/enroll-with-code`, { codeId }),
   payments: (leadId: string) => request<LeadPayment[]>("GET", `/leads/${leadId}/payments`),
+
+  // Phase S2 / S3: Sales-recorded payments and Sales & Bills
+  paymentPreview: (leadId: string, interestId: string) => request<PaymentPreview>("GET", `/leads/${leadId}/payments/preview${qs({ interestId })}`),
+  recordPayment: (leadId: string, form: FormData) => requestForm<SalesPayment>("POST", `/leads/${leadId}/payments`, form),
+  confirmPayment: (id: string, expectedAmount: number) => request<SalesPayment>("POST", `/payments/${id}/confirm`, { checked: true, expectedAmount }),
+  rejectPayment: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/reject`, { reason }),
+  cancelPayment: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/cancel`, { reason }),
+  screenshotLink: (id: string) => request<{ url: string; expiresInSeconds: number; contentType: string }>("GET", `/payments/${id}/screenshot`),
+  bills: (params: Record<string, string | number | undefined>) => request<{ items: BillRow[]; pagination: Pagination; tab: BillTab }>("GET", `/payments${qs(params)}`),
+  billCounts: (params: Record<string, string | number | undefined> = {}) => request<Record<BillTab, number>>("GET", `/payments/counts${qs(params)}`),
+  billSummary: (params: Record<string, string | number | undefined> = {}) => request<{ items: BillSummaryItem[] }>("GET", `/payments/summary${qs(params)}`),
+  bill: (id: string) => request<Bill>("GET", `/payments/${id}/bill`),
+  /** Downloads the PDF receipt (R46) and saves it with the server's file name. */
+  downloadReceipt: async (id: string) => {
+    const res = await fetch(`${CRM}/payments/${id}/receipt.pdf`, { ...createFetchOptions("GET"), cache: "no-store" });
+    if (!res.ok) {
+      const json = await res.json().catch(() => null);
+      throw new CrmApiError(json?.error || `Request failed (${res.status})`, res.status, json?.code);
+    }
+    const blob = await res.blob();
+    const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") || "")?.[1] || "NoteSwift-receipt.pdf";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  },
 };
+
+/** Multipart request (no JSON content type, so the browser sets the boundary). */
+async function requestForm<T>(method: string, path: string, form: FormData): Promise<T> {
+  const options = createFetchOptions(method);
+  const headers = { ...(options.headers as Record<string, string>) };
+  delete headers["Content-Type"];
+  const res = await fetch(`${CRM}${path}`, { ...options, headers, body: form, cache: "no-store" });
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    /* empty body */
+  }
+  if (!res.ok || json?.success === false) throw new CrmApiError(json?.error || `Request failed (${res.status})`, res.status, json?.code, json?.reasons);
+  return (json?.data ?? json) as T;
+}
+
+export type PriceSnapshot = { listPrice: number; courseDiscountPercent: number; courseDiscountAmount: number; discountCode?: string; codeDiscountPercent: number; codeDiscountAmount: number; totalDiscount: number; total: number; vatRate: number; taxableAmount: number; vatAmount: number };
+export type PaymentPreview = { canRecord: boolean; reason: string | null; code: string | null; interestId: string; courseId: string | null; source: "approved_quote" | "list_price" | null; quoteId: string | null; price: PriceSnapshot | null };
+export type SalesPayment = { _id: string; status: string; amount: number; method: string; reference: string | null; hasScreenshot: boolean; receivedAt: string | null; receiptNumber: string | null };
+export type BillTab = "waiting" | "confirmed" | "rejected" | "cancelled" | "all";
+export type BillStatus = "waiting" | "confirmed" | "rejected" | "cancelled" | "invalid" | "other";
+export type BillRow = {
+  _id: string;
+  date: string;
+  receivedAt: string | null;
+  receiptNumber: string | null;
+  studentName: string;
+  leadId: string | null;
+  courseTitle: string;
+  path: string;
+  pathLabel: string;
+  method: string;
+  methodLabel: string;
+  amount: number;
+  pricing: { listPrice: number; totalDiscount: number; discountCode: string | null; vatRate: number; vatAmount: number; total: number } | null;
+  recordedByName: string | null;
+  creditedToName: string | null;
+  status: BillStatus;
+  statusLabel: string;
+  invalidated: boolean;
+  organization: boolean;
+  canConfirm: boolean;
+  canReject: boolean;
+  canCancel: boolean;
+  canDownloadPdf: boolean;
+  canViewScreenshot: boolean;
+};
+export type BillSummaryItem = { key: string; label: string; includes: string; total?: number; count: number; tone?: "good" | "warn" | "bad" };
+export type Bill = {
+  seller: { name: string; address: string; vatNumber: string };
+  status: BillStatus;
+  statusLabel: string;
+  receiptNumber: string | null;
+  receiptNote: string | null;
+  student: { name: string; phone: string | null };
+  leadId: string | null;
+  course: string;
+  items: { label: string; amount: number }[];
+  totals: { taxableAmount: number | null; vatRate: number | null; vatAmount: number | null; total: number; pricesIncludeVat: boolean | null };
+  amountInWords: string;
+  payment: { path: string; pathLabel: string; method: string; methodLabel: string; reference: string | null; hasScreenshot: boolean };
+  dates: { receivedAt: string | null; recordedAt: string; paidAt: string | null; decidedAt: string | null };
+  people: { recordedBy: string | null; confirmedBy: string | null; rejectedBy: string | null; creditedTo: string | null };
+  reason: string | null;
+  invalidated: boolean;
+  canDownloadPdf: boolean;
+  canViewScreenshot: boolean;
+  footer: string;
+};
+export const BILL_STATUS_TONE: Record<BillStatus, "warn" | "good" | "bad" | "neutral"> = { waiting: "warn", confirmed: "good", rejected: "bad", cancelled: "neutral", invalid: "bad", other: "neutral" };
+export const OFFLINE_METHOD_LABELS: Record<string, string> = { cash: "Cash", "esewa-personal": "eSewa", "bank-transfer": "Bank transfer", other: "Other" };
+export const PAYMENT_METHOD_LABELS: Record<string, string> = { ...OFFLINE_METHOD_LABELS, fonepay: "Fonepay", "esewa-gateway": "eSewa (online)", connectips: "connectIPS" };
 
 export type QuoteStatus = "pending_approval" | "active" | "rejected" | "cancelled" | "superseded" | "expired";
 export type Quote = {
@@ -263,7 +364,7 @@ export type LeadPayment = {
   courseId: string;
   courseTitle?: string;
   status: string;
-  path: "online" | "single_code" | "bulk_codes" | "direct_grant" | "other_offline";
+  path: "online" | "single_code" | "bulk_codes" | "direct_grant" | "sales_recorded" | "other_offline";
   kind: "qualifying" | "complimentary" | "bulk" | "invalidated" | "not_applicable";
   countsAsSale: boolean;
   date: string;
@@ -276,6 +377,14 @@ export type LeadPayment = {
   creditReason?: string;
   duplicatePaymentOf?: string;
   invalidation?: { at: string; byName?: string; reason: string };
+  // Sales-recorded payments (R26): the recorder also sees these on their own rows.
+  recordedByMe?: boolean;
+  receivedAt?: string | null;
+  rejection?: { at: string; reason: string } | null;
+  cancellation?: { at: string; reason: string } | null;
+  receiptNumber?: string | null;
+  reference?: string | null;
+  hasScreenshot?: boolean;
 };
 
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
@@ -291,6 +400,7 @@ export const PAYMENT_PATH_LABELS: Record<LeadPayment["path"], string> = {
   single_code: "Code from a recorded sale",
   bulk_codes: "Prepaid organization code",
   direct_grant: "Enrolled by a Super Admin",
+  sales_recorded: "Recorded by salesperson",
   other_offline: "Recorded payment",
 };
 
