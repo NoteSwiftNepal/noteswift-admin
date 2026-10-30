@@ -137,6 +137,8 @@ export type Activity = {
 export type LeadCourseState = "enrolled" | "payment_pending" | "interested" | "trial";
 export type LeadCourse = { courseId: string; title: string; state: LeadCourseState; since: string | null; assignmentId?: string; canCancel: boolean };
 
+export type StageOption = { to: Stage; allowed: boolean; reason?: string };
+
 export type LeadDetail = {
   _id: string;
   kind: "student" | "prospect";
@@ -147,6 +149,8 @@ export type LeadDetail = {
   saleWaiting: boolean;
   courseTitle: string | null;
   courses: LeadCourse[];
+  /** R70: what the stage dropdown offers, decided by the server. */
+  stageOptions: StageOption[];
   enrollment: {
     enrolledCourses: { courseId: string; title: string }[];
     pendingCourseAssignments: { _id: string; courseId: string; title: string; assignedAt: string; fromThisLead: boolean }[];
@@ -197,8 +201,11 @@ export const crmApi = {
   getLead: (id: string) => request<LeadDetail>("GET", `/leads/${id}`),
   updateLead: (id: string, patch: Record<string, unknown>) => request("PATCH", `/leads/${id}`, patch),
   /** R63 (S8): the only manual stage moves, forward only. */
-  // R69 (S8c): New lead, Contacted and Interested in either direction.
-  moveStage: (id: string, body: { to: "new_lead" | "contacted" } | { to: "interested"; courseId: string }) => request<{ stage: Stage; changed: boolean; opportunitiesClosed?: number }>("POST", `/leads/${id}/stage`, body),
+  // R70 (S9): the stage dropdown. Record sale stays its own call.
+  moveStage: (
+    id: string,
+    body: { to: "new_lead" | "contacted" } | { to: "interested"; courseId: string } | { to: "payment_pending"; mode: "later"; courseId: string; note?: string } | { to: "lost"; reason: string }
+  ) => request<{ stage: Stage; changed: boolean; opportunitiesClosed?: number; interestId?: string; assignmentId?: string }>("POST", `/leads/${id}/stage`, body),
   markLost: (id: string, reason: string) => request("POST", `/leads/${id}/lost`, { reason }),
   reopenLead: (id: string, reason: string) => request("POST", `/leads/${id}/reopen`, { reason }),
   setDoNotContact: (id: string, flag: boolean, reason: string) => request("POST", `/leads/${id}/do-not-contact`, { flag, reason }),

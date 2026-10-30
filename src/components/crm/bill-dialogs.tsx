@@ -334,6 +334,7 @@ export function RecordSalePanel({
   interests,
   leadCourses = [],
   courses,
+  initialCourseId,
   onDone,
   onCancel,
 }: {
@@ -341,6 +342,8 @@ export function RecordSalePanel({
   interests: Interest[];
   /** The lead's courses (R67); Payment pending and Interested ones come first. */
   leadCourses?: LeadCourse[];
+  /** R70: prefilled from the stage dropdown's "Money received: record sale". */
+  initialCourseId?: string;
   courses: { _id: string; title: string; price?: number; type?: string }[];
   onDone: () => void;
   onCancel: () => void;
@@ -353,7 +356,7 @@ export function RecordSalePanel({
     return [...fromCourses, ...rest];
   }, [interests, leadCourses, courses]);
   const otherPaid = useMemo(() => courses.filter((c) => c.type !== "free" && (c.price ?? 0) > 0 && !openOnes.some((i) => i.courseId === c._id)), [courses, openOnes]);
-  const [courseId, setCourseId] = useState(openOnes[0]?.courseId || otherPaid[0]?._id || UNCONFIRMED);
+  const [courseId, setCourseId] = useState((initialCourseId && [...openOnes.map((o) => o.courseId), ...otherPaid.map((c) => c._id)].includes(initialCourseId) ? initialCourseId : null) || openOnes[0]?.courseId || otherPaid[0]?._id || UNCONFIRMED);
   const [discount, setDiscount] = useState<string>(""); // "" until the server's public discount arrives
   const [amountReceived, setAmountReceived] = useState("");
   const [preview, setPreview] = useState<PaymentPreview | null>(null);
