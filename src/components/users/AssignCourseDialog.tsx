@@ -19,13 +19,20 @@ export interface AssignCourseFormData {
   notes: string;
 }
 
+// direct: Super Admin enrolls now and records how the student paid.
+// pending: Admin assigns the course; the student gets access only after a
+// verified payment (a pending course assignment, not an enrollment or a sale).
+export type AssignCourseMode = "direct" | "pending";
+
 interface AssignCourseDialogProps {
+  /** Modes this admin may use; when both, the dialog lets them choose (first is the default). */
+  modes: AssignCourseMode[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   studentName: string;
   courses: Course[];
   coursesLoading: boolean;
-  onSubmit: (formData: AssignCourseFormData) => Promise<void>;
+  onSubmit: (formData: AssignCourseFormData, mode: AssignCourseMode) => Promise<void>;
   loading: boolean;
 }
 
@@ -38,6 +45,7 @@ const EMPTY_FORM: AssignCourseFormData = {
 };
 
 export function AssignCourseDialog({
+  modes,
   open,
   onOpenChange,
   studentName,
@@ -47,10 +55,12 @@ export function AssignCourseDialog({
   loading,
 }: AssignCourseDialogProps) {
   const [formData, setFormData] = useState<AssignCourseFormData>(EMPTY_FORM);
+  const [chosenMode, setChosenMode] = useState<AssignCourseMode | null>(null);
+  const mode: AssignCourseMode = chosenMode && modes.includes(chosenMode) ? chosenMode : modes[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(formData);
+    await onSubmit(formData, mode);
     setFormData(EMPTY_FORM);
   };
 
@@ -60,10 +70,27 @@ export function AssignCourseDialog({
         <DialogHeader>
           <DialogTitle>Assign Course to {studentName}</DialogTitle>
           <DialogDescription>
-            Directly enroll this student in a course — no unlock code needed. Record how they paid, same as a manual sale.
+            {mode === "direct"
+              ? "Directly enroll this student in a course — no unlock code needed. Record how they paid, same as a manual sale."
+              : "The course is assigned with payment pending. The student does not get access, and nothing is recorded as a sale, until their payment is verified."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {modes.length > 1 && (
+            <div>
+              <Label htmlFor="assign-mode">How</Label>
+              <Select value={mode} onValueChange={(value) => setChosenMode(value as AssignCourseMode)}>
+                <SelectTrigger id="assign-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="direct">Enroll now (record the payment)</SelectItem>
+                  <SelectItem value="pending">Payment pending (no access until paid)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <Label htmlFor="assign-course">Course</Label>
             <Select value={formData.course} onValueChange={(value) => setFormData({ ...formData, course: value })}>
@@ -84,6 +111,8 @@ export function AssignCourseDialog({
             </Select>
           </div>
 
+          {mode === "direct" && (
+          <>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="assign-payment-method">Payment Method</Label>
@@ -111,7 +140,7 @@ export function AssignCourseDialog({
                 step="0.01"
                 value={formData.amount}
                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                required
+                required={mode === "direct"}
               />
             </div>
           </div>
@@ -126,11 +155,14 @@ export function AssignCourseDialog({
             />
           </div>
 
+          </>
+          )}
+
           <div>
             <Label htmlFor="assign-notes">Notes (optional)</Label>
             <Textarea
               id="assign-notes"
-              placeholder="Additional notes about this assignment"
+              placeholder={mode === "direct" ? "Additional notes about this assignment" : "e.g. will pay at the office on Friday"}
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             />
@@ -140,8 +172,11 @@ export function AssignCourseDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !formData.course || !formData.paymentMethod || !formData.amount}>
-              {loading ? "Assigning..." : "Assign Course"}
+            <Button
+              type="submit"
+              disabled={loading || !formData.course || (mode === "direct" && (!formData.paymentMethod || !formData.amount))}
+            >
+              {loading ? "Assigning..." : mode === "direct" ? "Assign Course" : "Assign (payment pending)"}
             </Button>
           </div>
         </form>

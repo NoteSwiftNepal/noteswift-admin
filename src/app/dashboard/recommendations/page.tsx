@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Brain, Target, Users, TrendingUp, Play, Pause, Settings, Sparkles } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useAdmin } from '@/context/admin-context';
 
 interface Course {
   _id: string;
@@ -36,6 +37,9 @@ interface RecommendationStats {
 }
 
 export default function RecommendationsPage() {
+  // Admin and Sales have read-only access; analysing is Super Admin only.
+  const { can } = useAdmin();
+  const canManage = can('recommendations.manage');
   const [courses, setCourses] = useState<Course[]>([]);
   const [stats, setStats] = useState<RecommendationStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,7 +57,7 @@ export default function RecommendationsPage() {
   const courseCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    fetchCourses();
+    // The stats response carries the course list too (read-only fields).
     fetchStats();
   }, []);
 
@@ -63,25 +67,26 @@ export default function RecommendationsPage() {
   }, [recommendationMode]);
 
   useEffect(() => {
-    // Auto-analyze all courses when mode is set to 'auto' (only once per mode change)
-    if (recommendationMode === 'auto' && !autoAnalyzedRef.current) {
+    // Auto-analyze all courses when mode is set to 'auto' (only once per mode change).
+    // Read-only viewers never analyse, whatever mode this browser remembers.
+    if (canManage && recommendationMode === 'auto' && !autoAnalyzedRef.current) {
       autoAnalyzedRef.current = true;
       handleAutoAnalyzeAll();
     } else if (recommendationMode !== 'auto') {
       autoAnalyzedRef.current = false;
     }
-  }, [recommendationMode]);
+  }, [recommendationMode, canManage]);
 
   useEffect(() => {
     // Set up course change monitoring when in auto mode
-    if (recommendationMode === 'auto') {
+    if (canManage && recommendationMode === 'auto') {
       startCourseMonitoring();
     } else {
       stopCourseMonitoring();
     }
 
     return () => stopCourseMonitoring();
-  }, [recommendationMode]);
+  }, [recommendationMode, canManage]);
 
   const startCourseMonitoring = () => {
     // Check for course changes every 30 seconds
@@ -150,6 +155,12 @@ export default function RecommendationsPage() {
       const data = await response.json();
       if (data.success) {
         setStats(data.result.stats);
+        const list: Course[] = data.result.courses || [];
+        setCourses(list);
+        if (list.length) {
+          const latestUpdate = Math.max(...list.map((c) => new Date(c.updatedAt || c.createdAt || 0).getTime()));
+          setLastCourseUpdate(new Date(latestUpdate));
+        }
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -269,6 +280,7 @@ export default function RecommendationsPage() {
           <p className="text-gray-600 mt-2">Automatically analyze courses and provide personalized recommendations to students</p>
         </div>
         <div className="flex items-center gap-4">
+          {canManage && (
           <Select value={recommendationMode} onValueChange={(value: any) => setRecommendationMode(value)}>
             <SelectTrigger className="w-40">
               <SelectValue />
@@ -279,6 +291,8 @@ export default function RecommendationsPage() {
               <SelectItem value="manual">Manual Override</SelectItem>
             </SelectContent>
           </Select>
+          )}
+          {canManage && (
           <Button
             onClick={analyzeAllCourses}
             disabled={loading || analyzedPercentage === 100 || recommendationMode !== 'manual'}
@@ -287,6 +301,7 @@ export default function RecommendationsPage() {
             <Brain className="w-4 h-4" />
             Analyze All Courses
           </Button>
+          )}
         </div>
       </div>
 
@@ -404,7 +419,8 @@ export default function RecommendationsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => analyzeCourse(course._id, 'manual')}
-                      disabled={analyzingCourses.has(course._id) || loading || recommendationMode === 'auto'}
+                      disabled={!canManage || analyzingCourses.has(course._id) || loading || recommendationMode === 'auto'}
+                      title={canManage ? undefined : 'Only a Super Admin can analyse courses'}
                     >
                       {analyzingCourses.has(course._id) ? (
                         <>

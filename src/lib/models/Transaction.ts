@@ -13,7 +13,7 @@ export interface ITransaction {
   status: 'pending-code-redemption' | 'completed' | 'cancelled' | 'pending-gateway' | 'failed';
   unlockCodeId?: string;
   issuedByAdminId?: string; // Admin ID who issued this — absent on automated esewa-gateway transactions
-  issuedByRole?: 'system_admin' | 'super_admin' | 'admin'; // Admin role — absent on automated esewa-gateway transactions
+  issuedByRole?: 'system_admin' | 'super_admin' | 'admin' | 'sales'; // Admin role — absent on automated esewa-gateway transactions
   createdAt: Date;
   updatedAt: Date;
 
@@ -45,7 +45,7 @@ const transactionSchema = new Schema<ITransaction>({
   status: { type: String, required: true, enum: ['pending-code-redemption', 'completed', 'cancelled', 'pending-gateway', 'failed'], default: 'pending-code-redemption' },
   unlockCodeId: { type: String },
   issuedByAdminId: { type: String },
-  issuedByRole: { type: String, enum: ['system_admin', 'super_admin', 'admin'] },
+  issuedByRole: { type: String, enum: ['system_admin', 'super_admin', 'admin', 'sales'] },
 
   studentId: { type: String },
   transactionUuid: { type: String },

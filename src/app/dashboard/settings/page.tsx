@@ -12,11 +12,16 @@ import { UserManagementSettings } from "@/components/admin/user-management-setti
 import { ContentModerationSettings } from "@/components/admin/content-moderation-settings";
 import { SystemMaintenanceSettings } from "@/components/admin/system-maintenance-settings";
 import { Settings } from "lucide-react";
+import { useAdmin } from "@/context/admin-context";
 
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'account';
+  // Admin and Sales manage only their own account; the other tabs are Super Admin settings.
+  const { can } = useAdmin();
+  const canPlatform = can('settings.platform');
+  const requestedTab = searchParams.get('tab') || 'account';
+  const activeTab = canPlatform ? requestedTab : 'account';
 
   const handleTabChange = (val: string) => {
     router.push(`/dashboard/settings?tab=${val}`);
@@ -33,15 +38,19 @@ export default function SettingsPage() {
           <p className="text-gray-600 mt-2">Configure and manage your NoteSwift platform settings</p>
         </div>
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className={`grid w-full ${canPlatform ? 'grid-cols-8' : 'grid-cols-1 max-w-xs'}`}>
           <TabsTrigger value="account">My Account</TabsTrigger>
-          <TabsTrigger value="platform">Platform</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="payment">Payment</TabsTrigger>
-          <TabsTrigger value="email">Email/SMS</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="content">Content</TabsTrigger>
-          <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+          {canPlatform && (
+            <>
+              <TabsTrigger value="platform">Platform</TabsTrigger>
+              <TabsTrigger value="security">Security</TabsTrigger>
+              <TabsTrigger value="payment">Payment</TabsTrigger>
+              <TabsTrigger value="email">Email/SMS</TabsTrigger>
+              <TabsTrigger value="users">Users</TabsTrigger>
+              <TabsTrigger value="content">Content</TabsTrigger>
+              <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         <TabsContent value="account">

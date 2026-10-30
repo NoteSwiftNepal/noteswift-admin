@@ -1,13 +1,18 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect, ReactNode } from 'react';
+import type { Permission, ProductRole } from '@/lib/permissions';
 
 export interface AdminData {
   _id: string;
   email: string;
   phone_number?: string | null;
   name: string;
-  role: 'system_admin' | 'super_admin' | 'admin';
+  // Stored role value; use productRole / permissions instead (lib/permissions.ts).
+  role: 'system_admin' | 'super_admin' | 'admin' | 'sales';
+  productRole: ProductRole | null;
+  roleLabel: string;
+  permissions: Permission[];
   isActive: boolean;
   createdAt: Date;
   lastLogin?: Date;
@@ -18,12 +23,11 @@ interface AdminContextType {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  hasPermission: (requiredRole: string) => boolean;
-  isSystemAdmin: boolean;
-  isSuperAdmin: boolean;
-  isRegularAdmin: boolean;
-  canPromoteToSuperAdmin: (targetRole: string) => boolean;
-  canDemoteFromSuperAdmin: (targetRole: string) => boolean;
+  /** Whether the signed-in admin has this permission (decides what the panel shows; the backend enforces it). */
+  can: (permission: Permission) => boolean;
+  productRole: ProductRole | null;
+  /** Super Admin (stored system_admin), the top level. */
+  isTopAdmin: boolean;
   canDeleteAdmin: (targetId: string, targetRole: string) => boolean;
   canManageSpecificAdmin: (targetId: string, targetRole: string) => boolean;
   canInviteAdmins: boolean;
@@ -77,53 +81,17 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     await fetchAdminProfile();
   };
 
-  const hasPermission = (requiredRole: string): boolean => {
-    if (!admin) return false;
+  const can = useCallback(
+    (permission: Permission): boolean => !!admin?.permissions?.includes(permission),
+    [admin]
+  );
 
-    const roleHierarchy = {
-      'system_admin': 3,
-      'super_admin': 2,
-      'admin': 1
-    };
+  // Admin accounts are managed only by a Super Admin, who can't remove
+  // themselves; the backend also refuses to remove a Super Admin.
+  const canManageSpecificAdmin = (targetId: string, targetRole: string): boolean =>
+    can('admins.manage') && admin?._id !== targetId && targetRole !== 'system_admin';
 
-    return roleHierarchy[admin.role as keyof typeof roleHierarchy] >= roleHierarchy[requiredRole as keyof typeof roleHierarchy];
-  };
-
-  const canPromoteToSuperAdmin = (targetRole: string): boolean => {
-    return admin?.role === 'system_admin' && targetRole === 'admin';
-  };
-
-  const canDemoteFromSuperAdmin = (targetRole: string): boolean => {
-    return admin?.role === 'system_admin' && targetRole === 'super_admin';
-  };
-
-  const canDeleteAdmin = (targetId: string, targetRole: string): boolean => {
-    // Cannot delete yourself
-    if (admin?._id === targetId) return false;
-
-    // System admin can delete anyone
-    if (admin?.role === 'system_admin') return true;
-
-    // Super admin can only delete regular admins
-    if (admin?.role === 'super_admin') return targetRole === 'admin';
-
-    // Regular admins cannot delete anyone
-    return false;
-  };
-
-  const canManageSpecificAdmin = (targetId: string, targetRole: string): boolean => {
-    // Cannot manage yourself
-    if (admin?._id === targetId) return false;
-
-    // System admin can manage anyone (except themselves, handled above)
-    if (admin?.role === 'system_admin') return true;
-
-    // Super admin can only manage regular admins
-    if (admin?.role === 'super_admin') return targetRole === 'admin';
-
-    // Regular admins cannot manage anyone
-    return false;
-  };
+  const canDeleteAdmin = canManageSpecificAdmin;
 
   useEffect(() => {
     fetchAdminProfile();
@@ -134,15 +102,12 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     loading,
     error,
     refetch,
-    hasPermission,
-    isSystemAdmin: admin?.role === 'system_admin',
-    isSuperAdmin: admin?.role === 'super_admin',
-    isRegularAdmin: admin?.role === 'admin',
-    canPromoteToSuperAdmin,
-    canDemoteFromSuperAdmin,
+    can,
+    productRole: admin?.productRole ?? null,
+    isTopAdmin: admin?.productRole === 'super_admin',
     canDeleteAdmin,
     canManageSpecificAdmin,
-    canInviteAdmins: admin?.role === 'system_admin' || admin?.role === 'super_admin'
+    canInviteAdmins: can('admins.manage'),
   };
 
   return (

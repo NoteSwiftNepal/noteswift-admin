@@ -18,9 +18,15 @@ import Course from "@/lib/models/Course";
 import Student from "@/lib/models/Student";
 import CourseEnrollment from "@/lib/models/CourseEnrollment";
 import Transaction from "@/lib/models/Transaction";
+import { requireAdmin } from "@/lib/server/require-admin";
+
+// Every action authenticates its caller first (lib/server/require-admin.ts):
+// server actions can be called by anyone who can reach this server.
+const UNAUTHORIZED = { success: false as const, error: "You are not signed in or not allowed to do this." };
 
 // ---------------------------- SUGGEST TAGS ----------------------------
 export async function handleSuggestTags(data: ContentTaggingInput) {
+  if (!(await requireAdmin('courses.manage'))) return UNAUTHORIZED;
   try {
     const result = await suggestTags(data);
     return { success: true, tags: result.tags };
@@ -33,6 +39,7 @@ export async function handleSuggestTags(data: ContentTaggingInput) {
 
 // ---------------------------- DASHBOARD INSIGHTS ----------------------------
 export async function handleGetDashboardInsights() {
+  if (!(await requireAdmin('dashboard.view'))) return UNAUTHORIZED;
   try {
     await dbConnect();
 
@@ -115,6 +122,7 @@ export async function handleGetDashboardInsights() {
 
 // ---------------------------- TASK SUGGESTIONS ----------------------------
 export async function handleGetTaskSuggestions() {
+  if (!(await requireAdmin('dashboard.view'))) return UNAUTHORIZED;
   try {
     await dbConnect();
 

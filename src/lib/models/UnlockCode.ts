@@ -7,7 +7,7 @@ export interface IUnlockCode {
   courseId: string;
   issuedTo?: string;
   issuedByAdminId: string; // Admin ID who issued this
-  issuedByRole: 'system_admin' | 'super_admin' | 'admin'; // Admin role
+  issuedByRole: 'system_admin' | 'super_admin' | 'admin' | 'sales'; // Admin role
   isUsed: boolean;
   usedByUserId?: string;
   usedDeviceHash?: string;
@@ -24,7 +24,7 @@ const unlockCodeSchema = new Schema<IUnlockCode>({
   courseId: { type: String, required: true },
   issuedTo: { type: String },
   issuedByAdminId: { type: String, required: true },
-  issuedByRole: { type: String, required: true, enum: ['system_admin', 'super_admin', 'admin'] },
+  issuedByRole: { type: String, required: true, enum: ['system_admin', 'super_admin', 'admin', 'sales'] },
   isUsed: { type: Boolean, required: true, default: false },
   usedByUserId: { type: String },
   usedDeviceHash: { type: String },

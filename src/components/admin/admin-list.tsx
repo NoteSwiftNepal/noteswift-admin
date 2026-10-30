@@ -4,15 +4,16 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Crown, Shield, User, Trash2, Star, Search, UserMinus } from "lucide-react";
+import { Crown, Shield, Trash2, Search, BadgeIndianRupee } from "lucide-react";
 import { adminApi } from "@/lib/admin-api";
 import { useAdmin } from "@/context/admin-context";
+import { productRoleOf, ROLE_BADGES } from "@/lib/permissions";
 
 interface Admin {
   _id: string;
   email: string;
   name: string;
-  role: 'system_admin' | 'super_admin' | 'admin';
+  role: 'system_admin' | 'super_admin' | 'admin' | 'sales';
   createdAt: string;
   lastLogin?: string;
 }
@@ -25,7 +26,7 @@ export function AdminList({ schoolId }: AdminListProps = {}) {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const { admin: currentAdmin, canPromoteToSuperAdmin, canDemoteFromSuperAdmin, canDeleteAdmin } = useAdmin();
+  const { admin: currentAdmin, canDeleteAdmin } = useAdmin();
 
   useEffect(() => {
     fetchAdmins();
@@ -48,30 +49,6 @@ export function AdminList({ schoolId }: AdminListProps = {}) {
     }
   };
 
-  const setSuperAdmin = async (adminId: string) => {
-    try {
-      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      const response = await fetch(API_ENDPOINTS.ADMINS.SET_SUPER_ADMIN, createFetchOptions('POST', { adminId }));
-      if (response.ok) {
-        fetchAdmins();
-      }
-    } catch (error) {
-      console.error('Error setting super admin:', error);
-    }
-  };
-
-  const demoteSuperAdmin = async (adminId: string) => {
-    try {
-      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      const response = await fetch(API_ENDPOINTS.ADMINS.DEMOTE_SUPER_ADMIN, createFetchOptions('POST', { adminId }));
-      if (response.ok) {
-        fetchAdmins();
-      }
-    } catch (error) {
-      console.error('Error demoting super admin:', error);
-    }
-  };
-
   const removeAdmin = async (adminId: string) => {
     if (!confirm('Are you sure you want to remove this admin?')) return;
 
@@ -86,26 +63,17 @@ export function AdminList({ schoolId }: AdminListProps = {}) {
     }
   };
 
+  // system_admin is the Super Admin; super_admin and admin are both Admin.
   const getRoleBadge = (role: string) => {
-    switch (role) {
-      case 'system_admin':
-        return <Badge variant="default" className="bg-red-500">System Admin</Badge>;
-      case 'super_admin':
-        return <Badge variant="default" className="bg-purple-500">Super Admin</Badge>;
-      default:
-        return <Badge variant="default" className="bg-blue-500">Admin</Badge>;
-    }
+    const product = productRoleOf(role);
+    const badge = product ? ROLE_BADGES[product] : { text: role, className: '' };
+    return <Badge variant="default" className={badge.className}>{badge.text}</Badge>;
   };
 
+  const ROLE_ORDER = { super_admin: 1, admin: 2, sales: 3 } as const;
   const getRolePriority = (role: string) => {
-    switch (role) {
-      case 'system_admin':
-        return 1;
-      case 'super_admin':
-        return 2;
-      default:
-        return 3;
-    }
+    const product = productRoleOf(role);
+    return product ? ROLE_ORDER[product] : 4;
   };
 
   const filteredAdmins = admins
@@ -138,9 +106,9 @@ export function AdminList({ schoolId }: AdminListProps = {}) {
           <div key={admin._id} className="flex items-center justify-between p-4 border rounded-lg">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                {admin.role === 'system_admin' && <Crown className="h-5 w-5 text-yellow-500" />}
-                {admin.role === 'super_admin' && <Star className="h-5 w-5 text-purple-500" />}
-                {admin.role === 'admin' && <Shield className="h-5 w-5 text-blue-500" />}
+                {productRoleOf(admin.role) === 'super_admin' && <Crown className="h-5 w-5 text-yellow-500" />}
+                {productRoleOf(admin.role) === 'admin' && <Shield className="h-5 w-5 text-blue-500" />}
+                {productRoleOf(admin.role) === 'sales' && <BadgeIndianRupee className="h-5 w-5 text-emerald-600" />}
               </div>
               <div>
                 <div className="font-medium">{admin.name}</div>
@@ -153,30 +121,6 @@ export function AdminList({ schoolId }: AdminListProps = {}) {
             </div>
             <div className="flex items-center gap-2">
               {getRoleBadge(admin.role)}
-              {/* Promote to Super Admin - only system admin can do this for regular admins */}
-              {canPromoteToSuperAdmin(admin.role) && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setSuperAdmin(admin._id)}
-                  className="text-purple-600 hover:text-purple-700"
-                >
-                  <Star className="h-4 w-4 mr-1" />
-                  Make Super Admin
-                </Button>
-              )}
-              {/* Demote from Super Admin - only system admin can do this for super admins */}
-              {canDemoteFromSuperAdmin(admin.role) && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => demoteSuperAdmin(admin._id)}
-                  className="text-orange-600 hover:text-orange-700"
-                >
-                  <UserMinus className="h-4 w-4 mr-1" />
-                  Demote to Admin
-                </Button>
-              )}
               {/* Remove Admin - based on role permissions */}
               {canDeleteAdmin(admin._id, admin.role) && (
                 <Button

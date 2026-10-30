@@ -18,13 +18,18 @@ import { BulkCodeGenerationDialog } from "@/components/orders/BulkCodeGeneration
 import { EsewaTransactionDialog } from "@/components/orders/EsewaTransactionDialog";
 import { exportCodesListToPDF } from "@/lib/pdf-utils";
 import { useAdmin } from "@/context/admin-context";
+import { productRoleOf, ROLE_BADGES } from "@/lib/permissions";
+import { InvalidBadge, InvalidateTransactionButton } from "@/components/orders/transaction-invalidation";
 
 export default function OrdersPaymentsPage() {
   const { toast } = useToast();
-  const { admin } = useAdmin();
+  const { can } = useAdmin();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isNormalAdmin = admin?.role === 'admin';
+  // Admin has a read-only view (the backend leaves out contact details,
+  // payment references and plaintext codes); recording sales and bulk codes
+  // is Super Admin only.
+  const canManageOrders = can('orders.manage');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [codes, setCodes] = useState([]);
@@ -69,19 +74,19 @@ export default function OrdersPaymentsPage() {
   const [pdfExporting, setPdfExporting] = useState(false);
 
   useEffect(() => {
-    fetchAdmins();
+    if (can('admins.manage')) fetchAdmins();
     fetchTransactions();
     fetchCourses();
-    if (!isNormalAdmin) {
+    if (canManageOrders) {
       fetchHistorySchools();
     }
-  }, [isNormalAdmin]);
+  }, [canManageOrders]);
 
   useEffect(() => {
-    if (isNormalAdmin && (activeTab === 'bulk-codes' || activeTab === 'esewa')) {
+    if (!canManageOrders && activeTab === 'bulk-codes') {
       setActiveTab('transactions');
     }
-  }, [isNormalAdmin, activeTab]);
+  }, [canManageOrders, activeTab]);
 
   useEffect(() => {
     setSelectedCodeIds(new Set());
@@ -300,11 +305,12 @@ export default function OrdersPaymentsPage() {
   };
 
   const formatIssuerInfo = (issuedByAdminId: string, issuedByRole: string) => {
+    const roleLabel = (role: string) => ROLE_BADGES[productRoleOf(role) ?? 'admin'].text;
     const admin = adminMap[issuedByAdminId];
     if (admin) {
-      return `${admin.role} (${admin.email})`;
+      return `${roleLabel(admin.role)} (${admin.email})`;
     }
-    return `${issuedByRole} (${issuedByAdminId})`;
+    return issuedByRole ? `${roleLabel(issuedByRole)} (${issuedByAdminId})` : issuedByAdminId;
   };
 
   const handleSubmitBulkCodes = async (formData: any) => {
@@ -431,15 +437,17 @@ export default function OrdersPaymentsPage() {
                   </div>
           <p className="text-gray-600 mt-2">Manage and track orders and payments for courses</p>
         </div>        <div className="flex gap-2">
-          <AddOfflineSaleDialog
-            open={isAddDialogOpen}
-            onOpenChange={setIsAddDialogOpen}
-            courses={courses}
-            coursesLoading={coursesLoading}
-            onSubmit={handleSubmitTransaction}
-            loading={loading}
-          />
-          {!isNormalAdmin && (
+          {canManageOrders && (
+            <AddOfflineSaleDialog
+              open={isAddDialogOpen}
+              onOpenChange={setIsAddDialogOpen}
+              courses={courses}
+              coursesLoading={coursesLoading}
+              onSubmit={handleSubmitTransaction}
+              loading={loading}
+            />
+          )}
+          {canManageOrders && (
             <BulkCodeGenerationDialog
               open={isBulkDialogOpen}
               onOpenChange={setIsBulkDialogOpen}
@@ -489,35 +497,33 @@ export default function OrdersPaymentsPage() {
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            {isNormalAdmin ? 'My Unlock Codes' : 'Unlock Codes'}
+            Unlock Codes
           </button>
-          {!isNormalAdmin && (
-            <>
-              <button
-                onClick={() => setActiveTab('bulk-codes')}
-                className={`px-4 py-2 font-medium transition-colors ${
-                  activeTab === 'bulk-codes'
-                    ? 'border-b-2 border-blue-600 text-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Bulk Codes
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('esewa');
-                  fetchEsewaTransactions();
-                }}
-                className={`px-4 py-2 font-medium transition-colors ${
-                  activeTab === 'esewa'
-                    ? 'border-b-2 border-blue-600 text-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Online Payments
-              </button>
-            </>
+          {canManageOrders && (
+            <button
+              onClick={() => setActiveTab('bulk-codes')}
+              className={`px-4 py-2 font-medium transition-colors ${
+                activeTab === 'bulk-codes'
+                  ? 'border-b-2 border-blue-600 text-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Bulk Codes
+            </button>
           )}
+          <button
+            onClick={() => {
+              setActiveTab('esewa');
+              fetchEsewaTransactions();
+            }}
+            className={`px-4 py-2 font-medium transition-colors ${
+              activeTab === 'esewa'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Online Payments
+          </button>
         </div>
 
         {/* Transactions Tab */}
@@ -572,12 +578,14 @@ export default function OrdersPaymentsPage() {
                         <TableCell>Rs. {transaction.amount}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">{transaction.status}</Badge>
+                          <InvalidBadge transaction={transaction} />
                         </TableCell>
                         <TableCell>{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <Button variant="ghost" size="sm">
                             <Eye className="w-4 h-4" />
                           </Button>
+                          <InvalidateTransactionButton transaction={transaction} onDone={fetchTransactions} />
                         </TableCell>
                       </TableRow>
                     ))
@@ -709,7 +717,7 @@ export default function OrdersPaymentsPage() {
         )}
 
         {/* Bulk Codes Tab */}
-        {activeTab === 'bulk-codes' && (
+        {canManageOrders && activeTab === 'bulk-codes' && (
           <Card>
             <CardHeader>
               <CardTitle>Bulk Codes — School History</CardTitle>
@@ -931,6 +939,7 @@ export default function OrdersPaymentsPage() {
                           <Badge variant={transaction.status === 'completed' ? 'default' : transaction.status === 'failed' || transaction.status === 'cancelled' ? 'destructive' : 'secondary'}>
                             {transaction.status}
                           </Badge>
+                          <InvalidBadge transaction={transaction} />
                         </TableCell>
                         <TableCell>
                           {transaction.gatewayStatus ? (
@@ -965,6 +974,7 @@ export default function OrdersPaymentsPage() {
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
+                          <InvalidateTransactionButton transaction={transaction} onDone={fetchEsewaTransactions} />
                         </TableCell>
                       </TableRow>
                     ))

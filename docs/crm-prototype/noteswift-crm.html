@@ -1,0 +1,769 @@
+<title>Note Swift Sales & CRM</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: admin shell — sidebar panel (existing groups + Sales & CRM group) beside a fluid workspace; tables scroll inside their own cards */
+:root{
+  --bg:#F2F5FB; --surface:#FFFFFF; --surface-2:#F6F8FC; --fg:#0E1A33; --muted:#5A6A86; --line:#DDE4EF;
+  --accent:#1F5FD6; --accent-soft:#E6EEFD; --accent-fg:#FFFFFF;
+  --good:#0F7A55; --good-soft:#E1F4EC; --warn:#9A5B00; --warn-soft:#FCF0DA; --bad:#B8322A; --bad-soft:#FBE6E4;
+  --overlay:rgba(14,26,51,.40);
+  --shadow:0 1px 2px rgba(14,26,51,.05),0 6px 18px rgba(14,26,51,.05);
+  --font-body:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-display:"Sora","Figtree",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0A1120; --surface:#111A2D; --surface-2:#16213A; --fg:#E5EBF6; --muted:#97A5BE; --line:#24324D;
+  --accent:#6C9BF2; --accent-soft:#1A2B4D; --accent-fg:#0A1120;
+  --good:#48C795; --good-soft:#123326; --warn:#F0B451; --warn-soft:#3A2A0F; --bad:#F07A70; --bad-soft:#3D1A18;
+  --overlay:rgba(0,0,0,.55); --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0A1120; --surface:#111A2D; --surface-2:#16213A; --fg:#E5EBF6; --muted:#97A5BE; --line:#24324D;
+  --accent:#6C9BF2; --accent-soft:#1A2B4D; --accent-fg:#0A1120;
+  --good:#48C795; --good-soft:#123326; --warn:#F0B451; --warn-soft:#3A2A0F; --bad:#F07A70; --bad-soft:#3D1A18;
+  --overlay:rgba(0,0,0,.55); --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--font-body);font-size:14px;line-height:1.45;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:22px} h2{font-size:15px} h3{font-size:14px}
+.muted{color:var(--muted)} .small{font-size:12.5px}
+.shell{display:grid;grid-template-columns:236px minmax(0,1fr);gap:16px;max-width:1440px;margin:0 auto;align-items:start}
+.side{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 14px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.logo{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-family:var(--font-display);font-weight:700;font-size:13px}
+.brand b{font-family:var(--font-display);font-size:14px;display:block}
+.nav{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;background:none;border-radius:8px;cursor:pointer;text-align:left;color:var(--muted);font-weight:500}
+.nav:hover{background:var(--surface-2);color:var(--fg)}
+.nav svg{width:17px;height:17px;flex:none}
+.nav.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.nav.group-head{color:var(--fg);font-weight:600}
+.chev{margin-left:auto;transition:transform .15s}
+.chev.open{transform:rotate(90deg)}
+.sub{display:flex;flex-direction:column;gap:2px;padding-left:16px;margin-left:18px;border-left:1px solid var(--line)}
+.sub .nav{padding:7px 10px}
+.badge{margin-left:auto;font-size:11px;font-weight:700;background:var(--bad-soft);color:var(--bad);border-radius:999px;padding:1px 7px}
+.main{min-width:0;display:flex;flex-direction:column;gap:16px}
+.topbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.crumb{color:var(--muted);font-size:12.5px}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;background:none;padding:6px 10px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:500;font-size:13px}
+.seg button.on{background:var(--accent);color:var(--accent-fg)}
+.mobnav{display:none;gap:6px;overflow-x:auto;padding-bottom:2px}
+.mobnav button{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;cursor:pointer;font-weight:500}
+.mobnav button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.page-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.page-head p{margin:4px 0 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);min-width:0}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.card-b{padding:14px 16px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.kpi:hover{border-color:var(--accent)}
+.kpi .v{font-family:var(--font-display);font-size:22px;font-weight:700}
+.kpi .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.kpi.bad .v{color:var(--bad)} .kpi.warn .v{color:var(--warn)} .kpi.good .v{color:var(--good)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.08);color:var(--accent-fg)}
+.btn.good{background:var(--good);border-color:var(--good);color:var(--surface)}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.input,select.input,textarea.input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;min-width:0}
+textarea.input{resize:vertical;min-height:64px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted);min-width:0}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.form .full{grid-column:1/-1}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toolbar .input{width:auto;flex:1 1 200px}
+.tabs{display:flex;gap:4px;overflow-x:auto;padding:10px 16px 0;border-bottom:1px solid var(--line)}
+.tab{border:0;background:none;padding:8px 10px;border-bottom:2px solid transparent;cursor:pointer;color:var(--muted);font-weight:600;white-space:nowrap;font-size:13px}
+.tab.on{color:var(--accent);border-color:var(--accent)}
+.tab .n{font-size:11px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-left:4px;color:var(--muted)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface-2)}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td .sub2{display:block;font-size:12px;color:var(--muted)}
+.num{text-align:right;white-space:nowrap}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap;background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.accent{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.pill.good{background:var(--good-soft);color:var(--good);border-color:transparent}
+.pill.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.pill.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.late{color:var(--bad);font-weight:600}
+.bar{height:8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:999px;background:var(--accent)}
+.bar i.good{background:var(--good)} .bar i.warn{background:var(--warn)} .bar i.bad{background:var(--bad)}
+.funnel{display:flex;flex-direction:column;gap:10px}
+.frow{display:grid;grid-template-columns:120px minmax(0,1fr) 36px;gap:10px;align-items:center;font-size:13px}
+.frow .fb{height:22px;border-radius:6px;background:var(--accent-soft);overflow:hidden}
+.frow .fb i{display:block;height:100%;background:var(--accent);border-radius:6px;min-width:4px}
+.list{display:flex;flex-direction:column}
+.li{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.li:last-child{border-bottom:0}
+.li .who{min-width:0}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line);border-radius:10px;padding:8px 12px}
+.overlay{position:fixed;inset:0;background:var(--overlay);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--surface);z-index:41;display:flex;flex-direction:column;border-left:1px solid var(--line);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.drawer-h{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.drawer-b{padding:16px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}
+.facts div{min-width:0} .facts dt{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.facts dd{margin:2px 0 0;word-break:break-word}
+.actions{display:flex;flex-wrap:wrap;gap:6px}
+.panel{border:1px solid var(--accent);border-radius:12px;padding:14px;background:var(--accent-soft);display:flex;flex-direction:column;gap:12px}
+.timeline{display:flex;flex-direction:column;gap:0}
+.ev{display:grid;grid-template-columns:12px minmax(0,1fr);gap:10px;padding-bottom:12px;position:relative}
+.ev::before{content:"";position:absolute;left:5px;top:12px;bottom:0;width:1px;background:var(--line)}
+.ev:last-child::before{display:none}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--surface);border:2px solid var(--accent);margin-top:4px}
+.dot.good{border-color:var(--good)} .dot.bad{border-color:var(--bad)} .dot.muted{border-color:var(--muted)}
+.modal{position:fixed;z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100% - 32px));max-height:calc(100% - 48px);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.modal .card-b{display:flex;flex-direction:column;gap:14px}
+.bill{border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;background:var(--surface)}
+.bill-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.bill table td,.bill table th{padding:8px 6px}
+.stamp{font-family:var(--font-display);font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;border:2px solid currentColor;border-radius:6px;padding:3px 8px;transform:rotate(-4deg);align-self:flex-start}
+.stamp.good{color:var(--good)} .stamp.warn{color:var(--warn)} .stamp.bad{color:var(--bad)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:60;font-weight:600;box-shadow:var(--shadow);max-width:calc(100% - 32px)}
+.big{font-family:var(--font-display);font-size:28px;font-weight:700}
+.mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.mini div{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px}
+.mini b{display:block;font-family:var(--font-display);font-size:15px}
+.mini span{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.selbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--accent-soft);border-bottom:1px solid var(--line)}
+.switch{position:relative;width:36px;height:20px;border-radius:999px;border:0;background:var(--line);cursor:pointer;flex:none}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:left .15s}
+.switch.on{background:var(--good)} .switch.on::after{left:18px}
+.foot{font-size:12px;color:var(--muted);text-align:center;padding:8px 0}
+@media (max-width:980px){.grid2{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:880px){.shell{grid-template-columns:minmax(0,1fr)}.side{display:none}.mobnav{display:flex}}
+@media (max-width:520px){.form,.facts{grid-template-columns:minmax(0,1fr)}.mini{grid-template-columns:minmax(0,1fr)}.frow{grid-template-columns:92px minmax(0,1fr) 30px}h1{font-size:19px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.umd.js"></script>
+<script>
+const {useState,useMemo,useEffect} = React;
+const html = htm.bind(React.createElement);
+
+/* ---------- constants ---------- */
+const NOW = new Date(2026,9,26,17,30).getTime();          // prototype "today"
+const MONTH = {y:2026,m:9,days:31,day:26,label:'October 2026'};
+const DAY = 86400000;
+const sod = ts=>{const d=new Date(ts);d.setHours(0,0,0,0);return d.getTime()};
+const TODAY0 = sod(NOW);
+const at = (day,h=10,m=0)=>new Date(2026,9,day,h,m).getTime();
+const inMonth = ts=>{const d=new Date(ts);return d.getFullYear()===MONTH.y&&d.getMonth()===MONTH.m};
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fDate = ts=>{const d=new Date(ts);return d.getDate()+' '+MON[d.getMonth()]};
+const fTime = ts=>new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+const fDT = ts=>fDate(ts)+', '+fTime(ts);
+const rel = ts=>{const d=sod(ts);if(d===TODAY0)return 'Today, '+fTime(ts);if(d===TODAY0-DAY)return 'Yesterday, '+fTime(ts);if(d===TODAY0+DAY)return 'Tomorrow, '+fTime(ts);return fDT(ts)};
+const rs = n=>'Rs '+Math.round(n).toLocaleString('en-IN');
+const pct = x=>Math.round(x*100)+'%';
+const p2 = x=>String(x).padStart(2,'0');
+const toInput = ts=>{const d=new Date(ts);return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`};
+let _id=5000, _tick=1; const uid = p=>p+(_id++);
+
+const COURSES=[
+  {id:'c1',name:'Class 12 Science – Full Year',grade:'Class 12',price:12000},
+  {id:'c2',name:'Class 11 Science – Full Year',grade:'Class 11',price:11000},
+  {id:'c3',name:'SEE Complete Prep',grade:'Class 10',price:8000},
+  {id:'c4',name:'Class 12 Management – Full Year',grade:'Class 12',price:9000},
+  {id:'c5',name:'Board Exam Crash Course',grade:'Class 12',price:4500}];
+const course = id=>COURSES.find(c=>c.id===id)||COURSES[0];
+const STAGES=[
+  {id:'new',label:'New lead',tone:'accent'},
+  {id:'contacted',label:'Contacted',tone:''},
+  {id:'interested',label:'Interested',tone:'accent'},
+  {id:'payment',label:'Payment pending',tone:'warn'},
+  {id:'enrolled',label:'Enrolled',tone:'good'},
+  {id:'lost',label:'Lost',tone:'bad'}];
+const stage = id=>STAGES.find(s=>s.id===id);
+const OUTCOMES=['Interested','Call back later','Not interested now','No answer','Switched off / unreachable','Wrong number'];
+const LOST_REASONS=['Too expensive','Joined another institute','Not interested','Could not reach','Wrong number','Other'];
+const TASK_TYPES=['Call','WhatsApp','School visit','Payment reminder'];
+const METHODS=['Cash','eSewa','Khalti','Bank transfer'];
+const SOURCES=['App registration','Website','School visit','Referral','Facebook ad','Walk-in'];
+const DISTRICTS=['Kanchanpur','Kailali','Dadeldhura','Baitadi','Doti','Darchula'];
+const SCHOOLS=['Siddhanath Science Campus','Kanchanpur Model Sec. School','Mahendranagar Higher Sec. School','Shree Krishna Sec. School','Gaurishankar Sec. School','Dhangadhi Model College'];
+const FIRST=['Aarav','Prakriti','Sujal','Anisha','Rohan','Kabita','Sagar','Pooja','Nabin','Sarita','Bibek','Asmita','Dipesh','Manisha','Kiran','Sushma','Roshan','Puja','Aayush','Srijana','Bishal','Nisha','Saroj','Rekha','Hemant','Laxmi','Pawan','Gita','Suman','Bhawana','Prabin','Sabina','Rajan','Kamala','Yubraj','Shristi','Anil','Muna','Deepak','Binita','Tek','Sunita','Ganesh','Ritu','Bhim','Sapana','Lokesh','Kopila'];
+const LAST=['Bhatt','Joshi','Chand','Pant','Awasthi','Rana','Thapa','Bista','Saud','Ojha','Dhami','Bohara','Kunwar','Air','Negi'];
+const GUARD=['Hari','Gopal','Krishna','Mohan','Devi','Kamala','Tara','Bal','Ram','Laxmi'];
+const STATUS={ahead:['Ahead','good'],ontrack:['On track','accent'],behind:['Behind','warn'],none:['Not selling','bad']};
+
+/* ---------- example data ---------- */
+function makeSeed(){
+  let s=11; const r=()=>(s=(s*9301+49297)%233280)/233280; const pick=a=>a[Math.floor(r()*a.length)];
+  const phone=()=>'98'+String(Math.floor(r()*1e8)).padStart(8,'0');
+  const reps=[
+    {id:'r1',name:'Sita Bhatt',phone:'9848012345',salary:15000,active:true},
+    {id:'r2',name:'Ramesh Joshi',phone:'9858023456',salary:12000,active:true},
+    {id:'r3',name:'Anjali Chand',phone:'9868034567',salary:15000,active:true},
+    {id:'r4',name:'Bikash Rawal',phone:'9809045678',salary:12000,active:true}];
+  const repName=id=>reps.find(x=>x.id===id).name;
+  const leads=[],sales=[],tasks=[],acts=[]; let bill=1,ni=0;
+  const act=(leadId,type,text,by,ts,tone)=>acts.push({id:uid('A'),leadId,type,text,by,at:ts,tone});
+  const mkLead=o=>{
+    const c=course(o.courseId); const last=LAST[(ni*7)%LAST.length];
+    const l={id:uid('L'),name:FIRST[ni%FIRST.length]+' '+last,phone:phone(),guardian:pick(GUARD)+' '+last,guardianPhone:phone(),
+      grade:c.grade,school:pick(SCHOOLS),district:pick(DISTRICTS),source:pick(SOURCES),courseId:o.courseId,ownerId:o.ownerId,
+      stage:o.stage,createdAt:o.createdAt,lastContact:o.lastContact||null,lostReason:o.lostReason||null};
+    ni++; leads.push(l); act(l.id,'created','Lead created · '+l.source,'System',l.createdAt,'muted');
+    if(o.ownerId) act(l.id,'assign','Assigned to '+repName(o.ownerId),'System',l.createdAt+60000,'muted');
+    return l;};
+  const won={r1:['c1','c2','c1','c3','c1','c4','c2','c1','c3','c1','c2'],r2:['c3','c5','c3','c4'],
+    r3:['c1','c1','c2','c1','c2','c1','c3','c1','c2','c1','c4','c1','c2'],r4:[]};
+  Object.entries(won).forEach(([rid,list])=>list.forEach((cid,i)=>{
+    const day=2+Math.floor(i*23/list.length), c=course(cid);
+    const l=mkLead({courseId:cid,ownerId:rid,stage:'enrolled',createdAt:at(Math.max(1,day-4),9+i%5),lastContact:at(day,11)});
+    const method=i%4===0?'App':pick(METHODS); const disc=i%3===2?500:0;
+    act(l.id,'call','Call · Interested — asked about class schedule',repName(rid),at(Math.max(1,day-2),12),'');
+    const sale={id:uid('S'),billNo:'NS-'+p2(p2(bill++)).padStart(4,'0'),leadId:l.id,repId:rid,courseId:cid,listPrice:c.price,discount:disc,
+      amount:c.price-disc,method,ref:method==='App'?'APP-'+Math.floor(r()*900000+100000):(method==='Cash'?'':'TXN'+Math.floor(r()*9e6+1e6)),
+      date:at(day,13),status:'verified',verifiedBy:method==='App'?'Payment system':'Admin',needsApproval:false};
+    sales.push(sale);
+    act(l.id,'sale','Sale recorded · '+rs(sale.amount)+' via '+method+' · '+sale.billNo,method==='App'?'Student (app)':repName(rid),sale.date,'');
+    act(l.id,'verify','Payment verified by '+sale.verifiedBy+' · enrolled in '+c.name,sale.verifiedBy,sale.date+3600000,'good');
+  }));
+  // pending sales
+  [['r1','c1','Cash',0,at(26,10,15)],['r2','c3','eSewa',1500,at(25,15,40)]].forEach(([rid,cid,method,disc,ts])=>{
+    const c=course(cid); const l=mkLead({courseId:cid,ownerId:rid,stage:'payment',createdAt:ts-5*DAY,lastContact:ts});
+    act(l.id,'call','Call · Interested — ready to pay',repName(rid),ts-DAY,'');
+    const sale={id:uid('S'),billNo:'NS-'+String(bill++).padStart(4,'0'),leadId:l.id,repId:rid,courseId:cid,listPrice:c.price,discount:disc,amount:c.price-disc,
+      method,ref:method==='Cash'?'':'TXN'+Math.floor(r()*9e6+1e6),date:ts,status:'pending',verifiedBy:null,needsApproval:disc/c.price*100>10};
+    sales.push(sale); act(l.id,'sale','Sale recorded · '+rs(sale.amount)+' via '+method+' · '+sale.billNo+' — waiting for verification',repName(rid),ts,'');
+  });
+  // fix bill numbers
+  sales.forEach((x,i)=>x.billNo='NS-'+String(i+1).padStart(4,'0'));
+  bill=sales.length+1;
+  const open=[
+    ['new',null,'c1',26,9],['new',null,'c3',26,11],['new','r1','c2',25,14],['new','r4','c3',24,16],['new','r2','c1',23,10],
+    ['contacted','r1','c1',20],['contacted','r2','c4',21],['contacted','r3','c5',22],['contacted','r4','c3',18],
+    ['interested','r1','c3',15],['interested','r1','c1',19],['interested','r2','c2',17],['interested','r3','c1',22],['interested','r4','c4',16],
+    ['lost','r2','c1',8,10,'Too expensive'],['lost','r3','c3',11,10,'Joined another institute'],['lost','r4','c5',9,10,'Could not reach']];
+  const dues=[at(24,11),at(26,15),at(26,18),at(27,10),at(25,16),at(28,12),at(26,11,30),at(29,10),at(23,15)];
+  const notes=['Asked about weekend live classes','Discuss fee with father','Send demo class link','Wants Class 12 Physics sample notes','Follow up after school exam','Confirm payment date'];
+  let k=0;
+  open.forEach(([st,rid,cid,day,h,reason])=>{
+    const l=mkLead({courseId:cid,ownerId:rid,stage:st,createdAt:at(day,h||10),lastContact:st==='contacted'||st==='interested'?at(Math.min(25,day+1),12):null,lostReason:reason});
+    if(st==='contacted') act(l.id,'call','Call · Call back later',repName(rid),at(Math.min(25,day+1),12),'');
+    if(st==='interested') act(l.id,'call','Call · Interested — '+notes[k%notes.length].toLowerCase(),repName(rid),at(Math.min(25,day+1),12),'');
+    if(st==='lost') act(l.id,'lost','Marked lost · '+reason,repName(rid),at(day+3,15),'bad');
+    if(st==='contacted'||st==='interested'){
+      const type=st==='interested'&&k%3===0?'Payment reminder':(k%2?'WhatsApp':'Call');
+      tasks.push({id:uid('T'),leadId:l.id,ownerId:rid,type,due:dues[k%dues.length],note:notes[k%notes.length],status:'open',outcome:null,doneAt:null});
+      k++;}
+  });
+  tasks.push({id:uid('T'),leadId:leads.find(l=>l.stage==='new'&&l.ownerId==='r2').id,ownerId:'r2',type:'Call',due:at(24,10),note:'First call — new registration',status:'open',outcome:null,doneAt:null});
+  return {reps,leads,sales,tasks,acts,billSeq:bill,settings:{threshold:100000,rate:4,mode:'above',maxDiscount:10}};
+}
+
+/* ---------- business rules ---------- */
+function repStats(db,rep){
+  const target=rep.salary*10;
+  const verified=db.sales.filter(s=>s.repId===rep.id&&s.status==='verified'&&inMonth(s.date));
+  const ach=verified.reduce((a,s)=>a+s.amount,0);
+  const pending=db.sales.filter(s=>s.repId===rep.id&&s.status==='pending').reduce((a,s)=>a+s.amount,0);
+  const expected=target*MONTH.day/MONTH.days; const ratio=expected?ach/expected:0;
+  const status=ach===0?'none':ratio>=1?'ahead':ratio>=0.85?'ontrack':'behind';
+  const daysLeft=MONTH.days-MONTH.day+1; const remaining=Math.max(0,target-ach); const st=db.settings;
+  const bonus=ach>=st.threshold?(st.mode==='all'?ach:ach-st.threshold)*st.rate/100:0;
+  return {target,weekly:target/4,daily:target/30,ach,pct:target?ach/target:0,count:verified.length,pending,status,remaining,daysLeft,perDay:remaining/daysLeft,bonus,toBonus:Math.max(0,st.threshold-ach)};
+}
+const barTone = s=>({ahead:'good',ontrack:'',behind:'warn',none:'bad'})[s];
+
+/* ---------- small components ---------- */
+const Pill=({tone,children})=>html`<span className=${'pill '+(tone||'')}>${children}</span>`;
+const StagePill=({id})=>{const s=stage(id);return html`<${Pill} tone=${s.tone}>${s.label}<//>`};
+const Bar=({v,tone})=>html`<div className="bar"><i className=${tone||''} style=${{width:Math.min(100,Math.max(0,v*100))+'%'}}></i></div>`;
+const I={
+  dash:html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>`,
+  users:html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .7 3.2 2.4 3.6 5.2"/></svg>`,
+  book:html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg>`,
+  video:html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2.5" y="6" width="13" height="12" rx="2"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg>`,
+  target:html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>`,
+  chev:html`<svg className="chev open" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 6 6 6-6 6"/></svg>`,
+};
+const PAGES=[
+  {id:'dashboard',label:'CRM Dashboard'},{id:'leads',label:'Leads'},{id:'followups',label:'Follow-ups'},
+  {id:'sales',label:'Sales & Bills'},{id:'team',label:'Team & Targets'}];
+
+/* ---------- App ---------- */
+function App(){
+  const [db,setDb]=useState(makeSeed);
+  const [role,setRole]=useState('admin');
+  const [page,setPage]=useState(()=>{const h=(location.hash||'').slice(1);return PAGES.some(p=>p.id===h)?h:'dashboard'});
+  const [open,setOpen]=useState(true);
+  const [leadId,setLeadId]=useState(null);
+  const [modal,setModal]=useState(null);
+  const [toast,setToast]=useState(null);
+  const me=role==='admin'?null:'r1';
+  const meName=me?db.reps.find(r=>r.id===me).name:'Admin';
+  const mutate=fn=>setDb(d=>{const n=structuredClone(d);fn(n);return n});
+  const notify=m=>{setToast(m);clearTimeout(window.__t);window.__t=setTimeout(()=>setToast(null),2600)};
+  const go=id=>{setPage(id);try{history.replaceState(null,'','#'+id)}catch(e){}window.scrollTo({top:0})};
+  const scope=useMemo(()=>({
+    leads:me?db.leads.filter(l=>l.ownerId===me):db.leads,
+    tasks:me?db.tasks.filter(t=>t.ownerId===me):db.tasks,
+    sales:me?db.sales.filter(s=>s.repId===me):db.sales}),[db,me]);
+  const rep=id=>db.reps.find(r=>r.id===id);
+  const repName=id=>id?(rep(id)||{}).name:'Unassigned';
+  useEffect(()=>{const k=e=>{if(e.key==='Escape'){setLeadId(null);setModal(null)}};addEventListener('keydown',k);return()=>removeEventListener('keydown',k)},[]);
+
+  const A={ // all write actions, one place
+    act(n,leadId,type,text,tone){n.acts.push({id:uid('A'),leadId,type,text,by:meName,at:NOW+(_tick++)*1000,tone})},
+    logCall(leadId,outcome,note,followTs,followType){mutate(n=>{
+      const l=n.leads.find(x=>x.id===leadId); const connected=!['No answer','Switched off / unreachable','Wrong number'].includes(outcome);
+      A.act(n,leadId,'call',(connected?'Call · ':'Call attempt · ')+outcome+(note?' — '+note:''),connected?'':'muted');
+      if(connected) l.lastContact=NOW;
+      if(outcome==='Wrong number'){l.stage='lost';l.lostReason='Wrong number';A.act(n,leadId,'lost','Marked lost · Wrong number','bad');}
+      else if(outcome==='Interested'&&['new','contacted'].includes(l.stage)){l.stage='interested';A.act(n,leadId,'stage','Stage → Interested','')}
+      else if(connected&&l.stage==='new'){l.stage='contacted';A.act(n,leadId,'stage','Stage → Contacted','')}
+      if(followTs){n.tasks.push({id:uid('T'),leadId,ownerId:l.ownerId||me||'r1',type:followType||'Call',due:followTs,note:note||outcome,status:'open',outcome:null,doneAt:null});
+        A.act(n,leadId,'task','Follow-up scheduled · '+fDT(followTs),'')}
+    });notify('Call logged')},
+    addTask(leadId,ts,type,note){mutate(n=>{const l=n.leads.find(x=>x.id===leadId);
+      n.tasks.push({id:uid('T'),leadId,ownerId:l.ownerId||me||'r1',type,due:ts,note,status:'open',outcome:null,doneAt:null});
+      A.act(n,leadId,'task',type+' scheduled · '+fDT(ts)+(note?' — '+note:''),'')});notify('Follow-up scheduled')},
+    doneTask(id,outcome){mutate(n=>{const t=n.tasks.find(x=>x.id===id);t.status='done';t.outcome=outcome;t.doneAt=NOW;
+      A.act(n,t.leadId,'done',t.type+' done · '+outcome,'good');
+      const l=n.leads.find(x=>x.id===t.leadId); if(l.stage==='new'){l.stage='contacted'} l.lastContact=NOW;});notify('Marked done')},
+    snooze(id){mutate(n=>{const t=n.tasks.find(x=>x.id===id);const old=t.due;t.due=Math.max(t.due,NOW)+DAY;
+      A.act(n,t.leadId,'task','Follow-up moved from '+fDT(old)+' to '+fDT(t.due),'muted')});notify('Moved to tomorrow')},
+    setStage(leadId,st){mutate(n=>{const l=n.leads.find(x=>x.id===leadId);l.stage=st;l.lostReason=null;A.act(n,leadId,'stage','Stage → '+stage(st).label,'')});notify('Stage updated')},
+    markLost(leadId,reason,reTs){mutate(n=>{const l=n.leads.find(x=>x.id===leadId);l.stage='lost';l.lostReason=reason;
+      n.tasks.forEach(t=>{if(t.leadId===leadId&&t.status==='open'){t.status='done';t.outcome='Closed — lead lost';t.doneAt=NOW}});
+      A.act(n,leadId,'lost','Marked lost · '+reason,'bad');
+      if(reTs){n.tasks.push({id:uid('T'),leadId,ownerId:l.ownerId||me||'r1',type:'Call',due:reTs,note:'Re-engage (was lost: '+reason+')',status:'open',outcome:null,doneAt:null});
+        A.act(n,leadId,'task','Re-engage call scheduled · '+fDate(reTs),'muted')}});notify('Lead marked lost')},
+    recordSale(leadId,f){let bn;mutate(n=>{const l=n.leads.find(x=>x.id===leadId);const c=course(f.courseId);
+      bn='NS-'+String(n.billSeq++).padStart(4,'0');const amount=c.price-f.discount;
+      n.sales.push({id:uid('S'),billNo:bn,leadId,repId:l.ownerId||me||'r1',courseId:c.id,listPrice:c.price,discount:f.discount,amount,method:f.method,ref:f.ref,
+        date:NOW,status:'pending',verifiedBy:null,needsApproval:f.discount/c.price*100>n.settings.maxDiscount});
+      l.stage='payment';l.courseId=c.id;
+      A.act(n,leadId,'sale','Sale recorded · '+rs(amount)+' via '+f.method+' · '+bn+' — waiting for verification','')});notify('Sale recorded · bill created')},
+    verify(id){mutate(n=>{const s=n.sales.find(x=>x.id===id);s.status='verified';s.verifiedBy='Admin';
+      const l=n.leads.find(x=>x.id===s.leadId);l.stage='enrolled';
+      A.act(n,s.leadId,'verify','Payment verified · '+s.billNo+' · enrolled in '+course(s.courseId).name,'good')});notify('Verified · counts toward target')},
+    reject(id,reason){mutate(n=>{const s=n.sales.find(x=>x.id===id);s.status='rejected';s.rejectReason=reason;
+      const l=n.leads.find(x=>x.id===s.leadId);l.stage='interested';
+      A.act(n,s.leadId,'reject','Payment rejected · '+s.billNo+' — '+reason,'bad')});notify('Sale rejected')},
+    assign(ids,rid){mutate(n=>{ids.forEach(id=>{const l=n.leads.find(x=>x.id===id);if(l.ownerId===rid)return;
+      const from=l.ownerId?n.reps.find(r=>r.id===l.ownerId).name:'Unassigned';l.ownerId=rid;
+      n.tasks.forEach(t=>{if(t.leadId===id&&t.status==='open')t.ownerId=rid});
+      A.act(n,id,'assign','Owner changed · '+from+' → '+n.reps.find(r=>r.id===rid).name,'muted')})});notify(ids.length>1?ids.length+' leads assigned':'Owner changed')},
+    addLead(f){let newId;mutate(n=>{let owner=f.owner;
+      if(owner==='auto'){const act=n.reps.filter(r=>r.active);
+        const load=r=>n.leads.filter(l=>l.ownerId===r.id&&!['enrolled','lost'].includes(l.stage)).length;
+        owner=act.sort((a,b)=>load(a)-load(b))[0]?.id||null}
+      if(owner==='none')owner=null;
+      const l={id:uid('L'),name:f.name,phone:f.phone,guardian:f.guardian,guardianPhone:f.guardianPhone,grade:course(f.courseId).grade,school:f.school,
+        district:f.district,source:f.source,courseId:f.courseId,ownerId:owner,stage:'new',createdAt:NOW,lastContact:null,lostReason:null};
+      newId=l.id;n.leads.unshift(l);A.act(n,l.id,'created','Lead created · '+f.source,'muted');
+      if(owner){A.act(n,l.id,'assign','Assigned to '+n.reps.find(r=>r.id===owner).name+(f.owner==='auto'?' (fewest open leads)':''),'muted');
+        n.tasks.push({id:uid('T'),leadId:l.id,ownerId:owner,type:'Call',due:NOW+15*60000,note:'First call — new lead',status:'open',outcome:null,doneAt:null})}
+    });notify('Lead added');return newId},
+    addRep(f){mutate(n=>{n.reps.push({id:uid('r'),name:f.name,phone:f.phone,salary:+f.salary,active:true})});notify('Salesperson added')},
+    toggleRep(id){mutate(n=>{const r=n.reps.find(x=>x.id===id);r.active=!r.active})},
+    settings(patch){mutate(n=>{Object.assign(n.settings,patch)})},
+  };
+
+  const overdueCount=scope.tasks.filter(t=>t.status==='open'&&t.due<TODAY0).length;
+  const pendingCount=scope.sales.filter(s=>s.status==='pending').length;
+  const c={db,role,me,meName,scope,A,rep,repName,go,openLead:setLeadId,setModal,notify};
+  const Page={dashboard:Dashboard,leads:Leads,followups:Followups,sales:Sales,team:Team}[page];
+  const badge={followups:overdueCount,sales:role==='admin'?pendingCount:0};
+
+  return html`
+  <div className="shell">
+    <aside className="side" aria-label="Admin navigation">
+      <div className="brand"><div className="logo">NS</div><div><b>Note Swift</b><span className="muted small">Admin Panel</span></div></div>
+      <button className="nav" type="button">${I.dash}Dashboard</button>
+      <button className="nav" type="button">${I.users}Users</button>
+      <button className="nav" type="button">${I.book}Courses</button>
+      <button className="nav" type="button">${I.video}Live Classes</button>
+      <button className="nav group-head" type="button" aria-expanded=${open} onClick=${()=>setOpen(!open)}>${I.target}Sales & CRM
+        <svg className=${'chev'+(open?' open':'')} viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 6 6 6-6 6"/></svg></button>
+      ${open&&html`<div className="sub">${PAGES.map(p=>html`
+        <button key=${p.id} type="button" className=${'nav'+(page===p.id?' active':'')} onClick=${()=>go(p.id)}>${p.label}${badge[p.id]?html`<span className="badge">${badge[p.id]}</span>`:null}</button>`)}</div>`}
+    </aside>
+    <main className="main">
+      <div className="topbar">
+        <div className="crumb">Sales & CRM / <b style=${{color:'var(--fg)'}}>${PAGES.find(p=>p.id===page).label}</b></div>
+        <div className="seg" role="group" aria-label="View as">
+          <button type="button" className=${role==='admin'?'on':''} onClick=${()=>{setRole('admin');setLeadId(null)}}>Admin view</button>
+          <button type="button" className=${role==='rep'?'on':''} onClick=${()=>{setRole('rep');setLeadId(null)}}>Salesperson view (Sita)</button>
+        </div>
+      </div>
+      <nav className="mobnav" aria-label="Sales & CRM">${PAGES.map(p=>html`<button key=${p.id} type="button" className=${page===p.id?'on':''} onClick=${()=>go(p.id)}>${p.label}${badge[p.id]?' ('+badge[p.id]+')':''}</button>`)}</nav>
+      <${Page} c=${c} />
+      <div className="foot">Prototype with example data · today is set to 26 Oct 2026 · changes reset on reload</div>
+    </main>
+  </div>
+  ${leadId&&html`<div className="overlay" onClick=${()=>setLeadId(null)}></div><${LeadDrawer} key=${leadId} c=${c} id=${leadId} close=${()=>setLeadId(null)} />`}
+  ${modal&&html`<div className="overlay" onClick=${()=>setModal(null)}></div><${Modal} c=${c} m=${modal} close=${()=>setModal(null)} />`}
+  ${toast&&html`<div className="toast" role="status">${toast}</div>`}`;
+}
+
+/* ---------- Dashboard ---------- */
+function Dashboard({c}){
+  const {db,scope,me,go,openLead,repName}=c;
+  const open=scope.tasks.filter(t=>t.status==='open');
+  const today=open.filter(t=>t.due>=TODAY0&&t.due<TODAY0+DAY);
+  const overdue=open.filter(t=>t.due<TODAY0).sort((a,b)=>a.due-b.due);
+  const ver=scope.sales.filter(s=>s.status==='verified'&&inMonth(s.date));
+  const pend=scope.sales.filter(s=>s.status==='pending');
+  const newM=scope.leads.filter(l=>inMonth(l.createdAt));
+  const uncalled=scope.leads.filter(l=>l.stage==='new'&&l.createdAt<NOW-DAY);
+  const unassigned=scope.leads.filter(l=>!l.ownerId);
+  const k=[
+    {l:'New leads this month',v:newM.length,s:unassigned.length&&!me?unassigned.length+' unassigned':'From app, website, visits',p:'leads'},
+    {l:'Follow-ups today',v:today.length,s:'Due before midnight',p:'followups'},
+    {l:'Overdue follow-ups',v:overdue.length,s:overdue.length?'Need action now':'All caught up',t:overdue.length?'bad':'good',p:'followups'},
+    {l:'Enrolled this month',v:ver.length,s:'Verified payments only',t:'good',p:'sales'},
+    {l:'Verified sales',v:rs(ver.reduce((a,s)=>a+s.amount,0)),s:MONTH.label,p:'sales'},
+    {l:'Waiting verification',v:pend.length,s:rs(pend.reduce((a,s)=>a+s.amount,0))+' not counted yet',t:pend.length?'warn':'',p:'sales'}];
+  const counts=STAGES.map(s=>({...s,n:scope.leads.filter(l=>l.stage===s.id).length}));
+  const max=Math.max(1,...counts.map(x=>x.n));
+  const reps=db.reps.filter(r=>r.active).map(r=>({r,s:repStats(db,r)})).sort((a,b)=>b.s.pct-a.s.pct);
+  return html`
+  <div className="page-head"><div><h1>${me?'My sales today':'CRM Dashboard'}</h1><p className="muted">${MONTH.label} · targets and sales count verified payments only</p></div>
+    <button className="btn primary" type="button" onClick=${()=>c.setModal({type:'addLead'})}>+ Add lead</button></div>
+  <div className="kpis">${k.map(x=>html`<button key=${x.l} type="button" className=${'kpi '+(x.t||'')} onClick=${()=>go(x.p)}><span className="l">${x.l}</span><span className="v">${x.v}</span><span className="muted small">${x.s}</span></button>`)}</div>
+  <div className="grid2">
+    ${me?html`<${MyTarget} c=${c} />`:html`
+    <section className="card"><div className="card-h"><h2>Target progress · ${MONTH.label}</h2><button className="btn sm" type="button" onClick=${()=>go('team')}>Team & Targets</button></div>
+      <div className="card-b list">${reps.map(({r,s})=>html`<div key=${r.id} className="li" style=${{display:'grid',gridTemplateColumns:'minmax(0,1fr) auto',gap:'6px 12px'}}>
+        <div className="who"><b>${r.name}</b> <span className="muted small">${rs(s.ach)} of ${rs(s.target)}</span></div>
+        <${Pill} tone=${STATUS[s.status][1]}>${STATUS[s.status][0]}<//>
+        <div style=${{gridColumn:'1/-1'}}><${Bar} v=${s.pct} tone=${barTone(s.status)} /></div></div>`)}</div></section>`}
+    <section className="card"><div className="card-h"><h2>Pipeline</h2><span className="muted small">${scope.leads.length} leads</span></div>
+      <div className="card-b funnel">${counts.map(x=>html`<div key=${x.id} className="frow"><span>${x.label}</span><div className="fb"><i style=${{width:(x.n/max*100)+'%',background:x.id==='lost'?'var(--bad)':x.id==='enrolled'?'var(--good)':x.id==='payment'?'var(--warn)':''}}></i></div><b className="num">${x.n}</b></div>`)}</div></section>
+  </div>
+  <section className="card"><div className="card-h"><h2>Needs attention</h2><button className="btn sm" type="button" onClick=${()=>go('followups')}>All follow-ups</button></div>
+    <div className="card-b list">
+      ${overdue.length===0&&uncalled.length===0&&!pend.length?html`<div className="empty">Nothing urgent. Every lead has a next step.</div>`:null}
+      ${overdue.slice(0,5).map(t=>{const l=db.leads.find(x=>x.id===t.leadId);return html`<div key=${t.id} className="li"><div className="who"><b>${l.name}</b> <span className="muted small">· ${t.type} · ${t.note}</span><span className="sub2 late">Overdue since ${fDT(t.due)}${me?'':' · '+repName(t.ownerId)}</span></div><button className="btn sm" type="button" onClick=${()=>openLead(l.id)}>Open</button></div>`})}
+      ${uncalled.length?html`<div className="li"><div className="who"><b>${uncalled.length} new lead${uncalled.length>1?'s':''} not called within 24 hours</b><span className="sub2 muted">Call new registrations quickly. Interest drops fast.</span></div><button className="btn sm" type="button" onClick=${()=>go('leads')}>View</button></div>`:null}
+      ${!me&&pend.length?html`<div className="li"><div className="who"><b>${pend.length} sale${pend.length>1?'s':''} waiting for verification</b><span className="sub2 muted">Check the money arrived, then verify so it counts toward targets.</span></div><button className="btn sm" type="button" onClick=${()=>go('sales')}>Review</button></div>`:null}
+    </div></section>`;
+}
+
+function MyTarget({c}){
+  const {db,me}=c; const r=db.reps.find(x=>x.id===me); const s=repStats(db,r); const st=db.settings;
+  return html`<section className="card"><div className="card-h"><h2>My target · ${MONTH.label}</h2><${Pill} tone=${STATUS[s.status][1]}>${STATUS[s.status][0]}<//></div>
+  <div className="card-b" style=${{display:'flex',flexDirection:'column',gap:'12px'}}>
+    <div><span className="big">${rs(s.ach)}</span> <span className="muted">of ${rs(s.target)} · ${pct(s.pct)}</span></div>
+    <${Bar} v=${s.pct} tone=${barTone(s.status)} />
+    <div className="mini"><div><span>Monthly</span><b>${rs(s.target)}</b></div><div><span>Weekly</span><b>${rs(s.weekly)}</b></div><div><span>Daily</span><b>${rs(s.daily)}</b></div></div>
+    <div className="note">${s.remaining>0?html`Sell <b>${rs(s.perDay)}</b> a day for the next ${s.daysLeft} days to hit target.`:html`<b>Target reached.</b> Everything more adds to your bonus.`}
+      ${' '}${s.bonus>0?html`Bonus earned so far: <b>${rs(s.bonus)}</b>.`:html`<b>${rs(s.toBonus)}</b> more to unlock the ${st.rate}% bonus.`}
+      ${s.pending?html` ${rs(s.pending)} is waiting for verification.`:null}</div>
+  </div></section>`;
+}
+
+/* ---------- Leads ---------- */
+function Leads({c}){
+  const {db,scope,me,repName,openLead}=c;
+  const [q,setQ]=useState(''); const [view,setView]=useState('all'); const [owner,setOwner]=useState('any');
+  const [sel,setSel]=useState([]); const [to,setTo]=useState('');
+  const next=useMemo(()=>{const m={};db.tasks.forEach(t=>{if(t.status==='open'&&(!m[t.leadId]||t.due<m[t.leadId]))m[t.leadId]=t.due});return m},[db.tasks]);
+  const VIEWS=[['all','All'],['new','New'],['today',"Today's follow-ups"],['overdue','Overdue'],['payment','Payment pending'],['enrolled','Enrolled'],['lost','Lost']].concat(me?[]:[['unassigned','Unassigned']]);
+  const test={all:()=>true,new:l=>l.stage==='new',today:l=>next[l.id]>=TODAY0&&next[l.id]<TODAY0+DAY,overdue:l=>next[l.id]<TODAY0,
+    payment:l=>l.stage==='payment',enrolled:l=>l.stage==='enrolled',lost:l=>l.stage==='lost',unassigned:l=>!l.ownerId};
+  const ql=q.trim().toLowerCase();
+  const base=scope.leads.filter(l=>(owner==='any'||(owner==='none'?!l.ownerId:l.ownerId===owner))&&(!ql||[l.name,l.phone,l.school,l.guardianPhone].some(x=>(x||'').toLowerCase().includes(ql))));
+  const rows=base.filter(test[view]).sort((a,b)=>(next[a.id]||9e15)-(next[b.id]||9e15)||b.createdAt-a.createdAt);
+  const all=rows.length>0&&rows.every(r=>sel.includes(r.id));
+  const tog=id=>setSel(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
+  return html`
+  <div className="page-head"><div><h1>${me?'My leads':'Leads'}</h1><p className="muted">${me?'Students assigned to you':'Every student enquiry, with one owner and a next step'}</p></div>
+    <button className="btn primary" type="button" onClick=${()=>c.setModal({type:'addLead'})}>+ Add lead</button></div>
+  <section className="card">
+    <div className="card-b toolbar">
+      <input id="lead-search" className="input" type="search" placeholder="Search name, phone, school" value=${q} onInput=${e=>setQ(e.target.value)} aria-label="Search leads" />
+      ${!me&&html`<select id="lead-owner" className="input" style=${{flex:'0 1 200px'}} value=${owner} onChange=${e=>setOwner(e.target.value)} aria-label="Owner">
+        <option value="any">All salespeople</option><option value="none">Unassigned</option>${db.reps.map(r=>html`<option key=${r.id} value=${r.id}>${r.name}</option>`)}</select>`}
+    </div>
+    <div className="tabs" role="tablist">${VIEWS.map(([id,l])=>html`<button key=${id} role="tab" type="button" aria-selected=${view===id} className=${'tab'+(view===id?' on':'')} onClick=${()=>{setView(id);setSel([])}}>${l}<span className="n">${base.filter(test[id]).length}</span></button>`)}</div>
+    ${!me&&sel.length>0&&html`<div className="selbar"><b>${sel.length} selected</b><select id="bulk-to" className="input" style=${{width:'auto'}} value=${to} onChange=${e=>setTo(e.target.value)}><option value="">Assign to…</option>${db.reps.filter(r=>r.active).map(r=>html`<option key=${r.id} value=${r.id}>${r.name}</option>`)}</select>
+      <button className="btn primary sm" type="button" disabled=${!to} onClick=${()=>{c.A.assign(sel,to);setSel([]);setTo('')}}>Assign</button><button className="btn sm" type="button" onClick=${()=>setSel([])}>Clear</button></div>`}
+    ${rows.length===0?html`<div className="empty">No leads here. Try another tab or clear the search.</div>`:html`
+    <div className="tw"><table><thead><tr>
+      ${!me&&html`<th><input type="checkbox" aria-label="Select all" checked=${all} onChange=${()=>setSel(all?[]:rows.map(r=>r.id))} /></th>`}
+      <th>Student</th><th>Phone</th><th>Course interest</th>${!me&&html`<th>Owner</th>`}<th>Stage</th><th>Next follow-up</th><th>Source</th></tr></thead>
+    <tbody>${rows.map(l=>{const n=next[l.id];return html`<tr key=${l.id} className="click" onClick=${()=>openLead(l.id)}>
+      ${!me&&html`<td onClick=${e=>e.stopPropagation()}><input type="checkbox" aria-label=${'Select '+l.name} checked=${sel.includes(l.id)} onChange=${()=>tog(l.id)} /></td>`}
+      <td><b>${l.name}</b><span className="sub2">${l.grade} · ${l.district}</span></td>
+      <td>${l.phone}</td><td>${course(l.courseId).name}</td>
+      ${!me&&html`<td>${l.ownerId?repName(l.ownerId):html`<span className="pill warn">Unassigned</span>`}</td>`}
+      <td><${StagePill} id=${l.stage} /></td>
+      <td className=${n&&n<TODAY0?'late':''}>${n?rel(n):html`<span className="muted">${['enrolled','lost'].includes(l.stage)?'—':'None set'}</span>`}</td>
+      <td className="muted">${l.source}</td></tr>`})}</tbody></table></div>`}
+  </section>`;
+}
+
+/* ---------- Lead drawer ---------- */
+function LeadDrawer({c,id,close}){
+  const {db,me,A,repName}=c; const l=db.leads.find(x=>x.id===id);
+  const [mode,setMode]=useState(null);
+  const [f,setF]=useState({});
+  const set=(k,v)=>setF(x=>({...x,[k]:v}));
+  const start=m=>{setMode(m);setF({
+    call:{outcome:'Interested',note:'',follow:toInput(NOW+DAY),followOn:true,type:'Call'},
+    task:{type:'Call',due:toInput(NOW+DAY),note:''},
+    sale:{courseId:l.courseId,discount:0,method:'Cash',ref:''},
+    lost:{reason:LOST_REASONS[0],re:'',reOn:false}}[m])};
+  if(!l)return null;
+  const acts=db.acts.filter(a=>a.leadId===id).sort((a,b)=>b.at-a.at);
+  const tasks=db.tasks.filter(t=>t.leadId===id&&t.status==='open').sort((a,b)=>a.due-b.due);
+  const sales=db.sales.filter(s=>s.leadId===id);
+  const closed=['enrolled','lost'].includes(l.stage);
+  const wa='https://wa.me/977'+l.phone;
+  const sc=f.courseId?course(f.courseId):null; const dpct=sc?(+f.discount||0)/sc.price*100:0;
+  return html`<aside className="drawer" role="dialog" aria-label=${'Lead '+l.name}>
+    <div className="drawer-h">
+      <div style=${{display:'flex',justifyContent:'space-between',gap:'10px',alignItems:'flex-start'}}>
+        <div><h1 style=${{fontSize:'19px'}}>${l.name}</h1><span className="muted small">${l.grade} · ${course(l.courseId).name}</span></div>
+        <button className="btn sm" type="button" onClick=${close} aria-label="Close">Close</button></div>
+      <div className="actions"><${StagePill} id=${l.stage} />${l.lostReason&&html`<span className="muted small">${l.lostReason}</span>`}</div>
+      ${!closed&&html`<div className="actions">
+        <button className="btn primary sm" type="button" onClick=${()=>start('call')}>Log call</button>
+        <button className="btn sm" type="button" onClick=${()=>start('task')}>Schedule follow-up</button>
+        ${l.stage!=='payment'&&html`<button className="btn sm" type="button" onClick=${()=>start('sale')}>Record sale</button>`}
+        <a className="btn sm" href=${wa} target="_blank" rel="noopener">WhatsApp</a>
+        <button className="btn sm danger" type="button" onClick=${()=>start('lost')}>Mark lost</button></div>`}
+      ${l.stage==='lost'&&html`<div className="actions"><button className="btn sm" type="button" onClick=${()=>A.setStage(id,'contacted')}>Reopen lead</button></div>`}
+    </div>
+    <div className="drawer-b">
+      ${mode==='call'&&html`<form className="panel" onSubmit=${e=>{e.preventDefault();A.logCall(id,f.outcome,f.note.trim(),f.followOn&&f.outcome!=='Wrong number'?new Date(f.follow).getTime():null,f.type);setMode(null)}}>
+        <h3>Log a call</h3>
+        <div className="form"><label className="f full">What happened?<select id="call-outcome" className="input" value=${f.outcome} onChange=${e=>set('outcome',e.target.value)}>${OUTCOMES.map(o=>html`<option key=${o}>${o}</option>`)}</select></label>
+        <label className="f full">Note<textarea id="call-note" className="input" placeholder="What did the student or parent say?" value=${f.note} onInput=${e=>set('note',e.target.value)}></textarea></label>
+        ${f.outcome!=='Wrong number'&&html`<label className="f full" style=${{flexDirection:'row',alignItems:'center',gap:'8px'}}><input id="call-followon" type="checkbox" checked=${f.followOn} onChange=${e=>set('followOn',e.target.checked)} />Schedule next follow-up</label>
+        ${f.followOn&&html`<label className="f">When<input id="call-follow" className="input" type="datetime-local" value=${f.follow} onInput=${e=>set('follow',e.target.value)} required /></label>
+        <label className="f">How<select id="call-type" className="input" value=${f.type} onChange=${e=>set('type',e.target.value)}>${TASK_TYPES.map(o=>html`<option key=${o}>${o}</option>`)}</select></label>`}`}</div>
+        <div className="actions"><button className="btn primary" type="submit">Save call</button><button className="btn" type="button" onClick=${()=>setMode(null)}>Cancel</button></div></form>`}
+      ${mode==='task'&&html`<form className="panel" onSubmit=${e=>{e.preventDefault();A.addTask(id,new Date(f.due).getTime(),f.type,f.note.trim());setMode(null)}}>
+        <h3>Schedule follow-up</h3>
+        <div className="form"><label className="f">Type<select id="task-type" className="input" value=${f.type} onChange=${e=>set('type',e.target.value)}>${TASK_TYPES.map(o=>html`<option key=${o}>${o}</option>`)}</select></label>
+        <label className="f">Due<input id="task-due" className="input" type="datetime-local" value=${f.due} onInput=${e=>set('due',e.target.value)} required /></label>
+        <label className="f full">Note<input id="task-note" className="input" placeholder="e.g. Send demo class link" value=${f.note} onInput=${e=>set('note',e.target.value)} /></label></div>
+        <div className="actions"><button className="btn primary" type="submit">Schedule</button><button className="btn" type="button" onClick=${()=>setMode(null)}>Cancel</button></div></form>`}
+      ${mode==='sale'&&html`<form className="panel" onSubmit=${e=>{e.preventDefault();A.recordSale(id,{courseId:f.courseId,discount:Math.max(0,Math.min(sc.price,+f.discount||0)),method:f.method,ref:f.ref.trim()});setMode(null)}}>
+        <h3>Record sale</h3>
+        <div className="form"><label className="f full">Course<select id="sale-course" className="input" value=${f.courseId} onChange=${e=>set('courseId',e.target.value)}>${COURSES.map(o=>html`<option key=${o.id} value=${o.id}>${o.name} · ${rs(o.price)}</option>`)}</select></label>
+        <label className="f">Discount (Rs)<input id="sale-discount" className="input" type="number" min="0" max=${sc.price} step="100" value=${f.discount} onInput=${e=>set('discount',e.target.value)} /></label>
+        <label className="f">Paid by<select id="sale-method" className="input" value=${f.method} onChange=${e=>set('method',e.target.value)}>${METHODS.map(o=>html`<option key=${o}>${o}</option>`)}</select></label>
+        <label className="f full">${f.method==='Cash'?'Receipt note (optional)':'Transaction ID'}<input id="sale-ref" className="input" value=${f.ref} onInput=${e=>set('ref',e.target.value)} required=${f.method!=='Cash'} placeholder=${f.method==='Cash'?'e.g. Collected at school visit':'e.g. 7Q4K29XA'} /></label></div>
+        <div style=${{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:'8px'}}><span>Total <b>${rs(sc.price-(+f.discount||0))}</b></span>${dpct>db.settings.maxDiscount&&html`<${Pill} tone="warn">${Math.round(dpct)}% discount · needs admin approval<//>`}</div>
+        <div className="note">The bill is created now. The sale counts toward your target after an admin checks the payment and verifies it.</div>
+        <div className="actions"><button className="btn primary" type="submit">Create bill</button><button className="btn" type="button" onClick=${()=>setMode(null)}>Cancel</button></div></form>`}
+      ${mode==='lost'&&html`<form className="panel" onSubmit=${e=>{e.preventDefault();A.markLost(id,f.reason,f.reOn&&f.re?new Date(f.re+'T10:00').getTime():null);setMode(null)}}>
+        <h3>Mark as lost</h3>
+        <div className="form"><label className="f full">Reason<select id="lost-reason" className="input" value=${f.reason} onChange=${e=>set('reason',e.target.value)}>${LOST_REASONS.map(o=>html`<option key=${o}>${o}</option>`)}</select></label>
+        <label className="f full" style=${{flexDirection:'row',alignItems:'center',gap:'8px'}}><input id="lost-reon" type="checkbox" checked=${f.reOn} onChange=${e=>set('reOn',e.target.checked)} />Try again later</label>
+        ${f.reOn&&html`<label className="f">Re-engage on<input id="lost-re" className="input" type="date" value=${f.re} onInput=${e=>set('re',e.target.value)} required /></label>`}</div>
+        <div className="actions"><button className="btn primary" type="submit">Mark lost</button><button className="btn" type="button" onClick=${()=>setMode(null)}>Cancel</button></div></form>`}
+
+      <dl className="facts" style=${{margin:0}}>
+        <div><dt>Student phone</dt><dd>${l.phone}</dd></div>
+        <div><dt>Guardian</dt><dd>${l.guardian} · ${l.guardianPhone}</dd></div>
+        <div><dt>School</dt><dd>${l.school}</dd></div>
+        <div><dt>District</dt><dd>${l.district}</dd></div>
+        <div><dt>Source</dt><dd>${l.source}</dd></div>
+        <div><dt>Added</dt><dd>${fDT(l.createdAt)}</dd></div>
+        <div><dt>Last contact</dt><dd>${l.lastContact?rel(l.lastContact):'Not contacted yet'}</dd></div>
+        <div><dt>Owner</dt><dd>${me?repName(l.ownerId):html`<select id="drawer-owner" className="input" value=${l.ownerId||''} onChange=${e=>e.target.value&&A.assign([id],e.target.value)}>
+          ${!l.ownerId&&html`<option value="">Unassigned</option>`}${db.reps.filter(r=>r.active||r.id===l.ownerId).map(r=>html`<option key=${r.id} value=${r.id}>${r.name}</option>`)}</select>`}</dd></div>
+      </dl>
+      ${!closed&&l.stage!=='payment'&&html`<label className="f">Stage<select id="drawer-stage" className="input" value=${l.stage} onChange=${e=>A.setStage(id,e.target.value)}>
+        ${['new','contacted','interested'].map(s=>html`<option key=${s} value=${s}>${stage(s).label}</option>`)}</select>
+        <span className="muted small" style=${{fontWeight:400}}>Payment pending and Enrolled are set automatically from sales.</span></label>`}
+
+      ${tasks.length>0&&html`<section><h3 style=${{marginBottom:'6px'}}>Open follow-ups</h3><div className="list">${tasks.map(t=>html`<div key=${t.id} className="li"><div className="who"><b>${t.type}</b> <span className="muted small">· ${t.note}</span><span className=${'sub2 '+(t.due<TODAY0?'late':'muted')}>${rel(t.due)}</span></div>
+        <div className="actions"><button className="btn sm good" type="button" onClick=${()=>A.doneTask(t.id,'Done')}>Done</button><button className="btn sm" type="button" onClick=${()=>A.snooze(t.id)}>+1 day</button></div></div>`)}</div></section>`}
+      ${sales.length>0&&html`<section><h3 style=${{marginBottom:'6px'}}>Sales</h3><div className="list">${sales.map(s=>html`<div key=${s.id} className="li"><div className="who"><b>${s.billNo}</b> <span className="muted small">· ${course(s.courseId).name}</span><span className="sub2 muted">${rs(s.amount)} · ${s.method} · ${fDate(s.date)}</span></div>
+        <div className="actions"><${SalePill} s=${s} /><button className="btn sm" type="button" onClick=${()=>c.setModal({type:'bill',id:s.id})}>Bill</button></div></div>`)}</div></section>`}
+      <section><h3 style=${{marginBottom:'10px'}}>Activity</h3><div className="timeline">${acts.map(a=>html`<div key=${a.id} className="ev"><span className=${'dot '+(a.tone||'')}></span><div><div>${a.text}</div><span className="muted small">${a.by} · ${rel(a.at)}</span></div></div>`)}</div></section>
+    </div></aside>`;
+}
+
+/* ---------- Follow-ups ---------- */
+function Followups({c}){
+  const {db,scope,me,repName,openLead,A}=c; const [tab,setTab]=useState('overdue'); const [done,setDone]=useState(null); const [out,setOut]=useState('');
+  const T={overdue:t=>t.status==='open'&&t.due<TODAY0,today:t=>t.status==='open'&&t.due>=TODAY0&&t.due<TODAY0+DAY,upcoming:t=>t.status==='open'&&t.due>=TODAY0+DAY,done:t=>t.status==='done'};
+  const tabs=[['overdue','Overdue'],['today','Today'],['upcoming','Upcoming'],['done','Done']];
+  const rows=scope.tasks.filter(T[tab]).sort((a,b)=>tab==='done'?b.doneAt-a.doneAt:a.due-b.due);
+  return html`
+  <div className="page-head"><div><h1>Follow-ups</h1><p className="muted">Every open lead should have one next step with a date</p></div></div>
+  <section className="card">
+    <div className="tabs" role="tablist">${tabs.map(([id,l])=>html`<button key=${id} type="button" role="tab" aria-selected=${tab===id} className=${'tab'+(tab===id?' on':'')} onClick=${()=>setTab(id)}>${l}<span className="n">${scope.tasks.filter(T[id]).length}</span></button>`)}</div>
+    <div className="card-b list">
+      ${rows.length===0&&html`<div className="empty">${tab==='overdue'?'No overdue follow-ups. Good work.':'Nothing here.'}</div>`}
+      ${rows.map(t=>{const l=db.leads.find(x=>x.id===t.leadId);return html`<div key=${t.id} className="li">
+        <div className="who"><b>${l.name}</b> <span className="muted small">· ${t.type} · ${l.phone}</span>
+          <span className="sub2">${t.note}</span>
+          <span className=${'sub2 '+(tab==='overdue'?'late':'muted')}>${tab==='done'?'Done '+rel(t.doneAt)+' · '+t.outcome:rel(t.due)}${me?'':' · '+repName(t.ownerId)}</span></div>
+        ${done===t.id?html`<form className="actions" onSubmit=${e=>{e.preventDefault();A.doneTask(t.id,out.trim()||'Done');setDone(null);setOut('')}}>
+          <input id=${'out-'+t.id} className="input" style=${{width:'200px'}} placeholder="Outcome, e.g. will pay Friday" value=${out} onInput=${e=>setOut(e.target.value)} autoFocus />
+          <button className="btn sm good" type="submit">Save</button><button className="btn sm" type="button" onClick=${()=>setDone(null)}>Cancel</button></form>`
+        :html`<div className="actions">${t.status==='open'&&html`<button className="btn sm good" type="button" onClick=${()=>{setDone(t.id);setOut('')}}>Done</button><button className="btn sm" type="button" onClick=${()=>A.snooze(t.id)}>+1 day</button>`}<button className="btn sm" type="button" onClick=${()=>openLead(l.id)}>Open lead</button></div>`}
+      </div>`})}
+    </div></section>`;
+}
+
+/* ---------- Sales & Bills ---------- */
+const SalePill=({s})=>s.status==='verified'?html`<${Pill} tone="good">Verified<//>`:s.status==='pending'?html`<${Pill} tone="warn">${s.needsApproval?'Needs approval':'Waiting verification'}<//>`:html`<${Pill} tone="bad">Rejected<//>`;
+function Sales({c}){
+  const {scope,me,repName,A,setModal,openLead,db}=c; const [tab,setTab]=useState(me?'all':'pending'); const [rej,setRej]=useState(null); const [why,setWhy]=useState('');
+  const T={pending:s=>s.status==='pending',verified:s=>s.status==='verified',rejected:s=>s.status==='rejected',all:()=>true};
+  const rows=scope.sales.filter(T[tab]).sort((a,b)=>b.date-a.date);
+  const vm=scope.sales.filter(s=>s.status==='verified'&&inMonth(s.date));
+  const pend=scope.sales.filter(s=>s.status==='pending');
+  return html`
+  <div className="page-head"><div><h1>Sales & Bills</h1><p className="muted">Manual sales stay pending until an admin confirms the money arrived. App purchases verify automatically.</p></div></div>
+  <div className="kpis">
+    <div className="kpi good" style=${{cursor:'default'}}><span className="l">Verified · ${MONTH.label}</span><span className="v">${rs(vm.reduce((a,s)=>a+s.amount,0))}</span><span className="muted small">${vm.length} enrollments</span></div>
+    <div className="kpi warn" style=${{cursor:'default'}}><span className="l">Waiting verification</span><span className="v">${rs(pend.reduce((a,s)=>a+s.amount,0))}</span><span className="muted small">${pend.length} bills</span></div>
+    <div className="kpi" style=${{cursor:'default'}}><span className="l">Discounts given</span><span className="v">${rs(vm.reduce((a,s)=>a+s.discount,0))}</span><span className="muted small">On verified sales this month</span></div>
+  </div>
+  <section className="card">
+    <div className="tabs" role="tablist">${[['pending','Waiting'],['verified','Verified'],['rejected','Rejected'],['all','All']].map(([id,l])=>html`<button key=${id} type="button" role="tab" aria-selected=${tab===id} className=${'tab'+(tab===id?' on':'')} onClick=${()=>setTab(id)}>${l}<span className="n">${scope.sales.filter(T[id]).length}</span></button>`)}</div>
+    ${rows.length===0?html`<div className="empty">No bills here.</div>`:html`<div className="tw"><table><thead><tr><th>Bill</th><th>Date</th><th>Student</th><th>Course</th><th className="num">Amount</th><th>Paid by</th>${!me&&html`<th>Salesperson</th>`}<th>Status</th><th></th></tr></thead>
+    <tbody>${rows.map(s=>{const l=db.leads.find(x=>x.id===s.leadId);return html`<tr key=${s.id}>
+      <td><b>${s.billNo}</b></td><td>${fDate(s.date)}</td>
+      <td><button className="btn sm" style=${{border:0,padding:0,background:'none',color:'var(--accent)'}} type="button" onClick=${()=>openLead(l.id)}>${l.name}</button></td>
+      <td>${course(s.courseId).name}</td>
+      <td className="num"><b>${rs(s.amount)}</b>${s.discount?html`<span className="sub2">−${rs(s.discount)} disc.</span>`:null}</td>
+      <td>${s.method}${s.ref?html`<span className="sub2">${s.ref}</span>`:null}</td>
+      ${!me&&html`<td>${repName(s.repId)}</td>`}
+      <td><${SalePill} s=${s} /></td>
+      <td><div className="actions" style=${{flexWrap:'nowrap'}}>
+        <button className="btn sm" type="button" onClick=${()=>setModal({type:'bill',id:s.id})}>Bill</button>
+        ${!me&&s.status==='pending'&&(rej===s.id?html`<input id=${'why-'+s.id} className="input" style=${{width:'160px',padding:'4px 8px'}} placeholder="Reason" value=${why} onInput=${e=>setWhy(e.target.value)} autoFocus />
+          <button className="btn sm danger" type="button" onClick=${()=>{A.reject(s.id,why.trim()||'Payment not received');setRej(null);setWhy('')}}>Reject</button><button className="btn sm" type="button" onClick=${()=>setRej(null)}>Cancel</button>`
+        :html`<button className="btn sm good" type="button" onClick=${()=>A.verify(s.id)}>Verify</button><button className="btn sm danger" type="button" onClick=${()=>{setRej(s.id);setWhy('')}}>Reject</button>`)}
+      </div></td></tr>`})}</tbody></table></div>`}
+  </section>`;
+}
+
+/* ---------- Team & Targets ---------- */
+function Team({c}){
+  const {db,me,A,setModal}=c; const st=db.settings;
+  if(me) return html`<div className="page-head"><div><h1>My target</h1><p className="muted">Monthly target is 10 × your salary</p></div></div><${MyTarget} c=${c} />`;
+  const rows=db.reps.map(r=>({r,s:repStats(db,r)}));
+  const tot=rows.filter(x=>x.r.active).reduce((a,{s})=>({t:a.t+s.target,v:a.v+s.ach,b:a.b+s.bonus}),{t:0,v:0,b:0});
+  return html`
+  <div className="page-head"><div><h1>Team & Targets</h1><p className="muted">Target = 10 × salary · weekly = target ÷ 4 · daily = target ÷ 30 · verified sales only</p></div>
+    <button className="btn primary" type="button" onClick=${()=>setModal({type:'addRep'})}>+ Add salesperson</button></div>
+  <div className="kpis">
+    <div className="kpi" style=${{cursor:'default'}}><span className="l">Team target</span><span className="v">${rs(tot.t)}</span><span className="muted small">${MONTH.label}</span></div>
+    <div className="kpi good" style=${{cursor:'default'}}><span className="l">Achieved</span><span className="v">${rs(tot.v)}</span><span className="muted small">${pct(tot.t?tot.v/tot.t:0)} of target</span></div>
+    <div className="kpi" style=${{cursor:'default'}}><span className="l">Bonus payable so far</span><span className="v">${rs(tot.b)}</span><span className="muted small">${st.rate}% after ${rs(st.threshold)}</span></div>
+  </div>
+  <section className="card"><div className="card-h"><h2>Salespeople</h2><span className="muted small">${MONTH.day} of ${MONTH.days} days gone</span></div>
+    <div className="tw"><table><thead><tr><th>Salesperson</th><th className="num">Salary</th><th className="num">Target</th><th className="num">Verified sales</th><th style=${{minWidth:'140px'}}>Progress</th><th className="num">Needed / day</th><th className="num">Bonus</th><th>Status</th><th>Active</th></tr></thead>
+    <tbody>${rows.map(({r,s})=>html`<tr key=${r.id} style=${{opacity:r.active?1:.55}}>
+      <td><b>${r.name}</b><span className="sub2">${r.phone}</span></td>
+      <td className="num">${rs(r.salary)}</td><td className="num">${rs(s.target)}</td>
+      <td className="num"><b>${rs(s.ach)}</b><span className="sub2">${s.count} sales${s.pending?' · '+rs(s.pending)+' pending':''}</span></td>
+      <td><div style=${{display:'flex',flexDirection:'column',gap:'4px'}}><${Bar} v=${s.pct} tone=${barTone(s.status)} /><span className="muted small">${pct(s.pct)}</span></div></td>
+      <td className="num">${s.remaining?rs(s.perDay):'Done'}</td>
+      <td className="num">${s.bonus?html`<b>${rs(s.bonus)}</b>`:html`<span className="muted small">${rs(s.toBonus)} to go</span>`}</td>
+      <td><${Pill} tone=${STATUS[s.status][1]}>${STATUS[s.status][0]}<//></td>
+      <td><button type="button" className=${'switch'+(r.active?' on':'')} aria-pressed=${r.active} aria-label=${'Active: '+r.name} onClick=${()=>A.toggleRep(r.id)}></button></td></tr>`)}</tbody></table></div></section>
+  <section className="card"><div className="card-h"><h2>Bonus & discount rules</h2><span className="muted small">Apply to everyone</span></div>
+    <div className="card-b form">
+      <label className="f">Bonus starts after (Rs, verified sales in the month)<input id="set-threshold" className="input" type="number" min="0" step="5000" value=${st.threshold} onInput=${e=>A.settings({threshold:+e.target.value||0})} /></label>
+      <label className="f">Bonus rate (%)<input id="set-rate" className="input" type="number" min="0" max="50" step="0.5" value=${st.rate} onInput=${e=>A.settings({rate:+e.target.value||0})} /></label>
+      <label className="f">Bonus is paid on<select id="set-mode" className="input" value=${st.mode} onChange=${e=>A.settings({mode:e.target.value})}>
+        <option value="above">Only sales above the threshold</option><option value="all">All sales once the threshold is crossed</option></select></label>
+      <label className="f">Max discount a salesperson can give (%)<input id="set-disc" className="input" type="number" min="0" max="100" value=${st.maxDiscount} onInput=${e=>A.settings({maxDiscount:+e.target.value||0})} /></label>
+      <div className="note full">Example: Rs 1,45,000 verified this month with a Rs 1,00,000 threshold and ${st.rate}% rate → ${st.mode==='above'?'Rs 45,000':'Rs 1,45,000'} × ${st.rate}% = <b>${rs((st.mode==='above'?45000:145000)*st.rate/100)}</b> bonus. Refunded or rejected sales drop out automatically.</div>
+    </div></section>`;
+}
+
+/* ---------- Modals ---------- */
+function Modal({c,m,close}){
+  if(m.type==='bill') return html`<${Bill} c=${c} id=${m.id} close=${close} />`;
+  if(m.type==='addLead') return html`<${AddLead} c=${c} close=${close} />`;
+  if(m.type==='addRep') return html`<${AddRep} c=${c} close=${close} />`;
+  return null;
+}
+function AddLead({c,close}){
+  const {me,db,A,openLead}=c;
+  const [f,setF]=useState({name:'',phone:'',guardian:'',guardianPhone:'',courseId:'c1',school:'',district:'Kanchanpur',source:'Walk-in',owner:me||'auto'});
+  const [err,setErr]=useState('');
+  const set=(k,v)=>setF(x=>({...x,[k]:v}));
+  const dup=f.phone.length>=10&&db.leads.find(l=>l.phone===f.phone.trim());
+  const submit=e=>{e.preventDefault();
+    if(!/^9[678]\d{8}$/.test(f.phone.trim())){setErr('Enter a 10-digit Nepali mobile number starting with 96, 97 or 98.');return}
+    if(dup){setErr('This number already belongs to '+dup.name+'. Open that lead instead.');return}
+    const id=A.addLead({...f,name:f.name.trim(),phone:f.phone.trim()});close();setTimeout(()=>openLead(id),0)};
+  return html`<div className="modal" role="dialog" aria-label="Add lead"><div className="card-h"><h2>Add lead</h2><button className="btn sm" type="button" onClick=${close}>Close</button></div>
+  <form className="card-b" onSubmit=${submit}><div className="form">
+    <label className="f full">Student name<input id="al-name" className="input" required value=${f.name} onInput=${e=>set('name',e.target.value)} /></label>
+    <label className="f">Student phone<input id="al-phone" className="input" inputMode="numeric" required placeholder="98XXXXXXXX" value=${f.phone} onInput=${e=>{set('phone',e.target.value);setErr('')}} /></label>
+    <label className="f">Guardian phone<input id="al-gphone" className="input" inputMode="numeric" placeholder="Optional" value=${f.guardianPhone} onInput=${e=>set('guardianPhone',e.target.value)} /></label>
+    <label className="f">Guardian name<input id="al-guardian" className="input" placeholder="Optional" value=${f.guardian} onInput=${e=>set('guardian',e.target.value)} /></label>
+    <label className="f">Course interest<select id="al-course" className="input" value=${f.courseId} onChange=${e=>set('courseId',e.target.value)}>${COURSES.map(o=>html`<option key=${o.id} value=${o.id}>${o.name}</option>`)}</select></label>
+    <label className="f">School<input id="al-school" className="input" value=${f.school} onInput=${e=>set('school',e.target.value)} /></label>
+    <label className="f">District<select id="al-district" className="input" value=${f.district} onChange=${e=>set('district',e.target.value)}>${DISTRICTS.map(o=>html`<option key=${o}>${o}</option>`)}</select></label>
+    <label className="f">Source<select id="al-source" className="input" value=${f.source} onChange=${e=>set('source',e.target.value)}>${SOURCES.map(o=>html`<option key=${o}>${o}</option>`)}</select></label>
+    ${!me&&html`<label className="f">Assign to<select id="al-owner" className="input" value=${f.owner} onChange=${e=>set('owner',e.target.value)}><option value="auto">Automatic (fewest open leads)</option><option value="none">Leave unassigned</option>${db.reps.filter(r=>r.active).map(r=>html`<option key=${r.id} value=${r.id}>${r.name}</option>`)}</select></label>`}
+  </div>
+  ${(err||dup)&&html`<div className="note" style=${{color:'var(--bad)'}}>${err||'This number already belongs to '+dup.name+'.'}</div>`}
+  <div className="note">A first-call follow-up is created for the owner, due in 15 minutes.</div>
+  <div className="actions"><button className="btn primary" type="submit">Add lead</button><button className="btn" type="button" onClick=${close}>Cancel</button></div></form></div>`;
+}
+function AddRep({c,close}){
+  const [f,setF]=useState({name:'',phone:'',salary:12000}); const set=(k,v)=>setF(x=>({...x,[k]:v})); const t=(+f.salary||0)*10;
+  return html`<div className="modal" role="dialog" aria-label="Add salesperson"><div className="card-h"><h2>Add salesperson</h2><button className="btn sm" type="button" onClick=${close}>Close</button></div>
+  <form className="card-b" onSubmit=${e=>{e.preventDefault();c.A.addRep({...f,name:f.name.trim()});close()}}><div className="form">
+    <label className="f full">Full name<input id="ar-name" className="input" required value=${f.name} onInput=${e=>set('name',e.target.value)} /></label>
+    <label className="f">Phone<input id="ar-phone" className="input" required inputMode="numeric" value=${f.phone} onInput=${e=>set('phone',e.target.value)} /></label>
+    <label className="f">Monthly salary (Rs)<input id="ar-salary" className="input" type="number" min="1000" step="500" required value=${f.salary} onInput=${e=>set('salary',e.target.value)} /></label></div>
+    <div className="mini"><div><span>Monthly target</span><b>${rs(t)}</b></div><div><span>Weekly</span><b>${rs(t/4)}</b></div><div><span>Daily</span><b>${rs(t/30)}</b></div></div>
+    <div className="actions"><button className="btn primary" type="submit">Add salesperson</button><button className="btn" type="button" onClick=${close}>Cancel</button></div></form></div>`;
+}
+function Bill({c,id,close}){
+  const {db,repName}=c; const s=db.sales.find(x=>x.id===id); const l=db.leads.find(x=>x.id===s.leadId); const co=course(s.courseId);
+  const stamp=s.status==='verified'?['Paid · Verified','good']:s.status==='pending'?['Pending verification','warn']:['Rejected','bad'];
+  return html`<div className="modal" role="dialog" aria-label=${'Bill '+s.billNo}><div className="card-h"><h2>Bill ${s.billNo}</h2><button className="btn sm" type="button" onClick=${close}>Close</button></div>
+  <div className="card-b"><div className="bill">
+    <div className="bill-top"><div><b style=${{fontFamily:'var(--font-display)',fontSize:'16px'}}>Note Swift Pvt. Ltd.</b><span className="sub2 muted">Bhimdatta-6, Sky Vista Cafe Building, Mahendranagar</span><span className="sub2 muted">Payment receipt</span></div>
+      <span className=${'stamp '+stamp[1]}>${stamp[0]}</span></div>
+    <dl className="facts" style=${{margin:0}}>
+      <div><dt>Bill no.</dt><dd>${s.billNo}</dd></div><div><dt>Date</dt><dd>${fDT(s.date)}</dd></div>
+      <div><dt>Student</dt><dd>${l.name}</dd></div><div><dt>Phone</dt><dd>${l.phone}</dd></div></dl>
+    <div className="tw"><table><thead><tr><th>Item</th><th className="num">Amount</th></tr></thead><tbody>
+      <tr><td>${co.name}</td><td className="num">${rs(s.listPrice)}</td></tr>
+      ${s.discount?html`<tr><td>Discount</td><td className="num">− ${rs(s.discount)}</td></tr>`:null}
+      <tr><td><b>Total paid</b></td><td className="num"><b>${rs(s.amount)}</b></td></tr></tbody></table></div>
+    <dl className="facts" style=${{margin:0}}>
+      <div><dt>Paid by</dt><dd>${s.method}${s.ref?' · '+s.ref:''}</dd></div><div><dt>Sold by</dt><dd>${s.method==='App'?'Student (app purchase)':repName(s.repId)}</dd></div>
+      ${s.status==='rejected'&&html`<div><dt>Rejected because</dt><dd>${s.rejectReason}</dd></div>`}</dl>
+  </div></div></div>`;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
+</script>

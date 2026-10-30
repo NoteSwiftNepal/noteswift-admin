@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2, GraduationCap, School } from "lucide-react";
-import { AssignCourseDialog, AssignCourseFormData } from "@/components/users/AssignCourseDialog";
+import { AssignCourseDialog, AssignCourseFormData, AssignCourseMode } from "@/components/users/AssignCourseDialog";
+import { useAdmin } from "@/context/admin-context";
 import { ManageSchoolDialog } from "@/components/users/ManageSchoolDialog";
 import {
   Table,
@@ -294,6 +295,15 @@ export default function UsersPage() {
   const [manageSchoolDialogOpen, setManageSchoolDialogOpen] = useState(false);
   const [assignSchoolLoading, setAssignSchoolLoading] = useState(false);
   const [makeIndependentLoading, setMakeIndependentLoading] = useState(false);
+  // Pending course assignments of the open student: assigned, awaiting
+  // payment, no access yet. Shown apart from enrollments on purpose.
+  const [pendingAssignments, setPendingAssignments] = useState<any[]>([]);
+  const { can } = useAdmin();
+  // Super Admin may enroll directly or assign with payment pending; Admin only the latter.
+  const assignModes: AssignCourseMode[] = [
+    ...(can('enrollments.grant_direct') ? ['direct' as const] : []),
+    ...(can('enrollments.assign_pending') ? ['pending' as const] : []),
+  ];
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -512,6 +522,7 @@ export default function UsersPage() {
             const freshEnrollments = enrollmentsRes.ok ? (await enrollmentsRes.json()).enrollments || [] : [];
             userData = { ...userData, realEnrollments: computeStudentEnrollments(userId, freshEnrollments) };
             console.log('✅ Student enrollments loaded fresh:', userData.realEnrollments.length);
+            await fetchPendingAssignments(userId);
           }
           
           console.log('📦 Processed user data:', userData);
@@ -527,6 +538,33 @@ export default function UsersPage() {
       console.error('❌ Error fetching user details:', error);
     } finally {
       setUserDetailsLoading(false);
+    }
+  };
+
+  const fetchPendingAssignments = async (studentId: string) => {
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const res = await fetch(`${API_ENDPOINTS.ENROLLMENTS.ASSIGNMENTS}?status=pending&studentId=${studentId}`, createFetchOptions('GET'));
+      const json = res.ok ? await res.json() : null;
+      setPendingAssignments(json?.data || []);
+    } catch (error) {
+      console.error('Error fetching pending course assignments:', error);
+      setPendingAssignments([]);
+    }
+  };
+
+  const handleCancelAssignment = async (assignment: any) => {
+    if (!selectedUser || selectedUser.type !== 'student') return;
+    if (!confirm(`Cancel the pending assignment of "${assignment.course?.title || 'this course'}"? The record is kept.`)) return;
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(API_ENDPOINTS.ENROLLMENTS.CANCEL_ASSIGNMENT(assignment._id), createFetchOptions('POST', {}));
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Failed to cancel the assignment');
+      toast({ title: 'Assignment cancelled' });
+      await fetchPendingAssignments(selectedUser._id);
+    } catch (error: any) {
+      toast({ title: 'Failed to cancel the assignment', description: error.message, variant: 'destructive' });
     }
   };
 
@@ -568,27 +606,35 @@ export default function UsersPage() {
     }
   };
 
-  const handleAssignCourseSubmit = async (formData: AssignCourseFormData) => {
+  const handleAssignCourseSubmit = async (formData: AssignCourseFormData, assignMode: AssignCourseMode) => {
     if (!selectedUser || selectedUser.type !== 'student') return;
     setAssignCourseLoading(true);
     try {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
-      const response = await fetch(
-        API_ENDPOINTS.ENROLLMENTS.CREATE,
-        createFetchOptions('POST', {
-          studentId: selectedUser._id,
-          courseId: formData.course,
-          paymentMethod: formData.paymentMethod,
-          amount: formData.amount,
-          paymentReference: formData.paymentReference || undefined,
-          notes: formData.notes || undefined,
-        })
-      );
+      const body = assignMode === 'direct'
+        ? {
+            mode: 'direct',
+            studentId: selectedUser._id,
+            courseId: formData.course,
+            paymentMethod: formData.paymentMethod,
+            amount: formData.amount,
+            paymentReference: formData.paymentReference || undefined,
+            notes: formData.notes || undefined,
+          }
+        : { mode: 'pending', studentId: selectedUser._id, courseId: formData.course, note: formData.notes || undefined };
+      const response = await fetch(API_ENDPOINTS.ENROLLMENTS.CREATE, createFetchOptions('POST', body));
       const data = await response.json();
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to assign course');
       }
-      toast({ title: 'Course assigned', description: `${selectedUser.full_name} was enrolled successfully.` });
+      toast(
+        assignMode === 'direct'
+          ? { title: 'Course assigned', description: `${selectedUser.full_name} was enrolled successfully.` }
+          : {
+              title: data.created === false ? 'Already assigned' : 'Course assigned — payment pending',
+              description: `${selectedUser.full_name} gets access once their payment is verified.`,
+            }
+      );
       setAssignCourseDialogOpen(false);
       await fetchUserDetails(selectedUser._id, 'student');
       refreshAfterStudentAction();
@@ -989,10 +1035,40 @@ export default function UsersPage() {
                                         <GraduationCap className="h-4 w-4 text-muted-foreground" />
                                         <span className="text-sm font-medium">Course Access</span>
                                       </div>
-                                      <Button size="sm" onClick={() => setAssignCourseDialogOpen(true)}>
-                                        Assign to Course
-                                      </Button>
+                                      {assignModes.length > 0 && (
+                                        <Button type="button" size="sm" onClick={() => setAssignCourseDialogOpen(true)}>
+                                          {assignModes.includes('direct') ? 'Assign to Course' : 'Assign Course (payment pending)'}
+                                        </Button>
+                                      )}
                                     </div>
+
+                                    {/* Pending course assignments — not enrollments: no access until payment is verified */}
+                                    {pendingAssignments.length > 0 && (
+                                      <div>
+                                        <h4 className="font-medium mb-3">Pending Course Assignments ({pendingAssignments.length})</h4>
+                                        <div className="grid gap-3">
+                                          {pendingAssignments.map((a: any) => (
+                                            <div key={a._id} className="flex items-center justify-between gap-3 p-3 border border-amber-200 bg-amber-50/50 rounded-lg">
+                                              <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-medium truncate">{a.course?.title || 'Unknown course'}</span>
+                                                  <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200">Payment pending</Badge>
+                                                </div>
+                                                <div className="text-xs text-muted-foreground mt-1">
+                                                  Assigned by {a.assignedByName || 'an admin'} on {new Date(a.assignedAt).toLocaleDateString()}
+                                                  {a.note ? ` · ${a.note}` : ''}
+                                                </div>
+                                              </div>
+                                              {can('enrollments.cancel_pending') && (
+                                                <Button type="button" size="sm" variant="outline" onClick={() => handleCancelAssignment(a)}>
+                                                  Cancel
+                                                </Button>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
 
                                     {/* Real Enrollments */}
                                     {(selectedUser as any).realEnrollments && (selectedUser as any).realEnrollments.length > 0 && (
@@ -1149,6 +1225,7 @@ export default function UsersPage() {
                                     </div>
 
                                     <AssignCourseDialog
+                                      modes={assignModes}
                                       open={assignCourseDialogOpen}
                                       onOpenChange={setAssignCourseDialogOpen}
                                       studentName={selectedUser.full_name}

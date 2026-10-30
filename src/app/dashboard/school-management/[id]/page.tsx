@@ -29,8 +29,8 @@ export default function SchoolDetailPage() {
   const params = useParams();
   const router = useRouter();
   const schoolId = params.id as string;
-  const { isSystemAdmin, isSuperAdmin } = useAdmin();
-  const canManageSchools = isSystemAdmin || isSuperAdmin;
+  const { can } = useAdmin();
+  const canManageSchools = can('schools.manage');
   const { toast } = useToast();
 
   const [school, setSchool] = useState<SchoolDetail | null>(null);

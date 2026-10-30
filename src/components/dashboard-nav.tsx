@@ -20,9 +20,9 @@ import {
   Image,
   School,
   TicketPercent,
-  UserSearch,
   ChevronDown,
   Link2,
+  Target,
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -36,11 +36,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLoading } from "@/context/loading-context";
 import { useAdmin } from "@/context/admin-context";
+import { canOpenHref, ROLE_BADGES } from "@/lib/permissions";
+import { crmApi } from "@/lib/crm/api";
 
 interface NavChild {
   href: string;
   label: string;
-  requiresSuperAdmin?: boolean;
 }
 
 interface NavLink {
@@ -120,12 +121,23 @@ const links: NavLink[] = [
     children: [
       { href: "/dashboard/orders-payments?tab=transactions", label: "Transactions" },
       { href: "/dashboard/orders-payments?tab=codes", label: "Unlock Codes" },
-      { href: "/dashboard/orders-payments?tab=bulk-codes", label: "Bulk Codes", requiresSuperAdmin: true },
-      { href: "/dashboard/orders-payments?tab=esewa", label: "Online Payments", requiresSuperAdmin: true },
+      { href: "/dashboard/orders-payments?tab=bulk-codes", label: "Bulk Codes" },
+      { href: "/dashboard/orders-payments?tab=esewa", label: "Online Payments" },
     ],
   },
   { href: "/dashboard/discount-codes", label: "Promo Codes", icon: TicketPercent },
-  { href: "/dashboard/leads", label: "Leads", icon: UserSearch },
+  {
+    href: "/dashboard/crm/leads",
+    label: "Sales & CRM",
+    icon: Target,
+    children: [
+      { href: "/dashboard/crm", label: "CRM Dashboard" },
+      { href: "/dashboard/crm/leads", label: "Leads" },
+      { href: "/dashboard/crm/tasks", label: "Follow-ups" },
+      { href: "/dashboard/crm/sales", label: "Sales & Bills" },
+      { href: "/dashboard/crm/team", label: "Team & Targets" },
+    ],
+  },
   {
     href: "/dashboard/archives",
     label: "Archives",
@@ -157,6 +169,7 @@ const links: NavLink[] = [
 
 const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
   { label: "Overview", hrefs: ["/dashboard"] },
+  { label: "Sales & CRM", hrefs: ["/dashboard/crm/leads"] },
   {
     label: "People",
     hrefs: [
@@ -183,7 +196,6 @@ const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
       "/dashboard/revenue",
       "/dashboard/orders-payments",
       "/dashboard/discount-codes",
-      "/dashboard/leads",
     ],
   },
   {
@@ -209,6 +221,13 @@ function isParentActive(linkHref: string, children: NavChild[] | undefined, path
   return false;
 }
 
+// The Sales & CRM group uses the CRM look (R33, docs/crm-prototype/UI_SPEC.md §3);
+// the rest of the sidebar keeps its own. Colours are the prototype's, written
+// out because the sidebar sits outside the CRM's scoped tokens.
+const CRM_GROUP = "/dashboard/crm/leads";
+const CRM_TASKS = "/dashboard/crm/tasks";
+const CRM_SALES = "/dashboard/crm/sales";
+
 const DEFAULT_TABS: Record<string, string> = {
   '/dashboard/admin-management': 'hierarchy',
   '/dashboard/teacher-management': 'overview',
@@ -223,9 +242,8 @@ export function DashboardNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { startLoading } = useLoading();
-  const { admin } = useAdmin();
+  const { admin, can } = useAdmin();
 
-  const isNormalAdmin = admin?.role === 'admin';
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
@@ -251,21 +269,40 @@ export function DashboardNav() {
     });
   }, [pathname]);
 
+  // Overdue follow-ups badge on "Follow-ups": the user's own scope
+  // (Sales: their leads; Admin: everyone's), refreshed on navigation.
+  const canTasks = can("crm.manage_tasks");
+  const [overdueTasks, setOverdueTasks] = useState<number | null>(null);
+  useEffect(() => {
+    if (!canTasks) return;
+    let cancelled = false;
+    crmApi
+      .tasks({ view: "overdue", limit: 1 })
+      .then((r) => !cancelled && setOverdueTasks(r.pagination?.total ?? 0))
+      .catch(() => !cancelled && setOverdueTasks(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, canTasks]);
+
+  // Waiting-confirmation badge on "Sales & Bills": everything waiting for
+  // Admin / Super Admin, the user's own for Sales (the backend scopes the count).
+  const canBills = can("crm.view_assigned_leads");
+  const [waitingPayments, setWaitingPayments] = useState<number | null>(null);
+  useEffect(() => {
+    if (!canBills) return;
+    let cancelled = false;
+    crmApi
+      .billCounts()
+      .then((c) => !cancelled && setWaitingPayments(c.waiting ?? 0))
+      .catch(() => !cancelled && setWaitingPayments(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, canBills]);
+
   const toggleExpanded = (href: string) => {
     setExpanded((prev) => ({ ...prev, [href]: !prev[href] }));
-  };
-
-  const getRoleDisplay = (role: string) => {
-    switch (role) {
-      case "system_admin":
-        return { text: "System Admin", variant: "destructive" as const, className: "" };
-      case "super_admin":
-        return { text: "Super Admin", variant: "default" as const, className: "bg-purple-500 text-white" };
-      case "admin":
-        return { text: "Admin", variant: "secondary" as const, className: "bg-blue-500 text-white" };
-      default:
-        return { text: "Admin", variant: "secondary" as const, className: "bg-blue-500 text-white" };
-    }
   };
 
   const isLinkActive = (childHref: string, parentHref: string) => {
@@ -286,31 +323,22 @@ export function DashboardNav() {
     return !currentTab;
   };
 
-  const roleDisplay = admin ? getRoleDisplay(admin.role) : { text: "Loading...", variant: "secondary" as const, className: "" };
+  const roleBadge = admin?.productRole ? ROLE_BADGES[admin.productRole] : null;
 
-  const NORMAL_ADMIN_ALLOWED_HREFS = new Set([
-    "/dashboard",
-    "/dashboard/users",
-    "/dashboard/revenue",
-    "/dashboard/orders-payments",
-    "/dashboard/settings",
-    "/dashboard/about"
-  ]);
-
+  // Every link and child is shown only if the admin's permissions cover it
+  // (lib/permissions.ts); the backend enforces the same rules.
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
-    hrefs: isNormalAdmin
-      ? section.hrefs.filter((href) => NORMAL_ADMIN_ALLOWED_HREFS.has(href))
-      : section.hrefs,
+    hrefs: section.hrefs.filter((href) => canOpenHref(href, can)),
   })).filter((section) => section.hrefs.length > 0);
 
   return (
     <nav className="flex flex-col h-full select-none">
       <div className="px-4 py-4 shrink-0">
-        {admin?.role && (
+        {roleBadge && (
           <div className="mb-2">
-            <Badge variant={roleDisplay.variant} className={cn("text-xs", roleDisplay.className)}>
-              {roleDisplay.text}
+            <Badge variant="default" className={cn("text-xs", roleBadge.className)}>
+              {roleBadge.text}
             </Badge>
           </div>
         )}
@@ -332,14 +360,12 @@ export function DashboardNav() {
               </div>
               <SidebarMenu className="space-y-0.5">
                 {sectionLinks.map((link) => {
-                  const filteredChildren = link.children?.filter((child) => {
-                    if (isNormalAdmin && child.requiresSuperAdmin) return false;
-                    return true;
-                  });
+                  const filteredChildren = link.children?.filter((child) => canOpenHref(child.href, can));
 
                   const hasChildren = !!filteredChildren && filteredChildren.length > 0;
                   const active = isParentActive(link.href, filteredChildren, pathname);
                   const isOpen = hasChildren && !!expanded[link.href];
+                  const crm = link.href === CRM_GROUP;
 
                   return (
                     <SidebarMenuItem key={link.href}>
@@ -358,9 +384,11 @@ export function DashboardNav() {
                             className={cn(
                               "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
                               hasChildren && "pr-8",
-                              active
-                                ? "bg-primary text-primary-foreground font-medium"
-                                : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                              crm
+                                ? "font-semibold text-[#0E1A33] hover:bg-[#F6F8FC]"
+                                : active
+                                  ? "bg-primary text-primary-foreground font-medium"
+                                  : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"
                             )}
                           >
                             <link.icon className="h-[18px] w-[18px] shrink-0" />
@@ -374,7 +402,11 @@ export function DashboardNav() {
                             onClick={() => toggleExpanded(link.href)}
                             className={cn(
                               "absolute right-1.5 flex h-6 w-6 items-center justify-center rounded-md transition-colors",
-                              active ? "text-primary-foreground/80 hover:bg-white/10" : "text-gray-400 hover:bg-blue-100 hover:text-blue-600"
+                              crm
+                                ? "text-[#5A6A86] hover:bg-[#E6EEFD] hover:text-[#1F5FD6]"
+                                : active
+                                  ? "text-primary-foreground/80 hover:bg-white/10"
+                                  : "text-gray-400 hover:bg-blue-100 hover:text-blue-600"
                             )}
                           >
                             <ChevronDown
@@ -384,19 +416,27 @@ export function DashboardNav() {
                         )}
                       </div>
                       {hasChildren && isOpen && (
-                        <SidebarMenuSub className="mx-3.5 mt-1 border-l-2 border-gray-200 pl-2.5 space-y-0.5">
+                        <SidebarMenuSub className={cn("mx-3.5 mt-1 pl-2.5 space-y-0.5", crm ? "border-l border-[#DDE4EF]" : "border-l-2 border-gray-200")}>
                           {filteredChildren.map((child) => {
-                            const isChildActive = isLinkActive(child.href, link.href);
+                            const isChildActive = isLinkActive(child.href, link.href) || (crm && child.href !== "/dashboard/crm" && pathname.startsWith(`${child.href}/`));
+                            const badge = !crm ? null : child.href === CRM_TASKS && overdueTasks ? overdueTasks : child.href === CRM_SALES && waitingPayments ? waitingPayments : null;
                             return (
                               <SidebarMenuSubItem key={child.href}>
                                 <SidebarMenuSubButton
                                   asChild
                                   isActive={isChildActive}
                                   className={cn(
-                                    "text-[13px] py-1.5 px-2 rounded-md transition-colors",
-                                    isChildActive
-                                      ? "font-semibold text-blue-600 bg-blue-50"
-                                      : "text-gray-600 hover:text-blue-600 hover:bg-gray-50"
+                                    crm ? "text-[13px] py-[7px] px-2.5 rounded-lg transition-colors" : "text-[13px] py-1.5 px-2 rounded-md transition-colors",
+                                    crm
+                                      ? cn(
+                                          "active:bg-[#E6EEFD] active:text-[#1F5FD6] data-[active=true]:bg-[#E6EEFD] data-[active=true]:text-[#1F5FD6]",
+                                          isChildActive
+                                            ? "font-semibold text-[#1F5FD6] bg-[#E6EEFD] hover:bg-[#E6EEFD] hover:text-[#1F5FD6]"
+                                            : "font-medium text-[#5A6A86] hover:text-[#0E1A33] hover:bg-[#F6F8FC]"
+                                        )
+                                      : isChildActive
+                                        ? "font-semibold text-blue-600 bg-blue-50"
+                                        : "text-gray-600 hover:text-blue-600 hover:bg-gray-50"
                                   )}
                                 >
                                   <Link
@@ -409,6 +449,11 @@ export function DashboardNav() {
                                     }}
                                   >
                                     {child.label}
+                                    {badge != null && (
+                                      <span className="ml-auto rounded-full bg-[#FBE6E4] px-[7px] py-px text-[11px] font-bold text-[#B8322A]" aria-label={child.href === CRM_SALES ? `${badge} waiting confirmation` : `${badge} overdue`}>
+                                        {badge}
+                                      </span>
+                                    )}
                                   </Link>
                                 </SidebarMenuSubButton>
                               </SidebarMenuSubItem>
