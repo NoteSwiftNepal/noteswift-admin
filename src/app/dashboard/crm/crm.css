@@ -213,3 +213,48 @@ a.crm-kpi:hover, button.crm-kpi:hover { border-color: var(--crm-accent); }
 .crm-seg { display: inline-flex; background: var(--crm-surface); border: 1px solid var(--crm-line); border-radius: 10px; padding: 3px; gap: 2px; }
 .crm-seg button { border: 0; background: none; padding: 6px 10px; border-radius: 7px; cursor: pointer; color: var(--crm-muted); font-weight: 500; font-size: 13px; display: inline-flex; align-items: center; }
 .crm-seg button.on { background: var(--crm-accent); color: var(--crm-accent-fg); }
+
+/*
+ * Leads section (S1b, R53): the prototype's own controls, value for value
+ * (.btn, .input, label.f, .overlay, .drawer, .drawer-h, .drawer-b, .modal,
+ * .switch), so the list, the drawer and Add lead match the prototype exactly.
+ */
+.crm-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--crm-line); background: var(--crm-surface); padding: 7px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; color: var(--crm-fg); line-height: 1.45; font-family: inherit; text-decoration: none; }
+.crm-btn:hover { border-color: var(--crm-accent); color: var(--crm-accent); }
+.crm-btn.primary { background: var(--crm-accent); border-color: var(--crm-accent); color: var(--crm-accent-fg); }
+.crm-btn.primary:hover { filter: brightness(1.08); color: var(--crm-accent-fg); }
+.crm-btn.good { background: var(--crm-good); border-color: var(--crm-good); color: var(--crm-surface); }
+.crm-btn.good:hover { color: var(--crm-surface); filter: brightness(1.08); }
+.crm-btn.danger { color: var(--crm-bad); }
+.crm-btn.sm { padding: 4px 9px; font-size: 12px; }
+.crm-btn:disabled, .crm-btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.crm-btn:disabled:hover, .crm-btn[aria-disabled="true"]:hover { border-color: var(--crm-line); color: inherit; filter: none; }
+.crm-btn.primary:disabled:hover, .crm-btn.primary[aria-disabled="true"]:hover { border-color: var(--crm-accent); color: var(--crm-accent-fg); }
+.crm-btn .crm-badge-n { font-size: 11px; font-weight: 700; background: var(--crm-accent); color: var(--crm-accent-fg); border-radius: 999px; padding: 0 6px; }
+.crm-input { width: 100%; border: 1px solid var(--crm-line); background: var(--crm-surface); border-radius: 8px; padding: 8px 10px; min-width: 0; font: inherit; color: inherit; line-height: 1.45; }
+textarea.crm-input { resize: vertical; min-height: 64px; }
+label.crm-f, .crm-f { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--crm-muted); min-width: 0; }
+label.crm-f.crm-row { flex-direction: row; align-items: center; gap: 8px; }
+.crm-toolbar .crm-input { width: auto; flex: 1 1 200px; }
+.crm-overlay { position: fixed; inset: 0; background: var(--crm-overlay); z-index: 40; }
+.crm-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: var(--crm-surface); z-index: 41; display: flex; flex-direction: column; border-left: 1px solid var(--crm-line); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-right: env(safe-area-inset-right, 0px); outline: none; }
+.crm-drawer-h { padding: 16px 18px; border-bottom: 1px solid var(--crm-line); display: flex; flex-direction: column; gap: 10px; }
+.crm-drawer-h h1 { font-size: 19px; font-weight: 600; margin: 0; }
+.crm-drawer-b { padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; flex: 1 1 auto; min-height: 0; }
+.crm-drawer-b section > h3, .crm-sec-h { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+.crm-modal { position: fixed; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100% - 32px)); max-height: calc(100% - 48px); overflow-y: auto; background: var(--crm-surface); border: 1px solid var(--crm-line); border-radius: 16px; box-shadow: var(--crm-shadow); }
+.crm-modal .crm-card-b { display: flex; flex-direction: column; gap: 14px; }
+.crm-switch { position: relative; width: 36px; height: 20px; border-radius: 999px; border: 0; background: var(--crm-line); cursor: pointer; flex: none; }
+.crm-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--crm-surface); transition: left 0.15s; }
+.crm-switch.on { background: var(--crm-good); }
+.crm-switch.on::after { left: 18px; }
+.crm-switch:disabled { opacity: 0.5; cursor: not-allowed; }
+.crm-chev { transition: transform 0.15s; flex: none; }
+.crm-chev.open { transform: rotate(90deg); }
+.crm-collapse { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; padding: 0; cursor: pointer; color: var(--crm-fg); text-align: left; }
+.crm-gate { border-radius: 10px; padding: 8px 12px; font-size: 13px; border: 1px solid transparent; }
+.crm-gate.good { background: var(--crm-good-soft); color: var(--crm-good); }
+.crm-gate.bad { background: var(--crm-bad-soft); color: var(--crm-bad); }
+.crm-gate.wait { background: var(--crm-surface); color: var(--crm-muted); border-color: var(--crm-line); }
+.crm-pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--crm-line); flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { .crm-switch::after, .crm-chev { transition: none; } }

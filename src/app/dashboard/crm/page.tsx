@@ -12,8 +12,8 @@ import { useAdmin } from "@/context/admin-context";
 import { DataState } from "@/components/crm/crm-ui";
 import { CrmBar, CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmPill } from "@/components/crm/ui";
 import { MonthSelect, MyTargetCard, useTargetMonths } from "@/components/crm/targets";
-import { ProspectDialog } from "@/components/crm/prospect-dialog";
-import { Dashboard, Rep, TARGET_STATUS_TONE, TASK_TYPE_LABELS, crmApi, fmtDateTime, rs } from "@/lib/crm/api";
+import { AddLeadModal } from "@/components/crm/leads/add-lead-modal";
+import { Dashboard, Rep, TARGET_STATUS_TONE, TASK_TYPE_LABELS, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
 
 const MONEY_TILES = new Set(["credited", "waiting", "company"]);
 
@@ -27,6 +27,7 @@ export default function CrmDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [prospectOpen, setProspectOpen] = useState(false);
   const [reps, setReps] = useState<Rep[]>([]);
+  const [courses, setCourses] = useState<{ _id: string; title: string }[]>([]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -42,6 +43,7 @@ export default function CrmDashboardPage() {
   }, [load]);
   useEffect(() => {
     if (can("crm.manage_reps")) crmApi.reps().then((r) => setReps(r.filter((x) => x.status === "active")), () => setReps([]));
+    if (can("crm.create_leads")) fetchCourseCatalog().then(setCourses);
   }, [can]);
 
   const maxStage = Math.max(1, ...(data?.pipeline.stages.map((s) => s.count) ?? [0]), data?.pipeline.wonThisMonth ?? 0, data?.pipeline.lostThisMonth ?? 0);
@@ -64,7 +66,7 @@ export default function CrmDashboardPage() {
             <MonthSelect months={months} value={month || data?.month.key || ""} onChange={setMonth} />
             {can("crm.create_leads") && (
               <Button type="button" onClick={() => setProspectOpen(true)}>
-                <Plus className="mr-1 h-4 w-4" /> Add prospect
+                <Plus className="mr-1 h-4 w-4" /> Add lead
               </Button>
             )}
           </>
@@ -217,7 +219,7 @@ export default function CrmDashboardPage() {
           </>
         )}
       </DataState>
-      <ProspectDialog open={prospectOpen} onOpenChange={setProspectOpen} reps={team ? reps : []} onCreated={(id) => router.push(`/dashboard/crm/leads/${id}`)} />
+      <AddLeadModal open={prospectOpen} onClose={() => setProspectOpen(false)} reps={team ? reps : []} courses={courses} onCreated={(id) => router.push(`/dashboard/crm/leads/${id}`)} />
     </div>
   );
 }

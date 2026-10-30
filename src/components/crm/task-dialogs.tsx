@@ -1,6 +1,6 @@
 "use client";
 
-// Task forms for Sales & CRM: create, complete, reschedule. Contact tasks
+// Task forms for Sales & CRM: create (the drawer's panel), complete, reschedule. Contact tasks
 // (call, WhatsApp, SMS, email, payment reminder, course info) need a purpose;
 // the backend runs the outreach gate and refuses with its reasons.
 import { useEffect, useState } from "react";
@@ -9,19 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PURPOSE_LABELS, Purpose, TASK_TYPE_LABELS, crmApi } from "@/lib/crm/api";
+import { Field, Panel, Sel, fromLocalInput, toLocalInput, useBusy } from "@/components/crm/leads/controls";
+import { CHANNEL_LABELS, Channel, PURPOSE_LABELS, Purpose, TASK_TYPE_LABELS, crmApi } from "@/lib/crm/api";
 
 const CONTACT_TYPES = ["call", "whatsapp", "sms", "email", "payment_reminder", "send_course_info"];
 const CHANNEL_FOR_TYPE: Record<string, string> = { call: "call", whatsapp: "whatsapp", sms: "sms", email: "email" };
-
-// <input type="datetime-local"> works in local time; convert both ways.
-const toLocalInput = (d: Date) => {
-  const off = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - off).toISOString().slice(0, 16);
-};
-const fromLocalInput = (v: string) => new Date(v).toISOString();
 
 function useSubmit() {
   const [busy, setBusy] = useState(false);
@@ -40,36 +33,18 @@ function useSubmit() {
   return { busy, error, setError, run };
 }
 
-export function CreateTaskDialog({
-  open,
-  onOpenChange,
-  leadId,
-  interests,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  leadId: string;
-  interests: { _id: string; title: string; status: string }[];
-  onCreated: () => void;
-}) {
-  const [type, setType] = useState("follow_up");
+/** New task, drawn as the prototype's "Schedule follow-up" panel (S1b), with our fields. */
+export function TaskPanel({ leadId, interests, onCreated, onCancel }: { leadId: string; interests: { _id: string; title: string; status: string }[]; onCreated: () => void; onCancel: () => void }) {
+  const [type, setType] = useState("call");
   const [dueAt, setDueAt] = useState(toLocalInput(new Date(Date.now() + 24 * 3600_000)));
   const [priority, setPriority] = useState("normal");
   const [interestId, setInterestId] = useState("none");
   const [purpose, setPurpose] = useState<Purpose>("purchase_assistance");
   const [channel, setChannel] = useState("call");
   const [notes, setNotes] = useState("");
-  const { busy, error, setError, run } = useSubmit();
+  const { busy, error, run } = useBusy();
   const isContact = CONTACT_TYPES.includes(type);
   const openInterests = interests.filter((i) => i.status === "open");
-
-  useEffect(() => {
-    if (open) {
-      setError(null);
-      setNotes("");
-    }
-  }, [open, setError]);
 
   const submit = () =>
     run(async () => {
@@ -82,117 +57,43 @@ export function CreateTaskDialog({
         ...(isContact ? { purpose, channel: CHANNEL_FOR_TYPE[type] ?? channel } : {}),
       });
       onCreated();
-      onOpenChange(false);
     });
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New task</DialogTitle>
-          <DialogDescription>Assigned to the lead&apos;s owner. Contact tasks are checked against do-not-contact, consent and follow-up rules.</DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="task-type">Type</Label>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger id="task-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(TASK_TYPE_LABELS).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="task-due">Due</Label>
-            <Input id="task-due" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="task-priority">Priority</Label>
-            <Select value={priority} onValueChange={setPriority}>
-              <SelectTrigger id="task-priority">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="task-interest">Course</Label>
-            <Select value={interestId} onValueChange={setInterestId}>
-              <SelectTrigger id="task-interest">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Not about one course</SelectItem>
-                {openInterests.map((i) => (
-                  <SelectItem key={i._id} value={i._id}>
-                    {i.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {isContact && (
-            <>
-              <div>
-                <Label htmlFor="task-purpose">Purpose</Label>
-                <Select value={purpose} onValueChange={(v) => setPurpose(v as Purpose)}>
-                  <SelectTrigger id="task-purpose">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(PURPOSE_LABELS) as Purpose[]).map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {PURPOSE_LABELS[p]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {!CHANNEL_FOR_TYPE[type] && (
-                <div>
-                  <Label htmlFor="task-channel">Channel</Label>
-                  <Select value={channel} onValueChange={setChannel}>
-                    <SelectTrigger id="task-channel">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="call">Call</SelectItem>
-                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                      <SelectItem value="sms">SMS</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </>
-          )}
-          <div className="sm:col-span-2">
-            <Label htmlFor="task-notes">Notes</Label>
-            <Textarea id="task-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} />
-          </div>
-        </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={submit} disabled={busy || !dueAt}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create task
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <Panel title="Schedule follow-up" onSubmit={submit} submitLabel="Schedule" onCancel={onCancel} busy={busy} error={error} canSubmit={!!dueAt}>
+      <div className="crm-form">
+        <Field label="Type">
+          <Sel value={type} onChange={(e) => setType(e.target.value)} options={Object.entries(TASK_TYPE_LABELS).map(([value, label]) => ({ value, label }))} />
+        </Field>
+        <Field label="Due">
+          <input className="crm-input" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} required />
+        </Field>
+        {isContact && (
+          <>
+            <Field label="Purpose">
+              <Sel value={purpose} onChange={(e) => setPurpose(e.target.value as Purpose)} options={(Object.keys(PURPOSE_LABELS) as Purpose[]).map((p) => ({ value: p, label: PURPOSE_LABELS[p] }))} />
+            </Field>
+            {!CHANNEL_FOR_TYPE[type] && (
+              <Field label="Channel">
+                <Sel value={channel} onChange={(e) => setChannel(e.target.value)} options={["call", "whatsapp", "sms", "email"].map((c) => ({ value: c, label: CHANNEL_LABELS[c as Channel] }))} />
+              </Field>
+            )}
+          </>
+        )}
+        {openInterests.length > 0 && (
+          <Field label="Course">
+            <Sel value={interestId} onChange={(e) => setInterestId(e.target.value)} options={[{ value: "none", label: "Not about one course" }, ...openInterests.map((i) => ({ value: i._id, label: i.title }))]} />
+          </Field>
+        )}
+        <Field label="Priority">
+          <Sel value={priority} onChange={(e) => setPriority(e.target.value)} options={[{ value: "low", label: "Low" }, { value: "normal", label: "Normal" }, { value: "high", label: "High" }]} />
+        </Field>
+        <Field label="Note" full>
+          <input className="crm-input" placeholder="e.g. Send demo class link" value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+      </div>
+      {isContact && <span className="crm-muted crm-small">Contact tasks are checked against do not contact, consent and the follow-up rules.</span>}
+    </Panel>
   );
 }
 

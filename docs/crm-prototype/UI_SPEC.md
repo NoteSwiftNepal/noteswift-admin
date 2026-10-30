@@ -7,7 +7,7 @@ The prototype is a **design reference only**. It is never imported, built or shi
 Scope (R33):
 - The look applies to the Sales & CRM pages only. The rest of the panel keeps its current shadcn look.
 - No dark mode for now. The prototype has dark tokens; they are listed for later and not implemented.
-- The lead profile stays a full page. The prototype's drawer is used only as a visual reference for its sections.
+- ~~The lead profile stays a full page.~~ Since S1b (R53, 2026-10-29) the lead opens in the prototype's side drawer over the Leads list; `/dashboard/crm/leads/[leadId]` is the list with the drawer open.
 
 Contents: 1 Tokens · 2 Type, spacing, radius, shadow · 3 Components · 4 Pages · 5 Mapping to our code · 6 Not copied · 7 Gaps.
 
@@ -188,7 +188,7 @@ All colours are CSS variables on `:root`. In S1 they are scoped to the CRM area 
 - 1px accent border, radius 12px, padding 14px, accent-soft background, a column with gap 12px.
 - An `h3` title, the form grid, then an action row (primary + plain Cancel).
 
-**Drawer (`.drawer`), reference only (R33: we keep a full page):**
+**Drawer (`.drawer`), used since S1b (R53):**
 - Fixed right, width `min(520px,100%)`, surface background, left line border.
 - Header: padding 16px 18px, bottom border, a column with gap 10px.
 - Body: padding 16px 18px, scrolls, a column with gap 16px.
@@ -286,7 +286,7 @@ All colours are CSS variables on `:root`. In S1 they are scoped to the CRM area 
 3. Table columns: (Admin) checkbox · **Student** (bold name / "grade · district") · Phone · Course interest · (Admin) Owner (or a warn "Unassigned" pill) · Stage (pill) · Next follow-up (relative; red when overdue; "None set" or "—") · Source (muted). Rows open the lead. Sorted by next follow-up, then newest.
 4. Empty: "No leads here. Try another tab or clear the search."
 
-**Lead (drawer in the prototype; a full page for us):**
+**Lead (drawer, as the prototype, since S1b / R53):**
 - **Header:** name (19px), muted "grade · course"; plain sm "Close"; stage pill plus lost reason.
 - **Action row** (open leads): primary sm "Log call", sm "Schedule follow-up", sm "Record sale" (not while payment is pending), sm "WhatsApp" (wa.me link), danger sm "Mark lost". Lost leads get "Reopen lead".
 - **Body, in order:**
@@ -363,7 +363,7 @@ Paths are in this repo unless marked backend. "S1" is visual only; behaviour sta
 | Buttons | shadcn `Button` variants | CRM-scoped classes or wrapper; `good` = Done / Confirm; `danger` = text-red outline. |
 | Form fields, `label.f` | shadcn `Input`, `Select`, `Label`, `Textarea` | Restyle inside the CRM wrapper (8px radius, 12.5px muted labels above). |
 | Panel (inline form) | dialogs: `ContactDialog`, `CreateTaskDialog`, `LogActivityDialog`, `ReasonDialog`, `CreateQuoteDialog` | Keep the dialogs (behaviour and the outreach gate unchanged). Use the panel look for "Record payment" (S3) on the full-page profile; the others may move inline later without changing behaviour. |
-| Drawer | — | Not used (R33). The lead profile at `crm/leads/[leadId]/page.tsx` stays a page; restyle its header like the drawer header and its Overview with the facts grid. |
+| Drawer | — | S1b (R53): `components/crm/leads/lead-drawer.tsx`, opened over the list by `leads/layout.tsx`; the old profile page is gone. |
 | Facts grid | lead profile Overview `Info` cells | Restyle; add Guardian (R34) once the backend has it (S2). |
 | Timeline | lead profile Activity `ol` list | Restyle as a timeline with tone dots (outcomes: connected good, policy exception bad, system muted). |
 | List rows | lead profile Tasks list, quote rows | Restyle. |

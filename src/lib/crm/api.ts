@@ -34,7 +34,19 @@ const qs = (params: Record<string, string | number | undefined | null>) => {
 };
 
 // ---------- types (mirror the backend responses) ----------
-export type Person = { name: string | null; phone: string | null; email: string | null; grade: number | null; school: string | null; district: string | null };
+export type Person = {
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  grade: number | null;
+  school: string | null;
+  district: string | null;
+  // R34 / R40: the CRM's guardian fields, or (instead) the linked parent account, read-only.
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  linkedParent?: { name: string | null; phone: string | null };
+  linkedParents?: { name: string | null; phone: string | null }[];
+};
 export type LeadStage = "new" | "contact_attempted" | "contacted" | "qualified";
 export type LeadStatus = "active" | "nurture" | "lost";
 export type InterestStage = "interested" | "contacted" | "qualified" | "quoted" | "payment_pending";
@@ -51,15 +63,24 @@ export type LeadRow = {
   status: LeadStatus;
   priority: "low" | "normal" | "high";
   doNotContact: boolean;
+  isCustomer?: boolean;
+  // S1b: the one stage the list shows, the course behind it, and how many other open courses there are.
+  displayStage: DisplayStage;
+  displayCourseTitle: string | null;
+  otherOpenCourses: number;
   interests: { _id: string; courseId: string; title: string; stage: InterestStage }[];
   lastSignalAt: string | null;
   openTasks: number;
   nextTaskDueAt: string | null;
   overdue: boolean;
   source?: string;
+  manualSource?: ManualSource | null;
   createdAt?: string;
   possibleDuplicate?: boolean;
 };
+export type DisplayStage = "lost" | "enrolled" | InterestStage | LeadStage;
+export type ManualSource = "school_visit" | "referral" | "facebook_ad" | "walk_in" | "phone_enquiry" | "other";
+export type LeadView = "all" | "mine" | "new" | "today_tasks" | "overdue_tasks" | "payment_pending" | "enrolled" | "lost" | "unassigned" | "recent_signals" | "checkout_abandoned" | "do_not_contact";
 export type Pagination = { page: number; limit: number; total: number; pages: number };
 
 export type Interest = {
@@ -122,6 +143,9 @@ export type LeadDetail = {
   _id: string;
   kind: "student" | "prospect";
   person: Person;
+  isCustomer: boolean;
+  displayStage: DisplayStage;
+  displayCourseTitle: string | null;
   enrollment: {
     enrolledCourses: { courseId: string; title: string }[];
     pendingCourseAssignments: { _id: string; courseId: string; title: string; assignedAt: string; fromThisLead: boolean }[];
@@ -143,6 +167,7 @@ export type LeadDetail = {
   activities: { items: Activity[]; pagination: Pagination };
   // Admin / Super Admin only
   source?: string;
+  manualSource?: ManualSource | null;
   createdAt?: string;
   createdByName?: string | null;
   linkedAt?: string | null;
@@ -169,6 +194,8 @@ export type OutreachDecision = { allowed: boolean; reasons: string[]; basis: { s
 // ---------- calls ----------
 export const crmApi = {
   listLeads: (params: Record<string, string | number | undefined>) => request<{ items: LeadRow[]; pagination: Pagination; view: string }>("GET", `/leads${qs(params)}`),
+  /** S1b: the count of every list view, same scope and filters (one request). */
+  leadCounts: (params: Record<string, string | number | undefined>) => request<Partial<Record<LeadView, number>>>("GET", `/leads/counts${qs(params)}`),
   getLead: (id: string) => request<LeadDetail>("GET", `/leads/${id}`),
   updateLead: (id: string, patch: Record<string, unknown>) => request("PATCH", `/leads/${id}`, patch),
   markLost: (id: string, reason: string) => request("POST", `/leads/${id}/lost`, { reason }),
@@ -427,6 +454,24 @@ export async function fetchCourseCatalog(): Promise<{ _id: string; title: string
 // ---------- labels ----------
 export const LEAD_STAGE_LABELS: Record<LeadStage, string> = { new: "New", contact_attempted: "Contact attempted", contacted: "Contacted", qualified: "Qualified" };
 export const INTEREST_STAGE_LABELS: Record<InterestStage, string> = { interested: "Interested", contacted: "Contacted", qualified: "Qualified", quoted: "Quoted", payment_pending: "Payment pending" };
+// S1b: the list's single stage pill (prototype labels and tones where they exist).
+export const DISPLAY_STAGE: Record<DisplayStage, { label: string; tone: "neutral" | "accent" | "good" | "warn" | "bad" }> = {
+  new: { label: "New lead", tone: "accent" },
+  contact_attempted: { label: "Contact attempted", tone: "neutral" },
+  contacted: { label: "Contacted", tone: "neutral" },
+  qualified: { label: "Qualified", tone: "accent" },
+  interested: { label: "Interested", tone: "accent" },
+  quoted: { label: "Quoted", tone: "accent" },
+  payment_pending: { label: "Payment pending", tone: "warn" },
+  enrolled: { label: "Enrolled", tone: "good" },
+  lost: { label: "Lost", tone: "bad" },
+};
+export const MANUAL_SOURCE_LABELS: Record<ManualSource, string> = { school_visit: "School visit", referral: "Referral", facebook_ad: "Facebook ad", walk_in: "Walk-in", phone_enquiry: "Phone enquiry", other: "Other" };
+const LEAD_SOURCE_LABELS: Record<string, string> = { registration: "App registration", course_activity: "Course activity", manual: "Added by staff", import: "Import", referral: "Referral", school: "School", backfill: "Existing student", other: "Other" };
+/** The Source column: the Add lead form's source when there is one, otherwise how the lead came in. */
+export const sourceLabel = (r: { source?: string; manualSource?: ManualSource | null }) => (r.manualSource ? MANUAL_SOURCE_LABELS[r.manualSource] : r.source ? LEAD_SOURCE_LABELS[r.source] ?? r.source.replace(/_/g, " ") : "—");
+// Reasons offered in the Mark lost panel (the backend takes any reason; these are the prototype's).
+export const LOST_REASONS = ["Too expensive", "Joined another institute", "Not interested", "Could not reach", "Wrong number", "Other"];
 export const PURPOSE_LABELS: Record<Purpose, string> = { purchase_assistance: "Help with a course", enquiry_response: "Reply to enquiry", marketing: "Marketing" };
 export const CHANNEL_LABELS: Record<Channel, string> = { call: "Call", whatsapp: "WhatsApp", sms: "SMS", email: "Email" };
 export const OUTCOME_LABELS: Record<string, string> = {
@@ -462,6 +507,19 @@ export const timeAgo = (iso?: string | null) => {
 };
 export const fmtDateTime = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+/** The prototype's relative date: "Today, 3:00 PM", "Tomorrow, 9:00 AM", "24 Oct, 10:00 AM". */
+export const relDateTime = (iso?: string | null) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(d) - day(new Date())) / 86_400_000);
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  if (diff === 0) return `Today, ${time}`;
+  if (diff === -1) return `Yesterday, ${time}`;
+  if (diff === 1) return `Tomorrow, ${time}`;
+  const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
+  return `${date}, ${time}`;
+};
 export const rs = (n?: number | null) => (n == null ? "—" : `Rs. ${Number(n).toLocaleString("en-IN")}`);
 
 // ---------- targets (Phase S4 / S5) ----------
