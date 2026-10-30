@@ -1,10 +1,10 @@
 "use client";
 
 // The lead drawer (S8: exactly the prototype's LeadDrawer, R65). Header with
-// the stage and the actions Log call · Schedule follow-up · Record sale (R64)
-// · WhatsApp · Mark lost (and Assign for Admin); for a Lost lead only Reopen.
-// Body: facts, the Stage select (forward moves only, R63), open follow-ups,
-// sales and the activity timeline. The contact gate, Do not contact and
+// the stage and the actions Log call · Schedule follow-up · Assign course
+// (R67) · Record sale (R64) · WhatsApp · Mark lost (and Assign for Admin); for
+// a Lost lead only Reopen. Body: facts with the Courses row, the Stage select
+// (forward moves only, R68), open follow-ups, sales and the activity timeline. The contact gate, Do not contact and
 // Admin assignment stay because approved rules need them. Every action keeps
 // its backend call and permission; the backend decides what each role sees.
 import { KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -18,9 +18,11 @@ import { TaskPanel } from "@/components/crm/task-dialogs";
 import { RecordSalePanel } from "@/components/crm/bill-dialogs";
 import { LeadSalesSection } from "@/components/crm/sales-panels";
 import { Btn, Field, Panel, Sel, useBusy } from "@/components/crm/leads/controls";
-import { Activity, CHANNEL_LABELS, Channel, LOST_REASONS, LeadDetail, OUTCOME_LABELS, PURPOSE_LABELS, Rep, STAGE, TASK_TYPE_LABELS, crmApi, fmtDateTime, relDateTime, sourceLabel } from "@/lib/crm/api";
+import { Activity, CHANNEL_LABELS, Channel, LEAD_COURSE_STATE, LOST_REASONS, LeadDetail, OUTCOME_LABELS, PURPOSE_LABELS, Rep, STAGE, TASK_TYPE_LABELS, crmApi, fmtDateTime, relDateTime, sourceLabel } from "@/lib/crm/api";
 
-type Mode = { kind: "contact"; channel: Channel } | { kind: "task" } | { kind: "sale" } | { kind: "lost" } | { kind: "assign"; ownerId: string } | null;
+type CourseMode = "interested" | "payment_pending";
+type Mode = { kind: "contact"; channel: Channel } | { kind: "task" } | { kind: "course"; mode: CourseMode } | { kind: "sale" } | { kind: "lost" } | { kind: "assign"; ownerId: string } | null;
+type CatalogCourse = { _id: string; title: string; price?: number; type?: string };
 type ReasonAction = { title: string; description?: string; confirmLabel: string; destructive?: boolean; optional?: boolean; success: string; run: (reason: string) => Promise<unknown> } | null;
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -157,6 +159,11 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
                     Schedule follow-up
                   </Btn>
                 )}
+                {can("crm.manage_pipeline") && (
+                  <Btn sm onClick={() => setMode({ kind: "course", mode: "interested" })}>
+                    Assign course
+                  </Btn>
+                )}
                 {showSale && (
                   <Btn sm onClick={() => setMode({ kind: "sale" })}>
                     Record sale
@@ -198,7 +205,8 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
           <>
             {mode?.kind === "contact" && <ContactPanel key={mode.channel} leadId={leadId} phone={p?.phone ?? null} channel={mode.channel} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "task" && <TaskPanel leadId={leadId} onCreated={panelDone("Follow-up scheduled")} onCancel={() => setModeRaw(null)} />}
-            {mode?.kind === "sale" && <RecordSalePanel leadId={leadId} interests={lead.interests} courses={courses} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
+            {mode?.kind === "course" && <AssignCoursePanel key={mode.mode} lead={lead} courses={courses} initialMode={mode.mode} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
+            {mode?.kind === "sale" && <RecordSalePanel leadId={leadId} interests={lead.interests} leadCourses={lead.courses} courses={courses} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "lost" && <LostPanel leadId={leadId} onDone={panelDone("Lead marked lost")} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "assign" && <AssignPanel lead={lead} reps={reps} initialOwnerId={mode.ownerId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
 
@@ -209,6 +217,10 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
                 { label: "School", value: p?.school || "—" },
                 { label: "District", value: p?.district || "—" },
                 ...(isAdmin ? [{ label: "Source", value: sourceLabel(lead) }, { label: "Added", value: fmtDateTime(lead.createdAt) }] : []),
+                {
+                  label: "Courses",
+                  value: <LeadCourses lead={lead} onCancel={(c) => setReasonAction({ title: `Cancel ${c.title}`, description: "The course is no longer waiting for payment; the student stays Interested in it.", confirmLabel: "Cancel assignment", destructive: true, success: "Assignment cancelled", run: (r) => crmApi.cancelLeadCourse(lead._id, c.assignmentId!, r) })} />,
+                },
                 { label: "Last contact", value: lead.lastContactAt ? relDateTime(lead.lastContactAt) : "Not contacted yet" },
                 {
                   label: "Owner",
@@ -232,9 +244,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
             />
             <DoNotContactLink lead={lead} canSet={can("crm.set_do_not_contact")} canClear={can("crm.clear_do_not_contact")} ask={setReasonAction} />
 
-            {!lost && (lead.stage === "new_lead" || lead.stage === "contacted") && can("crm.edit_leads") && (
-              <StageSelect lead={lead} courses={courses} onMoved={(label) => panelDone(label)()} onError={fail} />
-            )}
+            {!lost && <StageSelect lead={lead} canMove={can("crm.edit_leads")} canAssignCourse={can("crm.manage_pipeline")} onMoved={(label) => panelDone(label)()} onInterested={() => setMode({ kind: "course", mode: "interested" })} onError={fail} />}
 
             <FollowUps lead={lead} act={act} />
 
@@ -343,56 +353,142 @@ function DoNotContactLink({ lead, canSet, canClear, ask }: { lead: LeadDetail; c
   );
 }
 
-/** R63: the prototype's "Stage" select, offering only the next manual steps forward. */
-function StageSelect({ lead, courses, onMoved, onError }: { lead: LeadDetail; courses: { _id: string; title: string; price?: number; type?: string }[]; onMoved: (label: string) => void; onError: (e: any) => void }) {
-  const [target, setTarget] = useState("");
-  const [courseId, setCourseId] = useState("");
+/** The Courses fact (R67): one pill per course; a Payment pending one its creator or an Admin may cancel. */
+function LeadCourses({ lead, onCancel }: { lead: LeadDetail; onCancel: (c: LeadDetail["courses"][number]) => void }) {
+  if (!lead.courses?.length) return <span className="crm-muted">None yet</span>;
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {lead.courses.map((c) => (
+        <span key={c.courseId} className="inline-flex items-center gap-1">
+          <CrmPill tone={LEAD_COURSE_STATE[c.state].tone}>
+            {c.title} · {LEAD_COURSE_STATE[c.state].label}
+          </CrmPill>
+          {c.state === "payment_pending" && c.canCancel && c.assignmentId && (
+            <button type="button" className="crm-link crm-small" onClick={() => onCancel(c)} aria-label={`Cancel ${c.title}`}>
+              Cancel
+            </button>
+          )}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * R68: the "Stage" select, always under the facts on an active lead. New lead
+ * can move to Contacted; New lead and Contacted to Interested, which opens
+ * Assign course with Interested chosen. Payment pending and Enrolled are
+ * read-only (set by sales); Interested has no manual step forward.
+ */
+function StageSelect({ lead, canMove, canAssignCourse, onMoved, onInterested, onError }: { lead: LeadDetail; canMove: boolean; canAssignCourse: boolean; onMoved: (label: string) => void; onInterested: () => void; onError: (e: any) => void }) {
   const [busy, setBusy] = useState(false);
-  const options = [{ value: "", label: STAGE[lead.stage].label }, ...(lead.stage === "new_lead" ? [{ value: "contacted", label: "Contacted" }] : []), { value: "interested", label: "Interested" }];
-  const move = async (to: string, course?: string) => {
+  const note = (
+    <span className="crm-muted crm-small" style={{ fontWeight: 400 }}>
+      Payment pending and Enrolled are set by sales.
+    </span>
+  );
+  const forward = [
+    ...(lead.stage === "new_lead" && canMove ? [{ value: "contacted", label: "Contacted" }] : []),
+    ...((lead.stage === "new_lead" || lead.stage === "contacted") && canAssignCourse ? [{ value: "interested", label: "Interested" }] : []),
+  ];
+  if (lead.stage === "payment_pending" || lead.stage === "enrolled" || forward.length === 0) {
+    return (
+      <div className="crm-f">
+        Stage
+        <span style={{ fontWeight: 400 }}>{STAGE[lead.stage].label}</span>
+        {note}
+      </div>
+    );
+  }
+  const change = async (to: string) => {
+    if (to === "interested") return onInterested();
+    if (to !== "contacted") return;
     setBusy(true);
     try {
-      await crmApi.moveStage(lead._id, to === "interested" ? { to: "interested", courseId: course! } : { to: "contacted" });
-      setTarget("");
-      setCourseId("");
-      onMoved(to === "interested" ? "Moved to Interested" : "Moved to Contacted");
+      await crmApi.moveStage(lead._id, { to: "contacted" });
+      onMoved("Moved to Contacted");
     } catch (e: any) {
       onError(e);
-      setTarget("");
     } finally {
       setBusy(false);
     }
   };
   return (
-    <div className="flex flex-col gap-2">
-      <Field label="Stage">
-        <Sel
-          value={target}
-          disabled={busy}
-          onChange={(e) => {
-            setTarget(e.target.value);
-            if (e.target.value === "contacted") move("contacted");
-          }}
-          options={options}
-        />
-        <span className="crm-muted crm-small" style={{ fontWeight: 400 }}>
-          Payment pending and Enrolled are set automatically from sales.
-        </span>
-      </Field>
-      {target === "interested" && (
-        <div className="flex flex-wrap items-end gap-2">
-          <Field label="Course">
-            <Sel value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "", label: "Choose a course" }, ...courses.filter((c) => c.type !== "free").map((c) => ({ value: c._id, label: c.title }))]} />
-          </Field>
-          <Btn sm tone="primary" busy={busy} disabled={!courseId} onClick={() => move("interested", courseId)}>
-            Save
-          </Btn>
-          <Btn sm onClick={() => setTarget("")}>
-            Cancel
-          </Btn>
+    <Field label="Stage">
+      <Sel value="" disabled={busy} onChange={(e) => change(e.target.value)} options={[{ value: "", label: STAGE[lead.stage].label }, ...forward]} />
+      {note}
+    </Field>
+  );
+}
+
+/**
+ * R67: Assign course. Interested (no payment yet) or Payment pending (the
+ * student will pay: the existing course assignment, registered students only).
+ * Courses the student already has are left out; a free course has nothing to pay.
+ */
+function AssignCoursePanel({ lead, courses, initialMode, onDone, onCancel }: { lead: LeadDetail; courses: CatalogCourse[]; initialMode: CourseMode; onDone: () => void; onCancel: () => void }) {
+  const { toast } = useToast();
+  const registered = lead.kind === "student";
+  const stateOf = (id: string) => lead.courses?.find((c) => c.courseId === id)?.state;
+  const [mode, setMode] = useState<CourseMode>(initialMode === "payment_pending" && registered ? "payment_pending" : "interested");
+  const [courseId, setCourseId] = useState("");
+  const [note, setNote] = useState("");
+  const { busy, error, setError, run } = useBusy();
+  // Enrolled courses never; Interested ones only to move them to Payment pending.
+  const available = courses.filter((c) => {
+    const st = stateOf(c._id);
+    if (st === "enrolled") return false;
+    if (st === "payment_pending") return false;
+    if (st === "interested") return mode === "payment_pending";
+    return true;
+  });
+  const chosen = courses.find((c) => c._id === courseId);
+  const free = !!chosen && (chosen.type === "free" || (chosen.price ?? 0) <= 0);
+  const pendingOff = !registered ? "Register the student first" : free ? "A free course has nothing to pay" : null;
+  useEffect(() => {
+    if (courseId && !available.some((c) => c._id === courseId)) setCourseId("");
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (pendingOff && mode === "payment_pending") setMode("interested");
+  }, [pendingOff]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Panel
+      title="Assign course"
+      submitLabel="Assign course"
+      onCancel={onCancel}
+      busy={busy}
+      error={error}
+      canSubmit={!!courseId}
+      onSubmit={() =>
+        run(async () => {
+          setError(null);
+          await crmApi.assignCourse(lead._id, { courseId, mode, note: note.trim() || undefined });
+          toast({ title: mode === "payment_pending" ? "Course assigned · Payment pending" : "Course assigned · Interested" });
+          onDone();
+        })
+      }
+    >
+      <div className="crm-form">
+        <Field label="Course" full>
+          <Sel value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "", label: available.length ? "Choose a course" : "No course left to assign" }, ...available.map((c) => ({ value: c._id, label: c.title + (stateOf(c._id) === "interested" ? " (interested)" : "") }))]} />
+        </Field>
+        <div className="crm-f crm-full" role="radiogroup" aria-label="How">
+          <label className="crm-f crm-row" style={{ fontWeight: 400 }}>
+            <input type="radio" name="assign-mode" checked={mode === "interested"} onChange={() => setMode("interested")} />
+            Interested — no payment yet
+          </label>
+          <label className="crm-f crm-row" style={{ fontWeight: 400 }} title={pendingOff ?? undefined}>
+            <input type="radio" name="assign-mode" checked={mode === "payment_pending"} disabled={!!pendingOff} onChange={() => setMode("payment_pending")} />
+            Payment pending — the student will pay
+            {pendingOff && <span className="crm-muted crm-small"> ({pendingOff})</span>}
+          </label>
         </div>
-      )}
-    </div>
+        <Field label="Note (optional)" full>
+          <input className="crm-input" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+      </div>
+      <span className="crm-muted crm-small">The student gets access only when a sale is confirmed or they pay in the app.</span>
+    </Panel>
   );
 }
 

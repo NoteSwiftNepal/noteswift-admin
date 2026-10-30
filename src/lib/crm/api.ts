@@ -133,6 +133,10 @@ export type Activity = {
   occurredAt: string;
 };
 
+// R67 (S8b): one entry per course on the lead, the most advanced state first.
+export type LeadCourseState = "enrolled" | "payment_pending" | "interested" | "trial";
+export type LeadCourse = { courseId: string; title: string; state: LeadCourseState; since: string | null; assignmentId?: string; canCancel: boolean };
+
 export type LeadDetail = {
   _id: string;
   kind: "student" | "prospect";
@@ -142,6 +146,7 @@ export type LeadDetail = {
   contactStage: LeadStage;
   saleWaiting: boolean;
   courseTitle: string | null;
+  courses: LeadCourse[];
   enrollment: {
     enrolledCourses: { courseId: string; title: string }[];
     pendingCourseAssignments: { _id: string; courseId: string; title: string; assignedAt: string; fromThisLead: boolean }[];
@@ -224,8 +229,9 @@ export const crmApi = {
     request<{ attemptId: string; link?: string }>("POST", `/leads/${leadId}/outreach/start`, body),
   outreachOutcome: (attemptId: string, outcome: string, summary?: string) => request("POST", `/outreach/${attemptId}/outcome`, { outcome, summary }),
 
-  assignCourse: (leadId: string, courseId: string, note?: string) => request("POST", `/leads/${leadId}/course-assignments`, { courseId, note }),
-  cancelCourseAssignment: (assignmentId: string, reason: string) => request("POST", `/course-assignments/${assignmentId}/cancel`, { reason }),
+  // R67 (S8b): Assign course from the drawer, and cancelling a Payment pending one.
+  assignCourse: (leadId: string, body: { courseId: string; mode: "interested" | "payment_pending"; note?: string }) => request<{ mode: string; created: boolean; assignmentId?: string; interestId?: string }>("POST", `/leads/${leadId}/courses`, body),
+  cancelLeadCourse: (leadId: string, assignmentId: string, reason: string) => request("POST", `/leads/${leadId}/courses/${assignmentId}/cancel`, { reason }),
 
   reps: () => request<Rep[]>("GET", `/reps`),
   inviteRep: (email: string, message?: string) => request<{ emailSent: boolean; invitationUrl: string; message: string }>("POST", `/reps/invite`, { email, message }),
@@ -429,6 +435,12 @@ export async function fetchCourseCatalog(): Promise<{ _id: string; title: string
 }
 
 // ---------- labels ----------
+export const LEAD_COURSE_STATE: Record<LeadCourseState, { label: string; tone: "neutral" | "accent" | "good" | "warn" }> = {
+  enrolled: { label: "Enrolled", tone: "good" },
+  payment_pending: { label: "Payment pending", tone: "warn" },
+  interested: { label: "Interested", tone: "accent" },
+  trial: { label: "Trial", tone: "neutral" },
+};
 export const INTEREST_STAGE_LABELS: Record<InterestStage, string> = { interested: "Interested", payment_pending: "Payment pending" };
 // R61 (S8): the six stages with the prototype's pill tones.
 export const STAGE: Record<Stage, { label: string; tone: "neutral" | "accent" | "good" | "warn" | "bad" }> = {

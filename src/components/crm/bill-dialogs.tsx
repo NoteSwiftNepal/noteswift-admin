@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { CrmFacts, CrmNote, CrmPill } from "@/components/crm/ui";
 import { Field, Panel, Sel } from "@/components/crm/leads/controls";
-import { BILL_STATUS_TONE, Bill, BillRow, Interest, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
+import { BILL_STATUS_TONE, Bill, BillRow, Interest, LeadCourse, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
 
 const STAMP_COLOR: Record<string, string> = { good: "var(--crm-good)", warn: "var(--crm-warn)", bad: "var(--crm-bad)", neutral: "var(--crm-muted)" };
 const STAMP_TEXT: Record<string, string> = { confirmed: "Paid · Confirmed", waiting: "Pending confirmation", rejected: "Rejected", cancelled: "Cancelled", invalid: "Invalid", other: "—" };
@@ -323,8 +323,8 @@ const UNCONFIRMED = "unconfirmed";
 
 /**
  * "Record sale" (S7, R55–R58), the prototype's panel in the lead drawer. The
- * course list holds the lead's open opportunities, then the other paid
- * courses, then "Course not confirmed yet". The discount starts at the
+ * course list holds the lead's Payment pending and Interested courses (S8b),
+ * then the other paid courses, then "Course not confirmed yet". The discount starts at the
  * course's public discount; the server prices it (preview) and flags a
  * discount above the limit. Sales on their own leads, Admin and Super Admin
  * on any lead; someone else always confirms.
@@ -332,18 +332,26 @@ const UNCONFIRMED = "unconfirmed";
 export function RecordSalePanel({
   leadId,
   interests,
+  leadCourses = [],
   courses,
   onDone,
   onCancel,
 }: {
   leadId: string;
   interests: Interest[];
+  /** The lead's courses (R67); Payment pending and Interested ones come first. */
+  leadCourses?: LeadCourse[];
   courses: { _id: string; title: string; price?: number; type?: string }[];
   onDone: () => void;
   onCancel: () => void;
 }) {
   const { toast } = useToast();
-  const openOnes = useMemo(() => interests.filter((i) => i.status === "open"), [interests]);
+  const openOnes = useMemo(() => {
+    const price = (id: string) => interests.find((i) => i.courseId === id)?.listPrice ?? courses.find((c) => c._id === id)?.price ?? null;
+    const fromCourses = leadCourses.filter((c) => c.state === "payment_pending" || c.state === "interested").map((c) => ({ _id: c.courseId, courseId: c.courseId, title: c.title, listPrice: price(c.courseId) }));
+    const rest = interests.filter((i) => i.status === "open" && !fromCourses.some((c) => c.courseId === i.courseId)).map((i) => ({ _id: i._id, courseId: i.courseId, title: i.title, listPrice: i.listPrice }));
+    return [...fromCourses, ...rest];
+  }, [interests, leadCourses, courses]);
   const otherPaid = useMemo(() => courses.filter((c) => c.type !== "free" && (c.price ?? 0) > 0 && !openOnes.some((i) => i.courseId === c._id)), [courses, openOnes]);
   const [courseId, setCourseId] = useState(openOnes[0]?.courseId || otherPaid[0]?._id || UNCONFIRMED);
   const [discount, setDiscount] = useState<string>(""); // "" until the server's public discount arrives
@@ -435,7 +443,7 @@ export function RecordSalePanel({
         <Field label="Course" full>
           <select className="crm-input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
             {openOnes.length > 0 && (
-              <optgroup label="Interested in">
+              <optgroup label="Payment pending and interested">
                 {openOnes.map((i) => (
                   <option key={i._id} value={i.courseId}>
                     {i.title}

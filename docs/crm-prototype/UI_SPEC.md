@@ -290,11 +290,11 @@ All colours are CSS variables on `:root`. In S1 they are scoped to the CRM area 
 
 **Lead (drawer, as the prototype, since S1b / R53):**
 - **Header:** name (19px), muted "grade · course"; plain sm "Close"; stage pill plus lost reason.
-- **Action row** (open leads): primary sm "Log call", sm "Schedule follow-up", sm "Record sale" (not while payment is pending), sm "WhatsApp" (wa.me link), danger sm "Mark lost". Lost leads get "Reopen lead".
+- **Action row** (open leads): primary sm "Log call", sm "Schedule follow-up", sm "Assign course" (S8b, R67), sm "Record sale" (R64), sm "WhatsApp" (wa.me link), danger sm "Mark lost", and sm "Assign" for Admin. Lost leads get only "Reopen lead". The row wraps at phone width.
 - **Body, in order:**
   1. the active inline panel (one at a time);
-  2. a facts grid: Student phone, Guardian (name · phone), School, District, Source, Added, Last contact, Owner (a select for Admin);
-  3. a Stage select (New / Contacted / Interested) with the note "Payment pending and Enrolled are set automatically from sales.";
+  2. a facts grid: Student phone, Guardian (name · phone), School, District, Source, Added, **Courses** (S8b: one pill per course, "Title · state": Enrolled good, Payment pending warn, Interested accent, Trial neutral; a small "Cancel" link on Payment pending entries the viewer may cancel, which asks for a reason; "None yet"), Last contact, Owner (a select for Admin);
+  3. the "Stage" select (R68), on every lead that isn't Lost: only the allowed forward options (New lead → Contacted / Interested, Contacted → Interested); picking Interested opens Assign course with Interested chosen. Interested, Payment pending and Enrolled show as text. Note: "Payment pending and Enrolled are set by sales.";
   4. "Open follow-ups" list: type, note, due (red if overdue); good sm "Done" and sm "+1 day";
   5. "Sales" list: bill no., course, "amount · method · date"; bill pill and sm "Bill";
   6. "Activity" timeline.
@@ -306,6 +306,8 @@ All colours are CSS variables on `:root`. In S1 they are scoped to the CRM area 
     - "Total **Rs x**", and a warn pill when the discount is over the limit;
     - note "The bill is created now. The sale counts toward your target after an admin checks the payment and verifies it.";
     - buttons Create bill / Cancel.
+  - **Assign course** (S8b, R67): Course select (paid and free catalog courses, without the ones the student already has; an Interested course stays listed only for Payment pending), radios "Interested — no payment yet" (default) and "Payment pending — the student will pay" (disabled with "Register the student first" on prospects, and for a free course), optional Note, help "The student gets access only when a sale is confirmed or they pay in the app." Buttons Assign course / Cancel.
+  - **Record sale** course list (S8b): the lead's Payment pending and Interested courses first, then other paid courses, then "Course not confirmed yet".
   - **Mark as lost:** Reason, "Try again later" → Re-engage on. Buttons Mark lost / Cancel.
 
 **Follow-ups:**
