@@ -18,7 +18,6 @@ import { useToast } from "@/hooks/use-toast";
 import { DataState } from "@/components/crm/crm-ui";
 import { CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmPill, CrmTabs, Tone } from "@/components/crm/ui";
 import { MyTargetView, TargetsTab } from "@/components/crm/targets";
-import { CodeAllocationCard, PendingQuotesCard } from "@/components/crm/team-panels";
 import { useAdmin } from "@/context/admin-context";
 import { Rep, crmApi, fetchCourseCatalog, fmtDateTime } from "@/lib/crm/api";
 
@@ -73,7 +72,6 @@ const STATUS_BADGE: Record<Rep["status"], { label: string; tone: Tone }> = {
 
 function TeamAllocation() {
   const { toast } = useToast();
-  const { can } = useAdmin();
   const [reps, setReps] = useState<Rep[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -183,8 +181,7 @@ function TeamAllocation() {
           </DataState>
       </CrmCard>
 
-      {can("crm.approve_discounts") && <PendingQuotesCard />}
-      {can("crm.allocate_codes") && <CodeAllocationCard reps={reps} courses={courses} />}
+      {/* S7: the discount approvals card (quotes, R54) and the code allocation card (R59) are gone; the backend keeps both. */}
 
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} onDone={(msg) => { toast({ title: msg }); load(); }} />
       <ProfileDialog rep={editRep} courses={courses} onClose={() => setEditRep(null)} onDone={() => { toast({ title: "Allocation updated" }); load(); }} />

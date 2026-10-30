@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
-import { CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmTable, CrmTabs, GOOD_BUTTON } from "@/components/crm/ui";
+import { CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmPill, CrmTable, CrmTabs, GOOD_BUTTON } from "@/components/crm/ui";
 import { DataState, ReasonDialog } from "@/components/crm/crm-ui";
 import { BillDialog, BillStatusPill, ConfirmPaymentDialog } from "@/components/crm/bill-dialogs";
 import { MonthSelect, useTargetMonths } from "@/components/crm/targets";
@@ -214,7 +214,8 @@ function SalesBillsInner() {
                 <th>Course</th>
                 <th>How</th>
                 <th className="crm-num">Amount</th>
-                {isAdmin && <th>Salesperson</th>}
+                <th>Recorded by</th>
+                {isAdmin && <th>Credit to</th>}
                 <th>Status</th>
                 <th>
                   <span className="sr-only">Actions</span>
@@ -230,7 +231,7 @@ function SalesBillsInner() {
                     {r.receivedAt && r.status === "waiting" && <span className="crm-sub">received {fmtDateTime(r.receivedAt)}</span>}
                   </td>
                   <td>{r.leadId ? <Link href={`/dashboard/crm/leads/${r.leadId}`} className="crm-link">{r.studentName}</Link> : r.studentName}</td>
-                  <td>{r.courseTitle}</td>
+                  <td>{r.courseUnconfirmed ? <CrmPill tone="warn">Course not confirmed</CrmPill> : r.courseTitle}</td>
                   <td>
                     {r.pathLabel}
                     <span className="crm-sub">{r.methodLabel}</span>
@@ -238,13 +239,15 @@ function SalesBillsInner() {
                   <td className="crm-num">
                     <b>{rs(r.amount)}</b>
                     {r.pricing && <span className="crm-sub">incl. VAT {rs(r.pricing.vatAmount)}</span>}
-                    {r.pricing && r.pricing.totalDiscount > 0 && <span className="crm-sub">−{rs(r.pricing.totalDiscount)} disc.</span>}
+                    {r.pricing && r.pricing.totalDiscount > 0 && (
+                      <span className="crm-sub" style={r.discount?.needsApproval && !r.discount.approved ? { color: "var(--crm-warn)", fontWeight: 600 } : undefined}>
+                        −{rs(r.pricing.totalDiscount)} disc.{r.discount?.needsApproval ? (r.discount.approved ? " (approved)" : " · needs approval") : ""}
+                      </span>
+                    )}
+                    {r.amountMismatch && <span className="crm-sub crm-late">received {rs(r.amountReceived)}</span>}
                   </td>
-                  {isAdmin && (
-                    <td>
-                      {r.organization ? <span className="crm-muted">Organization</span> : r.creditedToName ?? r.recordedByName ?? <span className="crm-muted">—</span>}
-                    </td>
-                  )}
+                  <td>{r.organization ? <span className="crm-muted">Organization</span> : r.recordedByName ?? <span className="crm-muted">{r.pathLabel}</span>}</td>
+                  {isAdmin && <td>{r.organization ? <span className="crm-muted">—</span> : r.creditedToName ?? r.creditOwnerName ?? <span className="crm-muted">No salesperson</span>}</td>}
                   <td>
                     <BillStatusPill status={r.status} label={r.statusLabel} />
                   </td>

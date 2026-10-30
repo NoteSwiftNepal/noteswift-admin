@@ -2,9 +2,11 @@
 
 // Sales & CRM → Sales Pipeline: open course opportunities by stage. Drag a
 // card to another column, or use its "Move to" menu (keyboard friendly).
-// The backend validates every move (no manual win; "quoted" waits for quotes;
-// "payment pending" needs a pending course assignment) and answers with the
-// reason when it refuses. Totals are course list prices, never revenue.
+// The backend validates every move (no manual win; no new moves to "quoted"
+// since R54, and its column shows only while opportunities are still there;
+// "payment pending" needs a pending course assignment or a recorded sale) and
+// answers with the reason when it refuses. Totals are course list prices,
+// never revenue.
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Columns3, Rows3 } from "lucide-react";
@@ -17,6 +19,8 @@ import { CrmCard, CrmPageHeader, CrmPill } from "@/components/crm/ui";
 import { INTEREST_STAGE_LABELS, InterestStage, Pipeline, PipelineCard, Rep, crmApi, fetchCourseCatalog, rs, timeAgo } from "@/lib/crm/api";
 
 const ANY = "any";
+// R54 (S7): nothing moves to "quoted" any more; an opportunity already there can stay.
+const moveTargets = (current: InterestStage) => (Object.keys(INTEREST_STAGE_LABELS) as InterestStage[]).filter((st) => st !== "quoted" || current === "quoted");
 
 export default function PipelinePage() {
   const { toast } = useToast();
@@ -68,6 +72,7 @@ export default function PipelinePage() {
   };
 
   const rows = (data?.stages || []).flatMap((s) => s.cards.map((c) => ({ ...c, stage: s.stage })));
+  const stages = (data?.stages || []).filter((s) => s.stage !== "quoted" || s.count > 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -121,8 +126,8 @@ export default function PipelinePage() {
 
       <DataState loading={loading} error={error} onRetry={load} empty={!!data && rows.length === 0} emptyText="No open opportunities.">
         {view === "board" ? (
-          <div className="grid gap-4 overflow-x-auto pb-2 md:grid-cols-[repeat(5,minmax(220px,1fr))]">
-            {data?.stages.map((s) => (
+          <div className="grid gap-4 overflow-x-auto pb-2 md:[grid-template-columns:var(--cols)]" style={{ ["--cols" as any]: `repeat(${stages.length},minmax(220px,1fr))` }}>
+            {stages.map((s) => (
               <section
                 key={s.stage}
                 aria-label={INTEREST_STAGE_LABELS[s.stage]}
@@ -175,7 +180,7 @@ export default function PipelinePage() {
                             <SelectValue placeholder="Move to" />
                           </SelectTrigger>
                           <SelectContent>
-                            {(Object.keys(INTEREST_STAGE_LABELS) as InterestStage[]).map((st) => (
+                            {moveTargets(s.stage).map((st) => (
                               <SelectItem key={st} value={st}>
                                 {INTEREST_STAGE_LABELS[st]}
                               </SelectItem>
@@ -220,7 +225,7 @@ export default function PipelinePage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {(Object.keys(INTEREST_STAGE_LABELS) as InterestStage[]).map((st) => (
+                            {moveTargets(c.stage).map((st) => (
                               <SelectItem key={st} value={st}>
                                 {INTEREST_STAGE_LABELS[st]}
                               </SelectItem>

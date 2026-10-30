@@ -14,14 +14,14 @@ import { OutcomeBadge, ReasonDialog } from "@/components/crm/crm-ui";
 import { CrmEvent, CrmFacts, CrmNote, CrmPill, CrmTimeline } from "@/components/crm/ui";
 import { ContactPanel } from "@/components/crm/contact-panel";
 import { TaskPanel } from "@/components/crm/task-dialogs";
-import { RecordPaymentPanel } from "@/components/crm/bill-dialogs";
-import { EnrollWithCodeDialog, LeadSalesSection } from "@/components/crm/sales-panels";
+import { RecordSalePanel } from "@/components/crm/bill-dialogs";
+import { EarlierQuotes, EnrollWithCodeDialog, LeadSalesSection } from "@/components/crm/sales-panels";
 import { Btn, Collapsible, Field, Panel, Sel, useBusy } from "@/components/crm/leads/controls";
 import {
   Activity,
   CHANNEL_LABELS,
+  CATEGORY,
   Channel,
-  DISPLAY_STAGE,
   INTEREST_STAGE_LABELS,
   Interest,
   InterestStage,
@@ -33,6 +33,7 @@ import {
   Rep,
   TASK_TYPE_LABELS,
   crmApi,
+  markerLabels,
   fmtDateTime,
   relDateTime,
   rs,
@@ -55,7 +56,7 @@ type ReasonAction = { title: string; description?: string; confirmLabel: string;
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { leadId: string; reps: Rep[]; courses: { _id: string; title: string; price?: number }[]; onClose: () => void; onChanged: () => void }) {
+export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { leadId: string; reps: Rep[]; courses: { _id: string; title: string; price?: number; type?: string }[]; onClose: () => void; onChanged: () => void }) {
   const { toast } = useToast();
   const { can } = useAdmin();
   const isAdmin = can("crm.view_all_leads");
@@ -65,7 +66,6 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
   const [reasonAction, setReasonAction] = useState<ReasonAction>(null);
   const [codeOpen, setCodeOpen] = useState(false);
   const [salesKey, setSalesKey] = useState(0);
-  const [recordable, setRecordable] = useState<{ ok: boolean; reason: string | null; interestId: string | null } | null>(null);
   const [activities, setActivities] = useState<{ items: Activity[]; page: number; total: number } | null>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -98,25 +98,6 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
     setModeRaw(m);
     if (m) bodyRef.current?.scrollTo({ top: 0 });
   };
-
-  // Sales: whether a payment can be recorded on any open opportunity (preview per course).
-  const openInterestKey = (lead?.interests || []).filter((i) => i.status === "open").map((i) => i._id).join(",");
-  useEffect(() => {
-    if (!can("crm.record_payments") || !lead) return;
-    const open = lead.interests.filter((i) => i.status === "open");
-    if (lead.kind !== "student") return setRecordable({ ok: false, reason: "Payments can be recorded only for a registered student.", interestId: null });
-    if (open.length === 0) return setRecordable({ ok: false, reason: "No open course opportunity.", interestId: null });
-    let cancelled = false;
-    setRecordable(null);
-    Promise.all(open.map((i) => crmApi.paymentPreview(leadId, i._id).catch((e) => ({ canRecord: false, reason: e?.message || "Can't price this course", interestId: i._id }) as any))).then((previews) => {
-      if (cancelled) return;
-      const ok = previews.find((p) => p.canRecord);
-      setRecordable(ok ? { ok: true, reason: null, interestId: ok.interestId } : { ok: false, reason: previews[0]?.reason || "Recording isn't possible right now.", interestId: null });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [lead?.kind, openInterestKey, leadId, can]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** After any change: the drawer, the payments and quotes, and the list row. */
   const refresh = async () => {
@@ -167,6 +148,8 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
   const name = p?.name || "Unnamed";
   const dnc = !!lead?.doNotContact.flag;
   const lost = lead?.status === "lost";
+  // R55: Sales, Admin and Super Admin record sales; the panel checks each course with the server.
+  const saleBlock = lead?.kind !== "student" ? "Register the student first" : lost ? "Reopen the lead first" : null;
   const contactBlock = (channel: Channel) => (dnc ? "Do not contact is set" : lead?.channels?.[channel] === false ? `${CHANNEL_LABELS[channel]} is turned off for this lead` : !can("crm.add_activities") ? "You can't contact leads" : null);
   const moreItems: { label: string; run: () => void }[] = lead
     ? [
@@ -194,18 +177,29 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
         {lead && (
           <>
             <div className="crm-actions">
-              <CrmPill tone={DISPLAY_STAGE[lead.displayStage]?.tone}>{DISPLAY_STAGE[lead.displayStage]?.label ?? lead.displayStage}</CrmPill>
+              <CrmPill tone={CATEGORY[lead.category]?.tone}>{CATEGORY[lead.category]?.label ?? lead.category}</CrmPill>
               {lost && lead.lostReason && <span className="crm-muted crm-small">{lead.lostReason}</span>}
+              {markerLabels(lead.markers).map((m) => (
+                <CrmPill key={m}>{m}</CrmPill>
+              ))}
               {dnc && <CrmPill tone="bad">Do not contact</CrmPill>}
               {lead.kind === "prospect" && <CrmPill>Prospect</CrmPill>}
+              <span className="crm-muted crm-small">Contact stage: {LEAD_STAGE_LABELS[lead.stage]}</span>
             </div>
             <div className="crm-actions">
               {lost ? (
-                can("crm.edit_leads") && (
-                  <Btn sm onClick={() => setReasonAction({ title: "Reopen lead", confirmLabel: "Reopen", optional: true, success: "Lead reopened", run: (r) => crmApi.reopenLead(leadId, r || "reopened by hand") })}>
-                    Reopen lead
-                  </Btn>
-                )
+                <>
+                  {can("crm.edit_leads") && (
+                    <Btn sm onClick={() => setReasonAction({ title: "Reopen lead", confirmLabel: "Reopen", optional: true, success: "Lead reopened", run: (r) => crmApi.reopenLead(leadId, r || "reopened by hand") })}>
+                      Reopen lead
+                    </Btn>
+                  )}
+                  {can("crm.record_payments") && (
+                    <Btn sm disabledReason={saleBlock}>
+                      Record sale
+                    </Btn>
+                  )}
+                </>
               ) : (
                 <>
                   <Btn sm tone="primary" disabledReason={contactBlock("call")} onClick={() => setMode({ kind: "contact", channel: "call", interest: null })}>
@@ -217,8 +211,8 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
                     </Btn>
                   )}
                   {can("crm.record_payments") && (
-                    <Btn sm disabledReason={recordable && !recordable.ok ? recordable.reason : null} disabled={!recordable} onClick={() => setMode({ kind: "payment" })}>
-                      Record payment
+                    <Btn sm disabledReason={saleBlock} onClick={() => setMode({ kind: "payment" })}>
+                      Record sale
                     </Btn>
                   )}
                   <Btn sm disabledReason={contactBlock("whatsapp")} onClick={() => setMode({ kind: "contact", channel: "whatsapp", interest: null })}>
@@ -268,7 +262,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
           <>
             {mode?.kind === "contact" && <ContactPanel key={`${mode.channel}-${mode.interest?._id ?? ""}`} leadId={leadId} interest={mode.interest} initialChannel={mode.channel} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "task" && <TaskPanel leadId={leadId} interests={lead.interests} onCreated={panelDone("Follow-up scheduled")} onCancel={() => setModeRaw(null)} />}
-            {mode?.kind === "payment" && <RecordPaymentPanel leadId={leadId} interests={lead.interests} initialInterestId={recordable?.interestId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
+            {mode?.kind === "payment" && <RecordSalePanel leadId={leadId} interests={lead.interests} courses={courses} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "lost" && <LostPanel lead={lead} onCoursesClick={() => coursesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} onDone={panelDone("Lead marked lost")} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "assign" && <AssignPanel lead={lead} reps={reps} initialOwnerId={mode.ownerId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "course" && <CoursePanel leadId={leadId} assign={mode.assign} courses={courses} onDone={panelDone(mode.assign ? "Course assigned, payment pending" : "Course added")} onCancel={() => setModeRaw(null)} />}
@@ -348,7 +342,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
 
             <FollowUps lead={lead} act={act} ask={setReasonAction} />
 
-            <LeadSalesSection leadId={leadId} interests={lead.interests} refreshKey={salesKey} onChanged={() => { load(); onChanged(); }} />
+            <LeadSalesSection leadId={leadId} refreshKey={salesKey} />
 
             <section>
               <div className="mb-2.5 flex items-center justify-between gap-2">
@@ -427,6 +421,9 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
             <Collapsible title="Past follow-ups">
               <PastFollowUps lead={lead} />
             </Collapsible>
+            <EarlierQuotes leadId={leadId} interests={lead.interests}>
+              {(list) => <Collapsible title="Earlier quotes (no longer used)">{list}</Collapsible>}
+            </EarlierQuotes>
             {isAdmin && (
               <Collapsible title="History">
                 <HistoryBody lead={lead} />
@@ -529,7 +526,7 @@ function CoursesSection({
           {lead.interests.map((i) => (
             <div key={i._id} className="crm-li" style={i.status === "closed" ? { opacity: 0.85 } : undefined}>
               <div className="crm-who">
-                <b>{i.title}</b> {i.status === "open" ? <CrmPill tone={DISPLAY_STAGE[i.stage].tone}>{INTEREST_STAGE_LABELS[i.stage]}</CrmPill> : <OutcomeBadge outcome={i.outcome} lostReason={i.lostReason} />}
+                <b>{i.title}</b> {i.status === "open" ? <CrmPill tone={i.stage === "payment_pending" ? "warn" : "accent"}>{INTEREST_STAGE_LABELS[i.stage]}</CrmPill> : <OutcomeBadge outcome={i.outcome} lostReason={i.lostReason} />}
                 {i.enrolled && (
                   <>
                     {" "}
@@ -558,11 +555,13 @@ function CoursesSection({
                       value={i.stage}
                       onChange={(e) => act(() => crmApi.setStage(i._id, e.target.value as InterestStage, i.stage), "Course stage updated")}
                     >
-                      {(Object.keys(INTEREST_STAGE_LABELS) as InterestStage[]).map((s) => (
-                        <option key={s} value={s}>
-                          {INTEREST_STAGE_LABELS[s]}
-                        </option>
-                      ))}
+                      {(Object.keys(INTEREST_STAGE_LABELS) as InterestStage[])
+                        .filter((s) => s !== "quoted" || i.stage === "quoted") // R54: no new moves to quoted
+                        .map((s) => (
+                          <option key={s} value={s}>
+                            {INTEREST_STAGE_LABELS[s]}
+                          </option>
+                        ))}
                     </select>
                   )}
                   <Btn sm disabledReason={contactBlocked} onClick={() => onContact(i)}>

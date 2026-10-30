@@ -15,7 +15,7 @@ import { CrmPageHeader, CrmPill } from "@/components/crm/ui";
 import { Field, Sel } from "@/components/crm/leads/controls";
 import { LeadDrawer } from "@/components/crm/leads/lead-drawer";
 import { AddLeadModal } from "@/components/crm/leads/add-lead-modal";
-import { DISPLAY_STAGE, LEAD_STAGE_LABELS, LeadRow, LeadView, Pagination, Rep, crmApi, fetchCourseCatalog, relDateTime, sourceLabel } from "@/lib/crm/api";
+import { CATEGORY, LEAD_STAGE_LABELS, LeadRow, LeadView, Pagination, Rep, crmApi, fetchCourseCatalog, markerLabels, relDateTime, sourceLabel } from "@/lib/crm/api";
 
 const BASE = "/dashboard/crm/leads";
 const PAGE_SIZE = 25;
@@ -28,21 +28,26 @@ export function LeadsSection() {
   const { can } = useAdmin();
   const isAdmin = can("crm.view_all_leads");
 
+  // R60 (S7): the five categories as the main tabs; the other views under "More views".
   const views: { value: LeadView; label: string }[] = [
     { value: isAdmin ? "all" : "mine", label: "All" },
-    { value: "new", label: "New" },
-    { value: "today_tasks", label: "Today's follow-ups" },
-    { value: "overdue_tasks", label: "Overdue" },
+    { value: "new", label: "New lead" },
+    { value: "interested", label: "Interested" },
     { value: "payment_pending", label: "Payment pending" },
     { value: "enrolled", label: "Enrolled" },
     { value: "lost", label: "Lost" },
+  ];
+  const moreViews: { value: LeadView; label: string }[] = [
     ...(isAdmin ? [{ value: "unassigned" as LeadView, label: "Unassigned" }] : []),
+    { value: "today_tasks", label: "Today's follow-ups" },
+    { value: "overdue_tasks", label: "Overdue" },
     { value: "recent_signals", label: "Recent course activity" },
     { value: "checkout_abandoned", label: "Abandoned checkout" },
     { value: "do_not_contact", label: "Do not contact" },
   ];
   const requested = params.get("view") as LeadView | null;
-  const view: LeadView = requested && views.some((v) => v.value === requested) ? requested : views[0].value;
+  const view: LeadView = requested && [...views, ...moreViews].some((v) => v.value === requested) ? requested : views[0].value;
+  const moreActive = moreViews.find((v) => v.value === view);
   const page = parseInt(params.get("page") || "1", 10) || 1;
   const filters = { status: params.get("status") || "", stage: params.get("stage") || "", courseId: params.get("courseId") || "", ownerId: params.get("ownerId") || "", q: params.get("q") || "" };
   const filterKey = JSON.stringify(filters);
@@ -220,13 +225,29 @@ export function LeadsSection() {
           </Popover>
         </div>
 
-        <div className="crm-tabs" role="tablist" aria-label="Lead views">
+        <div className="crm-tabs items-end" role="tablist" aria-label="Lead categories">
           {views.map((v) => (
             <button key={v.value} type="button" role="tab" aria-selected={view === v.value} className="crm-tab" onClick={() => setParam({ view: v.value === views[0].value ? null : v.value })}>
               {v.label}
               <span className="crm-tab-n">{counts[v.value] ?? "–"}</span>
             </button>
           ))}
+          <label className="ml-auto flex items-center gap-1.5 pb-1.5 pl-2">
+            <span className="sr-only">More views</span>
+            <select
+              className="crm-input"
+              style={{ width: "auto", padding: "4px 8px", fontSize: 12, fontWeight: 600, ...(moreActive ? { borderColor: "var(--crm-accent)", color: "var(--crm-accent)" } : {}) }}
+              value={moreActive ? view : ""}
+              onChange={(e) => setParam({ view: e.target.value || null })}
+            >
+              <option value="">More views…</option>
+              {moreViews.map((v) => (
+                <option key={v.value} value={v.value}>
+                  {v.label} ({counts[v.value] ?? "–"})
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {isAdmin && selected.length > 0 && (
@@ -279,15 +300,16 @@ export function LeadsSection() {
                   <th>Phone</th>
                   <th>Course interest</th>
                   {isAdmin && <th>Owner</th>}
-                  <th>Stage</th>
+                  <th>Category</th>
                   <th>Next follow-up</th>
                   {isAdmin && <th>Source</th>}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const st = DISPLAY_STAGE[r.displayStage] ?? { label: r.displayStage, tone: "neutral" as const };
-                  const closed = r.displayStage === "lost" || r.displayStage === "enrolled";
+                  const st = CATEGORY[r.category] ?? { label: r.category, tone: "neutral" as const };
+                  const closed = r.category === "lost" || r.category === "enrolled";
+                  const markers = markerLabels(r.markers);
                   const sub = [r.person?.grade ? `Grade ${r.person.grade}` : null, r.person?.district].filter(Boolean).join(" · ");
                   return (
                     <tr key={r._id} className="crm-click" tabIndex={0} aria-label={`Open ${r.person?.name || "lead"}`} onClick={(e) => openLead(r._id, e.currentTarget)} onKeyDown={(e) => rowKey(e, r._id)}>
@@ -315,6 +337,14 @@ export function LeadsSection() {
                       {isAdmin && <td>{r.ownerName || <CrmPill tone="warn">Unassigned</CrmPill>}</td>}
                       <td>
                         <CrmPill tone={st.tone}>{st.label}</CrmPill>
+                        {markers.length > 0 && (
+                          <span className="mt-1 flex flex-wrap gap-1">
+                            {markers.map((m) => (
+                              <CrmPill key={m}>{m}</CrmPill>
+                            ))}
+                          </span>
+                        )}
+                        <span className="crm-sub">{LEAD_STAGE_LABELS[r.stage] ?? r.stage}</span>
                       </td>
                       <td className={`whitespace-nowrap ${r.overdue ? "crm-late" : ""}`}>{r.nextTaskDueAt ? relDateTime(r.nextTaskDueAt) : <span className="crm-muted">{closed ? "—" : "None set"}</span>}</td>
                       {isAdmin && <td className="crm-muted">{sourceLabel(r)}</td>}

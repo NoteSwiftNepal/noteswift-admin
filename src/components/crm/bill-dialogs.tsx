@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { CrmFacts, CrmNote, CrmPill } from "@/components/crm/ui";
 import { Field, Panel, Sel } from "@/components/crm/leads/controls";
-import { BILL_STATUS_TONE, Bill, BillRow, Interest, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fmtDateTime, rs } from "@/lib/crm/api";
+import { BILL_STATUS_TONE, Bill, BillRow, Interest, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
 
 const STAMP_COLOR: Record<string, string> = { good: "var(--crm-good)", warn: "var(--crm-warn)", bad: "var(--crm-bad)", neutral: "var(--crm-muted)" };
 const STAMP_TEXT: Record<string, string> = { confirmed: "Paid · Confirmed", waiting: "Pending confirmation", rejected: "Rejected", cancelled: "Cancelled", invalid: "Invalid", other: "—" };
@@ -133,7 +133,9 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
                 ...(bill.people.recordedBy ? [{ label: "Recorded by", value: bill.people.recordedBy }] : []),
                 ...(bill.people.confirmedBy ? [{ label: "Confirmed by", value: `${bill.people.confirmedBy}${bill.dates.decidedAt ? ` · ${fmtDateTime(bill.dates.decidedAt)}` : ""}` }] : []),
                 ...(bill.people.rejectedBy ? [{ label: "Rejected by", value: bill.people.rejectedBy }] : []),
-                ...(bill.people.creditedTo ? [{ label: "Credited to", value: bill.people.creditedTo }] : []),
+                ...(bill.people.creditedTo ? [{ label: "Credited to", value: bill.people.creditedTo }] : bill.status === "waiting" ? [{ label: "Credit goes to", value: bill.people.creditOwner ?? "No salesperson" }] : []),
+                ...(bill.courseUnconfirmed ? [{ label: "Course", value: <span className="crm-late">Course not confirmed</span> }] : []),
+                ...(bill.amountMismatch ? [{ label: "Amount received", value: <span className="crm-late">{rs(bill.amountReceived)}</span> }] : []),
                 ...(bill.reason ? [{ label: bill.status === "rejected" ? "Rejected because" : "Cancelled because", value: bill.reason }] : []),
               ]}
             />
@@ -175,31 +177,64 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
   );
 }
 
-/** Confirm a Sales-recorded payment: shows what was recorded and needs the "money arrived" tick (R20). */
+/**
+ * Confirm a recorded sale: shows what was recorded and needs the "money
+ * arrived" tick (R20). A flagged discount is approved by confirming (R57); a
+ * sale without a course, or whose amount received doesn't match the course's
+ * total, gets its course set here first (R58).
+ */
 export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillRow | null; onOpenChange: (v: boolean) => void; onDone: () => void }) {
   const { toast } = useToast();
   const [bill, setBill] = useState<Bill | null>(null);
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cur, setCur] = useState<{ amount: number; amountReceived: number | null; courseUnconfirmed: boolean; courseTitle: string; discount: BillRow["discount"] } | null>(null);
+  const [courses, setCourses] = useState<{ _id: string; title: string; price?: number; type?: string }[]>([]);
+  const [courseId, setCourseId] = useState("");
+  const [discount, setDiscount] = useState("");
   useEffect(() => {
     if (!row) return;
     setChecked(false);
     setError(null);
     setBill(null);
+    setCur({ amount: row.amount, amountReceived: row.amountReceived, courseUnconfirmed: row.courseUnconfirmed, courseTitle: row.courseTitle, discount: row.discount });
+    setCourseId(row.courseId || "");
+    setDiscount("");
     crmApi.bill(row._id).then(setBill, () => setBill(null));
+    if (row.courseUnconfirmed || row.amountMismatch) fetchCourseCatalog().then((c) => setCourses(c.filter((x: any) => x.type !== "free" && (x.price ?? 0) > 0)));
   }, [row]);
-  const submit = async () => {
-    if (!row) return;
+  const mismatch = !!cur && cur.amountReceived !== null && cur.amountReceived !== cur.amount && !cur.courseUnconfirmed;
+  const needsCourse = !!cur && (cur.courseUnconfirmed || mismatch);
+
+  const setCourse = async () => {
+    if (!row || !courseId) return;
     setBusy(true);
     setError(null);
     try {
-      await crmApi.confirmPayment(row._id, row.amount);
-      toast({ title: "Payment confirmed", description: "The student has the course and the sale counts." });
+      const p = await crmApi.setPaymentCourse(row._id, courseId, discount === "" ? undefined : Number(discount));
+      const title = courses.find((c) => c._id === courseId)?.title || "Course";
+      setCur({ amount: p.amount, amountReceived: p.amountReceived, courseUnconfirmed: false, courseTitle: title, discount: p.discount ? { ...p.discount, limitPercent: 0, approved: false } : null });
+      toast({ title: "Course set", description: p.amountReceived !== null && p.amountReceived !== p.amount ? "The amount received doesn't match the course's total." : "The sale can be confirmed now." });
+      onDone();
+    } catch (e: any) {
+      setError(e?.message || "Could not set the course");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submit = async () => {
+    if (!row || !cur) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await crmApi.confirmPayment(row._id, cur.amount);
+      toast({ title: "Sale confirmed", description: "The student has the course and the sale counts." });
       onOpenChange(false);
       onDone();
     } catch (e: any) {
-      const msg = e?.code === "QUOTE_STALE" ? "The price changed or the promo code is no longer valid. Reject this payment and ask the salesperson to record it again." : e?.message || "Could not confirm";
+      const msg = e?.code === "AMOUNT_CHANGED" ? "The amount changed meanwhile. Close this and open it again." : e?.message || "Could not confirm";
       setError(msg);
       toast({ title: "Not confirmed", description: msg, variant: "destructive" });
     } finally {
@@ -208,22 +243,51 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
   };
   return (
     <Dialog open={!!row} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Confirm payment</DialogTitle>
-          <DialogDescription>The student gets the course and the sale counts for the salesperson once you confirm.</DialogDescription>
+          <DialogTitle>Confirm sale</DialogTitle>
+          <DialogDescription>The student gets the course and the sale counts once you confirm.</DialogDescription>
         </DialogHeader>
-        {row && (
+        {row && cur && (
           <CrmFacts
             items={[
-              { label: "Amount", value: <b>{rs(row.amount)}</b> },
+              { label: "Amount", value: <b>{rs(cur.amount)}</b> },
+              ...(cur.amountReceived !== null && (cur.courseUnconfirmed || mismatch) ? [{ label: "Amount received", value: <b className={mismatch ? "crm-late" : undefined}>{rs(cur.amountReceived)}</b> }] : []),
+              ...(cur.discount && cur.discount.amount > 0
+                ? [{ label: "Discount", value: <span style={cur.discount.needsApproval ? { color: "var(--crm-warn)", fontWeight: 600 } : undefined}>{rs(cur.discount.amount)} ({cur.discount.percent}%)</span> }]
+                : []),
               { label: "Paid by", value: `${row.methodLabel}${bill?.payment.reference ? ` · ${bill.payment.reference}` : ""}` },
               { label: "Student", value: row.studentName },
-              { label: "Course", value: row.courseTitle },
+              { label: "Course", value: cur.courseUnconfirmed ? <span className="crm-late">Course not confirmed</span> : cur.courseTitle },
               { label: "Money received", value: fmtDateTime(row.receivedAt) },
               { label: "Recorded by", value: row.recordedByName ?? "—" },
+              { label: "Credit goes to", value: row.creditOwnerName ?? "No salesperson" },
             ]}
           />
+        )}
+        {cur?.discount?.needsApproval && cur.discount.amount > 0 && <CrmNote>Needs approval: confirming approves this discount.</CrmNote>}
+        {mismatch && cur && (
+          <p className="crm-late text-sm">
+            {rs(cur.amountReceived)} was received but the course&apos;s total is {rs(cur.amount)}. Reject it, or change the course or discount below.
+          </p>
+        )}
+        {needsCourse && (
+          <div className="crm-panel">
+            <h3>{cur?.courseUnconfirmed ? "Set the course" : "Change the course"}</h3>
+            <div className="crm-form">
+              <Field label="Course" full>
+                <Sel value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "", label: "Choose a course" }, ...courses.map((c) => ({ value: c._id, label: `${c.title}${c.price ? ` · ${rs(c.price)}` : ""}` }))]} />
+              </Field>
+              <Field label="Discount (Rs, optional)">
+                <input className="crm-input" type="number" min={0} step={1} value={discount} placeholder="Public discount" onChange={(e) => setDiscount(e.target.value)} />
+              </Field>
+            </div>
+            <div className="crm-actions">
+              <button type="button" className="crm-btn sm primary" disabled={!courseId || busy} onClick={setCourse}>
+                Set course
+              </button>
+            </div>
+          </div>
         )}
         {row?.canViewScreenshot && (
           <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => openScreenshot(row._id, toast)}>
@@ -241,8 +305,8 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>
-          <Button type="button" className="bg-[var(--crm-good)] text-white hover:bg-[var(--crm-good)] hover:brightness-110" onClick={submit} disabled={busy || !checked}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Confirm payment
+          <Button type="button" className="bg-[var(--crm-good)] text-white hover:bg-[var(--crm-good)] hover:brightness-110" onClick={submit} disabled={busy || !checked || needsCourse}>
+            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Confirm sale
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -255,15 +319,35 @@ const SCREENSHOT_TYPES = ["image/jpeg", "image/png", "image/webp", "application/
 const dayInput = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
+const UNCONFIRMED = "unconfirmed";
+
 /**
- * Record a payment on the lead (Sales, R19–R21), drawn as the prototype's
- * "Record sale" panel in the lead drawer (S1b): the server's price, read-only,
- * never typed.
+ * "Record sale" (S7, R55–R58), the prototype's panel in the lead drawer. The
+ * course list holds the lead's open opportunities, then the other paid
+ * courses, then "Course not confirmed yet". The discount starts at the
+ * course's public discount; the server prices it (preview) and flags a
+ * discount above the limit. Sales on their own leads, Admin and Super Admin
+ * on any lead; someone else always confirms.
  */
-export function RecordPaymentPanel({ leadId, interests, initialInterestId, onDone, onCancel }: { leadId: string; interests: Interest[]; initialInterestId?: string | null; onDone: () => void; onCancel: () => void }) {
+export function RecordSalePanel({
+  leadId,
+  interests,
+  courses,
+  onDone,
+  onCancel,
+}: {
+  leadId: string;
+  interests: Interest[];
+  courses: { _id: string; title: string; price?: number; type?: string }[];
+  onDone: () => void;
+  onCancel: () => void;
+}) {
   const { toast } = useToast();
   const openOnes = useMemo(() => interests.filter((i) => i.status === "open"), [interests]);
-  const [interestId, setInterestId] = useState(initialInterestId || openOnes[0]?._id || "");
+  const otherPaid = useMemo(() => courses.filter((c) => c.type !== "free" && (c.price ?? 0) > 0 && !openOnes.some((i) => i.courseId === c._id)), [courses, openOnes]);
+  const [courseId, setCourseId] = useState(openOnes[0]?.courseId || otherPaid[0]?._id || UNCONFIRMED);
+  const [discount, setDiscount] = useState<string>(""); // "" until the server's public discount arrives
+  const [amountReceived, setAmountReceived] = useState("");
   const [preview, setPreview] = useState<PaymentPreview | null>(null);
   const [method, setMethod] = useState("cash");
   const [reference, setReference] = useState("");
@@ -276,12 +360,31 @@ export function RecordPaymentPanel({ leadId, interests, initialInterestId, onDon
   const [idempotencyKey] = useState(newKey);
   const today = new Date();
   const minDay = dayInput(new Date(today.getTime() - 7 * 86_400_000));
+  const unconfirmed = courseId === UNCONFIRMED;
 
+  // A new course starts from its public discount.
   useEffect(() => {
-    if (!interestId) return;
+    setDiscount("");
+  }, [courseId]);
+  // The server's price for this course and discount (debounced while typing).
+  useEffect(() => {
+    let cancelled = false;
     setPreview(null);
-    crmApi.paymentPreview(leadId, interestId).then(setPreview, (e) => setPreview({ canRecord: false, reason: e?.message || "Could not price this course", code: null, interestId, courseId: null, source: null, quoteId: null, price: null }));
-  }, [leadId, interestId]);
+    const t = setTimeout(() => {
+      crmApi
+        .paymentPreview(leadId, { courseId, ...(discount !== "" && !unconfirmed ? { discount } : {}) })
+        .then((p) => {
+          if (cancelled) return;
+          setPreview(p);
+          if (discount === "" && p.price) setDiscount(String(p.price.discount));
+        })
+        .catch((e) => !cancelled && setPreview({ canRecord: false, reason: e?.message || "Could not price this course", code: null, courseId, interestId: null, unconfirmed, price: null, needsApproval: false }));
+    }, discount === "" ? 0 : 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [leadId, courseId, discount, unconfirmed]);
 
   const pickFile = (f: File | null) => {
     setError(null);
@@ -292,14 +395,17 @@ export function RecordPaymentPanel({ leadId, interests, initialInterestId, onDon
   };
 
   const needsReference = method !== "cash" && !file;
-  const valid = !!preview?.canRecord && (!needsReference || reference.trim().length > 0) && received >= minDay && received <= dayInput(today);
+  const amountOk = !unconfirmed || (/^\d+$/.test(amountReceived) && Number(amountReceived) > 0);
+  const valid = !!preview?.canRecord && amountOk && (!needsReference || reference.trim().length > 0) && received >= minDay && received <= dayInput(today);
 
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
       const form = new FormData();
-      form.set("interestId", interestId);
+      form.set("courseId", courseId);
+      if (unconfirmed) form.set("amountReceived", amountReceived);
+      else form.set("discount", discount || "0");
       form.set("method", method);
       if (reference.trim()) form.set("reference", reference.trim());
       // The chosen day at the current time of day (or end of an earlier day), never in the future.
@@ -311,10 +417,10 @@ export function RecordPaymentPanel({ leadId, interests, initialInterestId, onDon
       form.set("idempotencyKey", idempotencyKey);
       if (file) form.set("screenshot", file);
       await crmApi.recordPayment(leadId, form);
-      toast({ title: "Payment recorded", description: "An Admin confirms it before it counts." });
+      toast({ title: "Sale recorded", description: "It counts once an Admin confirms it." });
       onDone();
     } catch (e: any) {
-      const msg = e?.status === 503 ? "Screenshot upload isn't set up yet. Enter the transaction ID instead." : e?.message || "Could not record the payment";
+      const msg = e?.status === 503 ? "Screenshot upload isn't set up yet. Enter the transaction ID instead." : e?.message || "Could not record the sale";
       setError(msg);
       toast({ title: "Not recorded", description: msg, variant: "destructive" });
     } finally {
@@ -324,69 +430,82 @@ export function RecordPaymentPanel({ leadId, interests, initialInterestId, onDon
 
   const p = preview?.price;
   return (
-    <Panel title="Record payment" onSubmit={submit} submitLabel="Record payment" onCancel={onCancel} busy={busy} error={error} canSubmit={valid}>
+    <Panel title="Record sale" onSubmit={submit} submitLabel="Record sale" onCancel={onCancel} busy={busy} error={error} canSubmit={valid}>
       <div className="crm-form">
         <Field label="Course" full>
-          <Sel value={interestId} onChange={(e) => setInterestId(e.target.value)} options={openOnes.map((i) => ({ value: i._id, label: i.title }))} />
+          <select className="crm-input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+            {openOnes.length > 0 && (
+              <optgroup label="Interested in">
+                {openOnes.map((i) => (
+                  <option key={i._id} value={i.courseId}>
+                    {i.title}
+                    {i.listPrice ? ` · ${rs(i.listPrice)}` : ""}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {otherPaid.length > 0 && (
+              <optgroup label="Other courses">
+                {otherPaid.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.title}
+                    {c.price ? ` · ${rs(c.price)}` : ""}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <option value={UNCONFIRMED}>Course not confirmed yet</option>
+          </select>
         </Field>
-        <div className="crm-full rounded-lg border border-[var(--crm-line)] bg-[var(--crm-surface)] p-3 text-[13px]">
-          {!preview ? (
-            <span className="crm-muted flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Getting the price…
-            </span>
-          ) : !preview.canRecord ? (
-            <span className="crm-late">{preview.reason}</span>
-          ) : p ? (
-            <div className="space-y-1">
-              <div className="flex justify-between">
-                <span>List price</span>
-                <span>{rs(p.listPrice)}</span>
-              </div>
-              {p.courseDiscountAmount > 0 && (
-                <div className="flex justify-between text-[var(--crm-good)]">
-                  <span>Course discount ({p.courseDiscountPercent}%)</span>
-                  <span>− {rs(p.courseDiscountAmount)}</span>
-                </div>
-              )}
-              {p.codeDiscountAmount > 0 && (
-                <div className="flex justify-between text-[var(--crm-good)]">
-                  <span>
-                    Promo code {p.discountCode} ({p.codeDiscountPercent}%)
-                  </span>
-                  <span>− {rs(p.codeDiscountAmount)}</span>
-                </div>
-              )}
-              <div className="crm-muted flex justify-between text-xs">
-                <span>Taxable amount · VAT ({p.vatRate}%)</span>
-                <span>
-                  {rs(p.taxableAmount)} · {rs(p.vatAmount)}
-                </span>
-              </div>
-              <div className="flex justify-between border-t border-[var(--crm-line)] pt-1">
-                <span>Total</span>
-                <b>{rs(p.total)}</b>
-              </div>
-              <span className="crm-sub">From the {preview.source === "approved_quote" ? "approved quote" : "list price"}. Prices include VAT.</span>
-            </div>
-          ) : null}
-        </div>
+        {unconfirmed ? (
+          <Field label="Amount received (Rs)">
+            <input className="crm-input" inputMode="numeric" value={amountReceived} onChange={(e) => setAmountReceived(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 4500" required />
+          </Field>
+        ) : (
+          <Field label="Discount (Rs)">
+            <input className="crm-input" type="number" min={0} max={p ? p.listPrice - 1 : undefined} step={1} value={discount} onChange={(e) => setDiscount(e.target.value)} />
+          </Field>
+        )}
         <Field label="Paid by">
           <Sel value={method} onChange={(e) => setMethod(e.target.value)} options={Object.entries(OFFLINE_METHOD_LABELS).map(([value, label]) => ({ value, label }))} />
+        </Field>
+        <Field label={method === "cash" ? "Receipt note (optional)" : "Transaction ID"} full>
+          <input className="crm-input" value={reference} maxLength={100} onChange={(e) => setReference(e.target.value)} placeholder={method === "cash" ? "e.g. Collected at school visit" : "e.g. 7Q4K29XA (or attach a screenshot)"} required={needsReference} />
         </Field>
         <Field label="Money received on">
           <input className="crm-input" type="date" min={minDay} max={dayInput(today)} value={received} onChange={(e) => setReceived(e.target.value)} />
         </Field>
-        <Field label={method === "cash" ? "Receipt note (optional)" : "Transaction ID"} full>
-          <input className="crm-input" value={reference} maxLength={100} onChange={(e) => setReference(e.target.value)} placeholder={method === "cash" ? "e.g. Collected at school visit" : "e.g. 7Q4K29XA"} />
-        </Field>
-        <Field label="Screenshot (optional; JPG, PNG, WEBP or PDF, up to 5 MB)" full>
+        <Field label="Screenshot (optional)">
           <input className="crm-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
         </Field>
         <Field label="Note (optional)" full>
           <textarea className="crm-input" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
         </Field>
       </div>
-      <CrmNote>The bill is created now. An Admin checks the money arrived before the student gets the course, and it counts toward your target only after that.</CrmNote>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {!preview ? (
+          <span className="crm-muted flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Getting the price…
+          </span>
+        ) : !preview.canRecord ? (
+          <span className="crm-late">{preview.reason}</span>
+        ) : unconfirmed ? (
+          <span>
+            Total <b>{amountOk ? rs(Number(amountReceived)) : "—"}</b> <span className="crm-muted crm-small">· the course is set before it can be confirmed</span>
+          </span>
+        ) : p ? (
+          <>
+            <span>
+              Total <b>{rs(p.total)}</b>
+              <span className="crm-sub">
+                {rs(p.listPrice)} − {rs(p.discount)} discount · taxable {rs(p.taxableAmount)} + VAT {p.vatRate}% {rs(p.vatAmount)}
+              </span>
+            </span>
+            {preview.needsApproval && <CrmPill tone="warn">{Math.round(p.discountPercent)}% discount · needs approval</CrmPill>}
+          </>
+        ) : null}
+      </div>
+      <CrmNote>The sale counts after an Admin checks the payment. The student gets the course when it&apos;s confirmed.</CrmNote>
     </Panel>
   );
 }

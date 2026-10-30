@@ -64,8 +64,9 @@ export type LeadRow = {
   priority: "low" | "normal" | "high";
   doNotContact: boolean;
   isCustomer?: boolean;
-  // S1b: the one stage the list shows, the course behind it, and how many other open courses there are.
-  displayStage: DisplayStage;
+  // R60 (S7): the one category the list shows, its markers; and (S1b) the course behind it and how many other open courses there are.
+  category: LeadCategory;
+  markers: CategoryMarkers;
   displayCourseTitle: string | null;
   otherOpenCourses: number;
   interests: { _id: string; courseId: string; title: string; stage: InterestStage }[];
@@ -78,9 +79,10 @@ export type LeadRow = {
   createdAt?: string;
   possibleDuplicate?: boolean;
 };
-export type DisplayStage = "lost" | "enrolled" | InterestStage | LeadStage;
+export type LeadCategory = "new_lead" | "interested" | "payment_pending" | "enrolled" | "lost";
+export type CategoryMarkers = { interestedInAnotherCourse: boolean; paid: boolean; trial: boolean };
 export type ManualSource = "school_visit" | "referral" | "facebook_ad" | "walk_in" | "phone_enquiry" | "other";
-export type LeadView = "all" | "mine" | "new" | "today_tasks" | "overdue_tasks" | "payment_pending" | "enrolled" | "lost" | "unassigned" | "recent_signals" | "checkout_abandoned" | "do_not_contact";
+export type LeadView = "all" | "mine" | "new" | "interested" | "payment_pending" | "enrolled" | "lost" | "unassigned" | "today_tasks" | "overdue_tasks" | "recent_signals" | "checkout_abandoned" | "do_not_contact";
 export type Pagination = { page: number; limit: number; total: number; pages: number };
 
 export type Interest = {
@@ -144,7 +146,8 @@ export type LeadDetail = {
   kind: "student" | "prospect";
   person: Person;
   isCustomer: boolean;
-  displayStage: DisplayStage;
+  category: LeadCategory;
+  markers: CategoryMarkers;
   displayCourseTitle: string | null;
   enrollment: {
     enrolledCourses: { courseId: string; title: string }[];
@@ -254,7 +257,8 @@ export const crmApi = {
   payments: (leadId: string) => request<LeadPayment[]>("GET", `/leads/${leadId}/payments`),
 
   // Phase S2 / S3: Sales-recorded payments and Sales & Bills
-  paymentPreview: (leadId: string, interestId: string) => request<PaymentPreview>("GET", `/leads/${leadId}/payments/preview${qs({ interestId })}`),
+  paymentPreview: (leadId: string, q: { courseId?: string; interestId?: string; discount?: number | string }) => request<PaymentPreview>("GET", `/leads/${leadId}/payments/preview${qs(q)}`),
+  setPaymentCourse: (id: string, courseId: string, discount?: number) => request<SalesPayment>("PATCH", `/payments/${id}/course`, { courseId, discount }),
   recordPayment: (leadId: string, form: FormData) => requestForm<SalesPayment>("POST", `/leads/${leadId}/payments`, form),
   confirmPayment: (id: string, expectedAmount: number) => request<SalesPayment>("POST", `/payments/${id}/confirm`, { checked: true, expectedAmount }),
   rejectPayment: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/reject`, { reason }),
@@ -311,8 +315,11 @@ async function requestForm<T>(method: string, path: string, form: FormData): Pro
 }
 
 export type PriceSnapshot = { listPrice: number; courseDiscountPercent: number; courseDiscountAmount: number; discountCode?: string; codeDiscountPercent: number; codeDiscountAmount: number; totalDiscount: number; total: number; vatRate: number; taxableAmount: number; vatAmount: number };
-export type PaymentPreview = { canRecord: boolean; reason: string | null; code: string | null; interestId: string; courseId: string | null; source: "approved_quote" | "list_price" | null; quoteId: string | null; price: PriceSnapshot | null };
-export type SalesPayment = { _id: string; status: string; amount: number; method: string; reference: string | null; hasScreenshot: boolean; receivedAt: string | null; receiptNumber: string | null };
+// R57 (S7): the server's price for a recorded sale.
+export type SalePrice = { listPrice: number; publicDiscount: number; discount: number; discountPercent: number; total: number; vatRate: number; taxableAmount: number; vatAmount: number; limitPercent: number; needsApproval: boolean };
+export type PaymentPreview = { canRecord: boolean; reason: string | null; code: string | null; courseId: string | null; interestId: string | null; unconfirmed: boolean; price: SalePrice | null; needsApproval: boolean };
+export type SaleDiscount = { amount: number; percent: number; limitPercent: number; needsApproval: boolean; approved: boolean };
+export type SalesPayment = { _id: string; status: string; amount: number; method: string; reference: string | null; hasScreenshot: boolean; receivedAt: string | null; receiptNumber: string | null; courseId: string | null; courseUnconfirmed: boolean; amountReceived: number | null; discount: { amount: number; percent: number; needsApproval: boolean } | null };
 export type BillTab = "waiting" | "confirmed" | "rejected" | "cancelled" | "all";
 export type BillStatus = "waiting" | "confirmed" | "rejected" | "cancelled" | "invalid" | "other";
 export type BillRow = {
@@ -323,13 +330,19 @@ export type BillRow = {
   studentName: string;
   leadId: string | null;
   courseTitle: string;
+  courseId: string | null;
+  courseUnconfirmed: boolean;
   path: string;
   pathLabel: string;
   method: string;
   methodLabel: string;
   amount: number;
   pricing: { listPrice: number; totalDiscount: number; discountCode: string | null; vatRate: number; vatAmount: number; total: number } | null;
+  discount: SaleDiscount | null;
+  amountReceived: number | null;
+  amountMismatch: boolean;
   recordedByName: string | null;
+  creditOwnerName: string | null;
   creditedToName: string | null;
   status: BillStatus;
   statusLabel: string;
@@ -356,7 +369,12 @@ export type Bill = {
   amountInWords: string;
   payment: { path: string; pathLabel: string; method: string; methodLabel: string; reference: string | null; hasScreenshot: boolean };
   dates: { receivedAt: string | null; recordedAt: string; paidAt: string | null; decidedAt: string | null };
-  people: { recordedBy: string | null; confirmedBy: string | null; rejectedBy: string | null; creditedTo: string | null };
+  people: { recordedBy: string | null; confirmedBy: string | null; rejectedBy: string | null; creditedTo: string | null; creditOwner: string | null };
+  discount: SaleDiscount | null;
+  amountReceived: number | null;
+  amountMismatch: boolean;
+  courseUnconfirmed: boolean;
+  courseId: string | null;
   reason: string | null;
   invalidated: boolean;
   canDownloadPdf: boolean;
@@ -400,7 +418,7 @@ export type CodeRow = {
 };
 export type LeadPayment = {
   _id: string;
-  courseId: string;
+  courseId: string | null;
   courseTitle?: string;
   status: string;
   path: "online" | "single_code" | "bulk_codes" | "direct_grant" | "sales_recorded" | "other_offline";
@@ -454,18 +472,17 @@ export async function fetchCourseCatalog(): Promise<{ _id: string; title: string
 // ---------- labels ----------
 export const LEAD_STAGE_LABELS: Record<LeadStage, string> = { new: "New", contact_attempted: "Contact attempted", contacted: "Contacted", qualified: "Qualified" };
 export const INTEREST_STAGE_LABELS: Record<InterestStage, string> = { interested: "Interested", contacted: "Contacted", qualified: "Qualified", quoted: "Quoted", payment_pending: "Payment pending" };
-// S1b: the list's single stage pill (prototype labels and tones where they exist).
-export const DISPLAY_STAGE: Record<DisplayStage, { label: string; tone: "neutral" | "accent" | "good" | "warn" | "bad" }> = {
-  new: { label: "New lead", tone: "accent" },
-  contact_attempted: { label: "Contact attempted", tone: "neutral" },
-  contacted: { label: "Contacted", tone: "neutral" },
-  qualified: { label: "Qualified", tone: "accent" },
+// R60 (S7): the five categories, with the prototype's pill tones.
+export const CATEGORY: Record<LeadCategory, { label: string; tone: "neutral" | "accent" | "good" | "warn" | "bad" }> = {
+  new_lead: { label: "New lead", tone: "accent" },
   interested: { label: "Interested", tone: "accent" },
-  quoted: { label: "Quoted", tone: "accent" },
   payment_pending: { label: "Payment pending", tone: "warn" },
   enrolled: { label: "Enrolled", tone: "good" },
   lost: { label: "Lost", tone: "bad" },
 };
+/** The small neutral marker pills under the category (R60). */
+export const markerLabels = (m: CategoryMarkers | undefined, doNotContact?: boolean) =>
+  [m?.interestedInAnotherCourse && "Interested in another course", m?.paid && "Paid", m?.trial && "Trial", doNotContact && "Do not contact"].filter(Boolean) as string[];
 export const MANUAL_SOURCE_LABELS: Record<ManualSource, string> = { school_visit: "School visit", referral: "Referral", facebook_ad: "Facebook ad", walk_in: "Walk-in", phone_enquiry: "Phone enquiry", other: "Other" };
 const LEAD_SOURCE_LABELS: Record<string, string> = { registration: "App registration", course_activity: "Course activity", manual: "Added by staff", import: "Import", referral: "Referral", school: "School", backfill: "Existing student", other: "Other" };
 /** The Source column: the Add lead form's source when there is one, otherwise how the lead came in. */
