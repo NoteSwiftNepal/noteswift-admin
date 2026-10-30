@@ -9,6 +9,8 @@ Scope (R33):
 - No dark mode for now. The prototype has dark tokens; they are listed for later and not implemented.
 - ~~The lead profile stays a full page.~~ Since S1b (R53, 2026-10-29) the lead opens in the prototype's side drawer over the Leads list; `/dashboard/crm/leads/[leadId]` is the list with the drawer open.
 
+**S8 (2026-10-30, R61–R66): the CRM now follows the prototype screen for screen.** Every lead is in one of six stages (New lead accent · Contacted neutral · Interested accent · Payment pending warn · Enrolled good · Lost bad), shown as the Leads tabs, the Stage pill and the dashboard funnel. Removed from the UI: the Pipeline page (redirects to Leads), quotes everywhere, markers other than "Do not contact", priority, purpose pills, contact-stage sub lines, "More views" / "More filters", the drawer's "⋯ More" menu and its Courses, Enrollment, Contact preferences, Consent, History and Earlier quotes sections, the Follow-ups Cancelled / All open tabs, and the Sales & Bills search, method, kind and date filters. Kept beyond the prototype (approved rules): the contact gate inside Log call / WhatsApp (shown only when it blocks), Do not contact, Admin assignment and the selection bar, Sales & Bills confirm / reject / screenshot / PDF rules, Team & allocation, salary edit and month close. Where this spec's older sections (§5, §6) disagree, S8 wins.
+
 Contents: 1 Tokens · 2 Type, spacing, radius, shadow · 3 Components · 4 Pages · 5 Mapping to our code · 6 Not copied · 7 Gaps.
 
 ---
@@ -381,17 +383,17 @@ Paths are in this repo unless marked backend. "S1" is visual only; behaviour sta
 | Follow-ups page | `crm/tasks/page.tsx` | S1 restyle to tabs with counts and list rows; keep Done (outcome required), Reschedule (with reason) and Cancel. |
 | Sales & Bills page | none; Orders & Payments is separate | S3: new `crm/sales/page.tsx`. Its tabs map to Pending confirmation · Confirmed · Rejected · All, over the R26 scope. |
 | Team & Targets page | `crm/team/page.tsx` (+ `components/crm/team-panels.tsx`) | S1 restyle of the existing reps table, approvals and code allocation; S5 adds salary, target, progress, bonus, rules card, salary dialog and "My target". |
-| Pipeline page | `crm/pipeline/page.tsx` (no prototype equivalent) | S1: apply cards, pills and toolbar styles to the board and table. |
+| ~~Pipeline page~~ | removed in S8 (R66); `/dashboard/crm/pipeline` redirects to Leads | — |
 
 ## 6. Prototype behaviours we do NOT copy
 
 From R33 and the other approved rules:
 
-1. **Single lead stage** (New → Contacted → Interested → Payment pending → Enrolled / Lost). We keep the lead contact stage plus per-course opportunities with stage and outcome (§3.5). "Enrolled" comes only from a qualifying payment.
-2. **10% Sales discount and a "max discount" setting.** R14 / R18: the Sales limit is 0%, every discounted quote needs another approver, and the limit is not edited on the rules card.
-3. **Free-typed discount and amount on "Record sale".** R21: the amount is the server price (list price or the active approved quote); Sales never type an amount or discount.
+1. ~~**Single lead stage.**~~ *Adopted in S8 (R61): six stages derived from our data (per-course opportunities stay underneath).*
+2. ~~**10% Sales discount and a "max discount" setting.**~~ *Adopted in S7 / S8 (R57, R62): 10% default, editable by Super Admin on the rules card; above it the confirmer approves.*
+3. ~~**Free-typed discount on "Record sale".**~~ *Adopted in S7 (R57): an editable discount on the list price, computed by the server.*
 4. **"Fewest open leads" automatic assignment.** We keep round-robin (§3.2, Phase 2).
-5. **"Log call" without the gate**, and its automatic stage moves (Interested, Contacted; "Wrong number" marks the lead lost). The gated contact dialog stays (R1, D13); stage changes stay manual and compare-and-set; losing a lead needs a reason.
+5. **"Log call" without the gate**, and its "Wrong number marks the lead lost". The gate stays inside the panel (R1, D13) and shows only when it blocks; a connected outcome moves New lead → Contacted (R63); losing a lead needs Mark lost with a reason.
 6. **"Try again later" / re-engage date on lost leads.** Waits for R11.
 7. **Admin "verify" of every manual sale and of app purchases.** Only Sales-recorded payments need confirmation (R20); online payments are verified by the gateway; Super Admin offline sales qualify when recorded (D16).
 8. **Bill number at recording (`NS-0001`).** R24: an `NS-RCP-…` receipt number is issued only at confirmation; pending payments show a "Waiting confirmation" slip with no number.

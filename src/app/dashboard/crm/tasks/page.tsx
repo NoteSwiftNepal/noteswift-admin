@@ -1,195 +1,165 @@
 "use client";
 
-// Sales & CRM → Follow-ups & Tasks. Sales see tasks on leads they currently
-// own; Admins see everyone's and can filter by rep. Times are shown in the
-// viewer's time zone; "today" is the Kathmandu day (backend).
+// Sales & CRM → Follow-ups (S8: the prototype's page). Tabs Overdue · Today ·
+// Upcoming · Done. Sales see follow-ups on leads they currently own; Admins
+// see everyone's. "Today" is the Kathmandu day (backend).
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
-import { DataState, ReasonDialog, TaskStatusBadge } from "@/components/crm/crm-ui";
-import { CrmCard, CrmPageHeader, CrmPill, CrmTabs, GOOD_BUTTON } from "@/components/crm/ui";
-import { CompleteTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-dialogs";
-import { PURPOSE_LABELS, Pagination, Rep, TASK_TYPE_LABELS, Task, crmApi, fmtDateTime } from "@/lib/crm/api";
+import { DataState } from "@/components/crm/crm-ui";
+import { CrmPageHeader } from "@/components/crm/ui";
+import { Btn } from "@/components/crm/leads/controls";
+import { Pagination, TASK_TYPE_LABELS, Task, crmApi, relDateTime } from "@/lib/crm/api";
 
-const VIEWS = [
-  { value: "today", label: "Today" },
+const TABS = [
   { value: "overdue", label: "Overdue" },
+  { value: "today", label: "Today" },
   { value: "upcoming", label: "Upcoming" },
-  { value: "open", label: "All open" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
+  { value: "completed", label: "Done" },
 ];
 
-export default function TasksPage() {
+export default function FollowUpsPage() {
   const { toast } = useToast();
   const { can } = useAdmin();
   const isAdmin = can("crm.view_all_leads");
-  const [view, setView] = useState("today");
-  const [assigneeId, setAssigneeId] = useState("any");
+  const [tab, setTab] = useState("overdue");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<Task[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reps, setReps] = useState<Rep[]>([]);
-  const [completeId, setCompleteId] = useState<string | null>(null);
-  const [rescheduleTask, setRescheduleTask] = useState<{ _id: string; dueAt: string } | null>(null);
-  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [doneId, setDoneId] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState("");
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
-      const data = await crmApi.tasks({ view, page, limit: 50, assigneeId: assigneeId === "any" ? undefined : assigneeId });
+      const data = await crmApi.tasks({ view: tab, page, limit: 50 });
       setItems(data.items);
       setPagination(data.pagination);
     } catch (e: any) {
-      setError(e?.message || "Could not load tasks");
+      setError(e?.message || "Could not load follow-ups");
     } finally {
       setLoading(false);
     }
-  }, [view, page, assigneeId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-  useEffect(() => {
-    if (can("crm.manage_reps")) crmApi.reps().then((r) => setReps(r.filter((x) => x.status === "active"))).catch(() => setReps([]));
-  }, [can]);
-
-  // Counts per tab (one small request per view, limit 1). Display only.
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all(
-      VIEWS.map((v) =>
-        crmApi
-          .tasks({ view: v.value, page: 1, limit: 1, assigneeId: assigneeId === "any" ? undefined : assigneeId })
-          .then((d) => [v.value, d.pagination.total] as const)
-          .catch(() => null)
-      )
-    ).then((res) => {
-      if (cancelled) return;
+  }, [tab, page]);
+  const loadCounts = useCallback(() => {
+    Promise.all(TABS.map((t) => crmApi.tasks({ view: t.value, page: 1, limit: 1 }).then((d) => [t.value, d.pagination.total] as const, () => null))).then((res) => {
       const next: Record<string, number> = {};
       for (const r of res) if (r) next[r[0]] = r[1];
       setCounts(next);
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [assigneeId, items]);
+  }, []);
+  useEffect(() => {
+    setLoading(true);
+    load();
+  }, [load]);
+  useEffect(() => {
+    loadCounts();
+  }, [loadCounts]);
+
+  const act = async (fn: () => Promise<unknown>, success: string) => {
+    try {
+      await fn();
+      toast({ title: success });
+      setDoneId(null);
+      load();
+      loadCounts();
+    } catch (e: any) {
+      toast({ title: "Not done", description: e?.message, variant: "destructive" });
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
-      <CrmPageHeader
-        crumb="Follow-ups & Tasks"
-        title="Follow-ups & Tasks"
-        subtitle={isAdmin ? "Everyone's follow-ups." : "Follow-ups on your leads."}
-        actions={
-          isAdmin && reps.length > 0 ? (
-            <Select value={assigneeId} onValueChange={(v) => { setAssigneeId(v); setPage(1); }}>
-              <SelectTrigger className="w-full bg-[var(--crm-surface)] sm:w-[200px]" aria-label="Assigned to">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="any">Everyone</SelectItem>
-                <SelectItem value="none">Unassigned</SelectItem>
-                {reps.map((r) => (
-                  <SelectItem key={r._id} value={r._id}>
-                    {r.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : undefined
-        }
-      />
-
-      <CrmCard flush>
-        <CrmTabs label="Tasks" value={view} onChange={(v) => { setView(v); setPage(1); }} tabs={VIEWS.map((v) => ({ value: v.value, label: v.label, count: counts[v.value] ?? null }))} />
+      <CrmPageHeader crumb="Follow-ups" title="Follow-ups" subtitle="Every open lead should have one next step with a date" />
+      <section className="crm-card">
+        <div className="crm-tabs" role="tablist" aria-label="Follow-ups">
+          {TABS.map((t) => (
+            <button key={t.value} type="button" role="tab" aria-selected={tab === t.value} className="crm-tab" onClick={() => { setTab(t.value); setPage(1); }}>
+              {t.label}
+              <span className="crm-tab-n">{counts[t.value] ?? "–"}</span>
+            </button>
+          ))}
+        </div>
         <div className="crm-card-b">
-          <DataState loading={loading} error={error} onRetry={load} empty={items.length === 0} emptyText={view === "overdue" ? "No overdue follow-ups. Good work." : "No tasks here."}>
-            <ul className="crm-list">
+          <DataState loading={loading} error={error} onRetry={load} empty={items.length === 0} emptyText={tab === "overdue" ? "No overdue follow-ups. Good work." : "Nothing here."}>
+            <div className="crm-list">
               {items.map((t) => (
-                <li key={t._id} className="crm-li">
+                <div key={t._id} className="crm-li">
                   <div className="crm-who">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link href={`/dashboard/crm/leads/${t.leadId}`} className="font-semibold hover:underline">
-                        {t.leadName || "Unnamed"}
-                      </Link>
-                      <span className="crm-muted crm-small">
-                        · {TASK_TYPE_LABELS[t.type] || t.type}
-                        {t.leadPhone ? ` · ${t.leadPhone}` : ""}
-                      </span>
-                      {t.purpose && <CrmPill tone="accent">{PURPOSE_LABELS[t.purpose]}</CrmPill>}
-                      <TaskStatusBadge status={t.status} overdue={t.overdue} />
-                    </div>
-                    {t.notes && <span className="block max-w-xl truncate">{t.notes}</span>}
-                    <span className={`crm-small block ${t.overdue ? "crm-late" : "crm-muted"}`}>
-                      Due {fmtDateTime(t.dueAt)}
-                      {t.rescheduleCount ? ` · rescheduled ${t.rescheduleCount}×` : ""}
+                    <b>{t.leadName || "Unnamed"}</b>{" "}
+                    <span className="crm-muted crm-small">
+                      · {TASK_TYPE_LABELS[t.type] || t.type}
+                      {t.leadPhone ? ` · ${t.leadPhone}` : ""}
+                    </span>
+                    {t.notes && <span className="crm-sub">{t.notes}</span>}
+                    <span className={`crm-sub ${tab === "overdue" ? "crm-late" : ""}`}>
+                      {tab === "completed" ? `Done${t.outcome ? ` · ${t.outcome}` : ""}` : relDateTime(t.dueAt)}
                       {isAdmin ? ` · ${t.assigneeName || "Unassigned"}` : ""}
                     </span>
-                    {t.outcome && <span className="crm-sub">Outcome: {t.outcome}</span>}
-                    {t.cancelReason && <span className="crm-sub">Cancelled: {t.cancelReason}</span>}
                   </div>
-                  <div className="crm-actions">
-                    {t.status === "open" && (
-                      <>
-                        <Button type="button" size="sm" className={GOOD_BUTTON} onClick={() => setCompleteId(t._id)}>
-                          <CheckCircle2 className="mr-1 h-4 w-4" /> Done
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => setRescheduleTask({ _id: t._id, dueAt: t.dueAt })}>
-                          Reschedule
-                        </Button>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => setCancelId(t._id)}>
-                          Cancel
-                        </Button>
-                      </>
-                    )}
-                    <Button type="button" size="sm" variant="outline" asChild>
-                      <Link href={`/dashboard/crm/leads/${t.leadId}`}>Open lead</Link>
-                    </Button>
-                  </div>
-                </li>
+                  {doneId === t._id ? (
+                    <form
+                      className="crm-actions"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (outcome.trim()) act(() => crmApi.completeTask(t._id, outcome.trim()), "Follow-up done");
+                      }}
+                    >
+                      <input className="crm-input" style={{ width: 200 }} placeholder="Outcome, e.g. will pay Friday" aria-label="Outcome" value={outcome} maxLength={100} onChange={(e) => setOutcome(e.target.value)} autoFocus required />
+                      <Btn sm tone="good" type="submit" disabled={!outcome.trim()}>
+                        Save
+                      </Btn>
+                      <Btn sm onClick={() => setDoneId(null)}>
+                        Cancel
+                      </Btn>
+                    </form>
+                  ) : (
+                    <div className="crm-actions">
+                      {t.status === "open" && (
+                        <>
+                          <Btn
+                            sm
+                            tone="good"
+                            onClick={() => {
+                              setDoneId(t._id);
+                              setOutcome("");
+                            }}
+                          >
+                            Done
+                          </Btn>
+                          <Btn sm onClick={() => act(() => crmApi.rescheduleTask(t._id, new Date(Math.max(Date.now(), new Date(t.dueAt).getTime()) + 86_400_000).toISOString(), "Moved by 1 day", t.dueAt), "Moved by 1 day")}>
+                            +1 day
+                          </Btn>
+                        </>
+                      )}
+                      <Link href={`/dashboard/crm/leads/${t.leadId}`} className="crm-btn sm">
+                        Open lead
+                      </Link>
+                    </div>
+                  )}
+                </div>
               ))}
-            </ul>
+            </div>
           </DataState>
         </div>
-      </CrmCard>
-
-      {pagination && pagination.pages > 1 && (
-        <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            Previous
-          </Button>
-          <span className="crm-muted crm-small">
-            Page {page} of {pagination.pages}
-          </span>
-          <Button type="button" variant="outline" size="sm" disabled={page >= pagination.pages} onClick={() => setPage(page + 1)}>
-            Next
-          </Button>
-        </div>
-      )}
-
-      <CompleteTaskDialog taskId={completeId} onOpenChange={(v) => !v && setCompleteId(null)} onDone={() => { toast({ title: "Task completed" }); load(); }} />
-      <RescheduleTaskDialog task={rescheduleTask} onOpenChange={(v) => !v && setRescheduleTask(null)} onDone={() => { toast({ title: "Task rescheduled" }); load(); }} />
-      <ReasonDialog
-        open={!!cancelId}
-        onOpenChange={(v) => !v && setCancelId(null)}
-        title="Cancel task"
-        confirmLabel="Cancel task"
-        destructive
-        onConfirm={async (r) => {
-          await crmApi.cancelTask(cancelId!, r);
-          toast({ title: "Task cancelled" });
-          load();
-        }}
-      />
+        {pagination && pagination.pages > 1 && (
+          <div className="crm-pager">
+            <span className="crm-muted crm-small">
+              Page {page} of {pagination.pages}
+            </span>
+            <button type="button" className="crm-btn sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              Previous
+            </button>
+            <button type="button" className="crm-btn sm" disabled={page >= pagination.pages} onClick={() => setPage(page + 1)}>
+              Next
+            </button>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

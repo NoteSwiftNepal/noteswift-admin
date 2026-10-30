@@ -1,8 +1,8 @@
 "use client";
 
-// Task forms for Sales & CRM: create (the drawer's panel), complete, reschedule. Contact tasks
-// (call, WhatsApp, SMS, email, payment reminder, course info) need a purpose;
-// the backend runs the outreach gate and refuses with its reasons.
+// Task forms for Sales & CRM: create (the drawer's panel), complete,
+// reschedule. Contact tasks go through the outreach gate on the server,
+// which also chooses their purpose (S8) and refuses with its reasons.
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, Panel, Sel, fromLocalInput, toLocalInput, useBusy } from "@/components/crm/leads/controls";
-import { CHANNEL_LABELS, Channel, PURPOSE_LABELS, Purpose, TASK_TYPE_LABELS, crmApi } from "@/lib/crm/api";
+import { crmApi } from "@/lib/crm/api";
+import { FOLLOW_UP_TYPES, taskChannel } from "@/components/crm/contact-panel";
 
-const CONTACT_TYPES = ["call", "whatsapp", "sms", "email", "payment_reminder", "send_course_info"];
-const CHANNEL_FOR_TYPE: Record<string, string> = { call: "call", whatsapp: "whatsapp", sms: "sms", email: "email" };
 
 function useSubmit() {
   const [busy, setBusy] = useState(false);
@@ -33,66 +32,30 @@ function useSubmit() {
   return { busy, error, setError, run };
 }
 
-/** New task, drawn as the prototype's "Schedule follow-up" panel (S1b), with our fields. */
-export function TaskPanel({ leadId, interests, onCreated, onCancel }: { leadId: string; interests: { _id: string; title: string; status: string }[]; onCreated: () => void; onCancel: () => void }) {
+/** "Schedule follow-up" (S8, the prototype's panel): Type · Due · Note. The server chooses the contact purpose and runs the gate. */
+export function TaskPanel({ leadId, onCreated, onCancel }: { leadId: string; onCreated: () => void; onCancel: () => void }) {
   const [type, setType] = useState("call");
   const [dueAt, setDueAt] = useState(toLocalInput(new Date(Date.now() + 24 * 3600_000)));
-  const [priority, setPriority] = useState("normal");
-  const [interestId, setInterestId] = useState("none");
-  const [purpose, setPurpose] = useState<Purpose>("purchase_assistance");
-  const [channel, setChannel] = useState("call");
   const [notes, setNotes] = useState("");
   const { busy, error, run } = useBusy();
-  const isContact = CONTACT_TYPES.includes(type);
-  const openInterests = interests.filter((i) => i.status === "open");
-
   const submit = () =>
     run(async () => {
-      await crmApi.createTask(leadId, {
-        type,
-        dueAt: fromLocalInput(dueAt),
-        priority,
-        notes: notes.trim() || undefined,
-        interestId: interestId === "none" ? undefined : interestId,
-        ...(isContact ? { purpose, channel: CHANNEL_FOR_TYPE[type] ?? channel } : {}),
-      });
+      await crmApi.createTask(leadId, { type, dueAt: fromLocalInput(dueAt), notes: notes.trim() || undefined, ...taskChannel(type) });
       onCreated();
     });
-
   return (
     <Panel title="Schedule follow-up" onSubmit={submit} submitLabel="Schedule" onCancel={onCancel} busy={busy} error={error} canSubmit={!!dueAt}>
       <div className="crm-form">
         <Field label="Type">
-          <Sel value={type} onChange={(e) => setType(e.target.value)} options={Object.entries(TASK_TYPE_LABELS).map(([value, label]) => ({ value, label }))} />
+          <Sel value={type} onChange={(e) => setType(e.target.value)} options={FOLLOW_UP_TYPES} />
         </Field>
         <Field label="Due">
           <input className="crm-input" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} required />
-        </Field>
-        {isContact && (
-          <>
-            <Field label="Purpose">
-              <Sel value={purpose} onChange={(e) => setPurpose(e.target.value as Purpose)} options={(Object.keys(PURPOSE_LABELS) as Purpose[]).map((p) => ({ value: p, label: PURPOSE_LABELS[p] }))} />
-            </Field>
-            {!CHANNEL_FOR_TYPE[type] && (
-              <Field label="Channel">
-                <Sel value={channel} onChange={(e) => setChannel(e.target.value)} options={["call", "whatsapp", "sms", "email"].map((c) => ({ value: c, label: CHANNEL_LABELS[c as Channel] }))} />
-              </Field>
-            )}
-          </>
-        )}
-        {openInterests.length > 0 && (
-          <Field label="Course">
-            <Sel value={interestId} onChange={(e) => setInterestId(e.target.value)} options={[{ value: "none", label: "Not about one course" }, ...openInterests.map((i) => ({ value: i._id, label: i.title }))]} />
-          </Field>
-        )}
-        <Field label="Priority">
-          <Sel value={priority} onChange={(e) => setPriority(e.target.value)} options={[{ value: "low", label: "Low" }, { value: "normal", label: "Normal" }, { value: "high", label: "High" }]} />
         </Field>
         <Field label="Note" full>
           <input className="crm-input" placeholder="e.g. Send demo class link" value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} />
         </Field>
       </div>
-      {isContact && <span className="crm-muted crm-small">Contact tasks are checked against do not contact, consent and the follow-up rules.</span>}
     </Panel>
   );
 }

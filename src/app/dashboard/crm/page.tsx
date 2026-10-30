@@ -46,14 +46,10 @@ export default function CrmDashboardPage() {
     if (can("crm.create_leads")) fetchCourseCatalog().then(setCourses);
   }, [can]);
 
-  const maxStage = Math.max(1, ...(data?.pipeline.stages.map((s) => s.count) ?? [0]), data?.pipeline.wonThisMonth ?? 0, data?.pipeline.lostThisMonth ?? 0);
-  const funnel = data
-    ? [
-        ...data.pipeline.stages.map((s) => ({ key: s.stage, label: s.label, count: s.count, color: s.stage === "payment_pending" ? "var(--crm-warn)" : "var(--crm-accent)" })),
-        { key: "won", label: `Won in ${data.month.label.split(" ")[0]}`, count: data.pipeline.wonThisMonth, color: "var(--crm-good)" },
-        { key: "lost", label: `Lost in ${data.month.label.split(" ")[0]}`, count: data.pipeline.lostThisMonth, color: "var(--crm-bad)" },
-      ]
-    : [];
+  // R66 (S8): the funnel is the six lead stages, as the prototype.
+  const maxStage = Math.max(1, ...(data?.pipeline.stages.map((s) => s.count) ?? [0]));
+  const FUNNEL_COLOR: Record<string, string> = { payment_pending: "var(--crm-warn)", enrolled: "var(--crm-good)", lost: "var(--crm-bad)" };
+  const funnel = data ? data.pipeline.stages.map((s) => ({ key: s.stage, label: s.label, count: s.count, color: FUNNEL_COLOR[s.stage] ?? "var(--crm-accent)" })) : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -128,7 +124,7 @@ export default function CrmDashboardPage() {
                 </CrmCard>
               )}
 
-              <CrmCard title="Pipeline" aside={<span className="crm-muted crm-small">Open opportunities by stage</span>}>
+              <CrmCard title="Pipeline" aside={<span className="crm-muted crm-small">{data.pipeline.total} leads</span>}>
                 <div className="flex flex-col gap-2.5">
                   {funnel.map((f) => (
                     <div key={f.key} className="grid grid-cols-[120px_minmax(0,1fr)_36px] items-center gap-2.5 text-[13px] max-[520px]:grid-cols-[92px_minmax(0,1fr)_30px]">

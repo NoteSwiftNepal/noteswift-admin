@@ -200,7 +200,7 @@ a.crm-kpi:hover, button.crm-kpi:hover { border-color: var(--crm-accent); }
 .crm-facts-label { font-size: 11.5px; color: var(--crm-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 2px; }
 
 /* shadcn Card and Table inside the scope take the CRM card and table look, so
-   panels built from them (quotes, payments, approvals, code allocation) match. */
+   panels built from them (payments, team and targets) match. */
 .crm-scope .rounded-lg.border.bg-card { border-radius: 14px; border-color: var(--crm-line); box-shadow: var(--crm-shadow); }
 .crm-scope .rounded-lg.border.bg-card > .flex.flex-col.p-6 { padding: 14px 16px; border-bottom: 1px solid var(--crm-line); }
 .crm-scope .rounded-lg.border.bg-card > .p-6.pt-0 { padding: 14px 16px; }

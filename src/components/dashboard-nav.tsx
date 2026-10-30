@@ -132,9 +132,8 @@ const links: NavLink[] = [
     icon: Target,
     children: [
       { href: "/dashboard/crm", label: "CRM Dashboard" },
-      { href: "/dashboard/crm/leads", label: "Leads & Students" },
-      { href: "/dashboard/crm/pipeline", label: "Sales Pipeline" },
-      { href: "/dashboard/crm/tasks", label: "Follow-ups & Tasks" },
+      { href: "/dashboard/crm/leads", label: "Leads" },
+      { href: "/dashboard/crm/tasks", label: "Follow-ups" },
       { href: "/dashboard/crm/sales", label: "Sales & Bills" },
       { href: "/dashboard/crm/team", label: "Team & Targets" },
     ],
@@ -270,7 +269,7 @@ export function DashboardNav() {
     });
   }, [pathname]);
 
-  // Overdue follow-ups badge on "Follow-ups & Tasks": the user's own scope
+  // Overdue follow-ups badge on "Follow-ups": the user's own scope
   // (Sales: their leads; Admin: everyone's), refreshed on navigation.
   const canTasks = can("crm.manage_tasks");
   const [overdueTasks, setOverdueTasks] = useState<number | null>(null);

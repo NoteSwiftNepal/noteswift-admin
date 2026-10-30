@@ -118,27 +118,6 @@ export function Panel({
   );
 }
 
-/** A drawer section that starts closed (the prototype's h3 with a chevron). */
-export function Collapsible({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <section>
-      <div className="flex items-center justify-between gap-2">
-        <button type="button" className="crm-collapse" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          <svg className={cn("crm-chev", open && "open")} viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="m9 6 6 6-6 6" />
-          </svg>
-          <h3 className="crm-sec-h" style={{ margin: 0 }}>
-            {title}
-          </h3>
-        </button>
-        {open && aside}
-      </div>
-      {open && <div className="mt-2.5">{children}</div>}
-    </section>
-  );
-}
-
 /** Wraps an async action with the busy flag and the server's message. */
 export function useBusy() {
   const [busy, setBusy] = useState(false);

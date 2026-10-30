@@ -47,9 +47,11 @@ export type Person = {
   linkedParent?: { name: string | null; phone: string | null };
   linkedParents?: { name: string | null; phone: string | null }[];
 };
-export type LeadStage = "new" | "contact_attempted" | "contacted" | "qualified";
+export type LeadStage = "new" | "contacted"; // the contact stage (R61, S8)
+// R61 (S8): the six stages every lead is in, derived by the server.
+export type Stage = "new_lead" | "contacted" | "interested" | "payment_pending" | "enrolled" | "lost";
 export type LeadStatus = "active" | "nurture" | "lost";
-export type InterestStage = "interested" | "contacted" | "qualified" | "quoted" | "payment_pending";
+export type InterestStage = "interested" | "payment_pending";
 export type Channel = "call" | "whatsapp" | "sms" | "email";
 export type Purpose = "purchase_assistance" | "enquiry_response" | "marketing";
 
@@ -59,30 +61,20 @@ export type LeadRow = {
   person: Person;
   ownerId: string | null;
   ownerName: string | null;
-  stage: LeadStage;
   status: LeadStatus;
-  priority: "low" | "normal" | "high";
+  stage: Stage;
+  courseTitle: string | null;
+  moreCourses: number;
   doNotContact: boolean;
-  isCustomer?: boolean;
-  // R60 (S7): the one category the list shows, its markers; and (S1b) the course behind it and how many other open courses there are.
-  category: LeadCategory;
-  markers: CategoryMarkers;
-  displayCourseTitle: string | null;
-  otherOpenCourses: number;
-  interests: { _id: string; courseId: string; title: string; stage: InterestStage }[];
-  lastSignalAt: string | null;
   openTasks: number;
   nextTaskDueAt: string | null;
   overdue: boolean;
   source?: string;
   manualSource?: ManualSource | null;
   createdAt?: string;
-  possibleDuplicate?: boolean;
 };
-export type LeadCategory = "new_lead" | "interested" | "payment_pending" | "enrolled" | "lost";
-export type CategoryMarkers = { interestedInAnotherCourse: boolean; paid: boolean; trial: boolean };
 export type ManualSource = "school_visit" | "referral" | "facebook_ad" | "walk_in" | "phone_enquiry" | "other";
-export type LeadView = "all" | "mine" | "new" | "interested" | "payment_pending" | "enrolled" | "lost" | "unassigned" | "today_tasks" | "overdue_tasks" | "recent_signals" | "checkout_abandoned" | "do_not_contact";
+export type LeadView = "all" | "mine" | "new" | "contacted" | "interested" | "payment_pending" | "enrolled" | "lost" | "unassigned";
 export type Pagination = { page: number; limit: number; total: number; pages: number };
 
 export type Interest = {
@@ -146,16 +138,16 @@ export type LeadDetail = {
   kind: "student" | "prospect";
   person: Person;
   isCustomer: boolean;
-  category: LeadCategory;
-  markers: CategoryMarkers;
-  displayCourseTitle: string | null;
+  stage: Stage;
+  contactStage: LeadStage;
+  saleWaiting: boolean;
+  courseTitle: string | null;
   enrollment: {
     enrolledCourses: { courseId: string; title: string }[];
     pendingCourseAssignments: { _id: string; courseId: string; title: string; assignedAt: string; fromThisLead: boolean }[];
   };
   ownerId: string | null;
   ownerName: string | null;
-  stage: LeadStage;
   status: LeadStatus;
   lostReason: string | null;
   priority: "low" | "normal" | "high";
@@ -179,8 +171,6 @@ export type LeadDetail = {
   assignmentHistory?: { from: string | null; to: string | null; by: string; method: string; reason: string | null; at: string }[];
 };
 
-export type PipelineCard = { interestId: string; leadId: string; name: string | null; courseTitle: string; listPrice: number | null; ownerName: string | null; lastSignalAt: string | null; overdue: boolean; doNotContact: boolean };
-export type Pipeline = { stages: { stage: InterestStage; count: number; listPriceTotal: number; cards: PipelineCard[] }[] };
 
 export type Rep = {
   _id: string;
@@ -201,6 +191,8 @@ export const crmApi = {
   leadCounts: (params: Record<string, string | number | undefined>) => request<Partial<Record<LeadView, number>>>("GET", `/leads/counts${qs(params)}`),
   getLead: (id: string) => request<LeadDetail>("GET", `/leads/${id}`),
   updateLead: (id: string, patch: Record<string, unknown>) => request("PATCH", `/leads/${id}`, patch),
+  /** R63 (S8): the only manual stage moves, forward only. */
+  moveStage: (id: string, body: { to: "contacted" } | { to: "interested"; courseId: string }) => request<{ stage: Stage }>("POST", `/leads/${id}/stage`, body),
   markLost: (id: string, reason: string) => request("POST", `/leads/${id}/lost`, { reason }),
   reopenLead: (id: string, reason: string) => request("POST", `/leads/${id}/reopen`, { reason }),
   setDoNotContact: (id: string, flag: boolean, reason: string) => request("POST", `/leads/${id}/do-not-contact`, { flag, reason }),
@@ -213,10 +205,8 @@ export const crmApi = {
     request<{ results: { leadId: string; ok: boolean; error?: string }[]; assigned: number; failed: number }>("POST", `/leads/bulk-assign`, { leadIds, ownerId, reason }),
 
   addInterest: (leadId: string, courseId: string) => request("POST", `/leads/${leadId}/interests`, { courseId }),
-  setStage: (interestId: string, to: InterestStage, expectedStage?: string, note?: string) => request("POST", `/interests/${interestId}/stage`, { to, expectedStage, note }),
   interestLost: (interestId: string, reason: string) => request("POST", `/interests/${interestId}/lost`, { reason }),
   interestReopen: (interestId: string, reason: string) => request("POST", `/interests/${interestId}/reopen`, { reason }),
-  pipeline: (params: Record<string, string | undefined>) => request<Pipeline>("GET", `/pipeline${qs(params)}`),
 
   activities: (leadId: string, page = 1) => request<{ items: Activity[]; pagination: Pagination }>("GET", `/leads/${leadId}/activities${qs({ page })}`),
   logActivity: (leadId: string, body: Record<string, unknown>) => request("POST", `/leads/${leadId}/activities`, body),
@@ -228,8 +218,9 @@ export const crmApi = {
   cancelTask: (taskId: string, reason: string) => request("POST", `/tasks/${taskId}/cancel`, { reason }),
   rescheduleTask: (taskId: string, dueAt: string, reason?: string, expectedDueAt?: string) => request("POST", `/tasks/${taskId}/reschedule`, { dueAt, reason, expectedDueAt }),
 
-  outreachCheck: (leadId: string, body: { purpose: Purpose; channel: Channel; interestId?: string }) => request<OutreachDecision>("POST", `/leads/${leadId}/outreach/check`, body),
-  outreachStart: (leadId: string, body: { purpose: Purpose; channel: Channel; interestId?: string }) =>
+  // S8: the server chooses the purpose; only the channel is sent.
+  outreachCheck: (leadId: string, body: { channel: Channel }) => request<OutreachDecision>("POST", `/leads/${leadId}/outreach/check`, body),
+  outreachStart: (leadId: string, body: { channel: Channel }) =>
     request<{ attemptId: string; link?: string }>("POST", `/leads/${leadId}/outreach/start`, body),
   outreachOutcome: (attemptId: string, outcome: string, summary?: string) => request("POST", `/outreach/${attemptId}/outcome`, { outcome, summary }),
 
@@ -241,13 +232,7 @@ export const crmApi = {
   updateRepProfile: (adminId: string, body: Record<string, unknown>) => request("PUT", `/reps/${adminId}/profile`, body),
   deactivateRep: (adminId: string, reason: string, reassignTo?: string | null) => request<{ leadsMoved: number }>("POST", `/reps/${adminId}/deactivate`, { reason, reassignTo }),
 
-  // Phase 4: quotes, codes, payments
-  quotes: (leadId: string) => request<Quote[]>("GET", `/leads/${leadId}/quotes`),
-  createQuote: (interestId: string, body: { applyCourseDiscount?: boolean; discountCode?: string; note?: string; validDays?: number }) =>
-    request<Quote>("POST", `/interests/${interestId}/quotes`, body),
-  decideQuote: (quoteId: string, approve: boolean, note?: string) => request<Quote>("POST", `/quotes/${quoteId}/decision`, { approve, note }),
-  cancelQuote: (quoteId: string, reason: string) => request<Quote>("POST", `/quotes/${quoteId}/cancel`, { reason }),
-  pendingQuotes: () => request<Quote[]>("GET", `/quotes/pending`),
+  // Phase 4: codes and payments (quotes removed in S8, R62)
   codesForAllocation: (params: { courseId?: string; allocatedTo?: string }) => request<CodeRow[]>("GET", `/codes${qs(params)}`),
   allocateCodes: (codeIds: string[], toAdminId: string, reason?: string) =>
     request<{ allocated: string[]; skipped: { codeId: string; reason: string }[] }>("POST", `/codes/allocate`, { codeIds, toAdminId, reason }),
@@ -278,7 +263,9 @@ export const crmApi = {
   mySalaryHistory: () => request<SalaryHistory>("GET", `/me/salary-history`),
   setSalary: (adminId: string, body: { amount: number; reason: string; expectedCurrentAmount: number | null }) => request<unknown>("PUT", `/reps/${adminId}/salary`, body),
   /** CRM settings (Super Admin); the endpoint answers { settings }. */
-  settings: async () => ((await request<any>("GET", `/settings`)).settings as { targets: TargetSchedule }),
+  settings: async () => ((await request<any>("GET", `/settings`)).settings as { targets: TargetSchedule; maxDiscountPercent: number }),
+  /** R57 / R62: recorded-sale discounts above this are flagged for approval (applies at once). */
+  updateMaxDiscount: async (maxDiscountPercent: number) => ((await request<any>("PUT", `/settings`, { maxDiscountPercent })).settings as { maxDiscountPercent: number }),
   updateTargetRules: async (targets: Partial<TargetRules>) => ((await request<any>("PUT", `/settings`, { targets })).settings as { targets: TargetSchedule }),
   /** Downloads the PDF receipt (R46) and saves it with the server's file name. */
   downloadReceipt: async (id: string) => {
@@ -385,26 +372,6 @@ export const BILL_STATUS_TONE: Record<BillStatus, "warn" | "good" | "bad" | "neu
 export const OFFLINE_METHOD_LABELS: Record<string, string> = { cash: "Cash", "esewa-personal": "eSewa", "bank-transfer": "Bank transfer", other: "Other" };
 export const PAYMENT_METHOD_LABELS: Record<string, string> = { ...OFFLINE_METHOD_LABELS, fonepay: "Fonepay", "esewa-gateway": "eSewa (online)", connectips: "connectIPS" };
 
-export type QuoteStatus = "pending_approval" | "active" | "rejected" | "cancelled" | "superseded" | "expired";
-export type Quote = {
-  _id: string;
-  leadId: string;
-  interestId: string;
-  courseId: string;
-  applyCourseDiscount: boolean;
-  discountCode?: string;
-  price: { listPrice: number; courseDiscountAmount: number; codeDiscountAmount: number; totalDiscount: number; total: number; vatRate: number; vatAmount: number };
-  discountPercent: number;
-  approval: { required: boolean; limitPercent: number; decidedAt?: string; note?: string };
-  status: QuoteStatus;
-  expiresAt: string;
-  note?: string;
-  createdAt: string;
-  history: { from?: string; to: string; at: string; note?: string }[];
-  createdById: string;
-  // Whether you may approve or reject it (never your own quote, R18). The backend re-checks.
-  canDecide?: boolean;
-};
 export type CodeRow = {
   _id: string;
   last4: string | null;
@@ -444,14 +411,6 @@ export type LeadPayment = {
   hasScreenshot?: boolean;
 };
 
-export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
-  pending_approval: "Waiting for approval",
-  active: "Active",
-  rejected: "Rejected",
-  cancelled: "Cancelled",
-  superseded: "Replaced",
-  expired: "Expired",
-};
 export const PAYMENT_PATH_LABELS: Record<LeadPayment["path"], string> = {
   online: "Online payment",
   single_code: "Code from a recorded sale",
@@ -470,19 +429,16 @@ export async function fetchCourseCatalog(): Promise<{ _id: string; title: string
 }
 
 // ---------- labels ----------
-export const LEAD_STAGE_LABELS: Record<LeadStage, string> = { new: "New", contact_attempted: "Contact attempted", contacted: "Contacted", qualified: "Qualified" };
-export const INTEREST_STAGE_LABELS: Record<InterestStage, string> = { interested: "Interested", contacted: "Contacted", qualified: "Qualified", quoted: "Quoted", payment_pending: "Payment pending" };
-// R60 (S7): the five categories, with the prototype's pill tones.
-export const CATEGORY: Record<LeadCategory, { label: string; tone: "neutral" | "accent" | "good" | "warn" | "bad" }> = {
+export const INTEREST_STAGE_LABELS: Record<InterestStage, string> = { interested: "Interested", payment_pending: "Payment pending" };
+// R61 (S8): the six stages with the prototype's pill tones.
+export const STAGE: Record<Stage, { label: string; tone: "neutral" | "accent" | "good" | "warn" | "bad" }> = {
   new_lead: { label: "New lead", tone: "accent" },
+  contacted: { label: "Contacted", tone: "neutral" },
   interested: { label: "Interested", tone: "accent" },
   payment_pending: { label: "Payment pending", tone: "warn" },
   enrolled: { label: "Enrolled", tone: "good" },
   lost: { label: "Lost", tone: "bad" },
 };
-/** The small neutral marker pills under the category (R60). */
-export const markerLabels = (m: CategoryMarkers | undefined, doNotContact?: boolean) =>
-  [m?.interestedInAnotherCourse && "Interested in another course", m?.paid && "Paid", m?.trial && "Trial", doNotContact && "Do not contact"].filter(Boolean) as string[];
 export const MANUAL_SOURCE_LABELS: Record<ManualSource, string> = { school_visit: "School visit", referral: "Referral", facebook_ad: "Facebook ad", walk_in: "Walk-in", phone_enquiry: "Phone enquiry", other: "Other" };
 const LEAD_SOURCE_LABELS: Record<string, string> = { registration: "App registration", course_activity: "Course activity", manual: "Added by staff", import: "Import", referral: "Referral", school: "School", backfill: "Existing student", other: "Other" };
 /** The Source column: the Add lead form's source when there is one, otherwise how the lead came in. */
@@ -602,7 +558,7 @@ export type Dashboard = {
   month: MonthInfo;
   tiles: DashboardTile[];
   target: { row?: TargetRow; rows?: { adminId: string; name: string; deactivated: boolean; achieved: number; target: number | null; progress: number | null; status: TargetStatus; statusLabel: string }[]; totals?: TargetsView["totals"] };
-  pipeline: { stages: { stage: string; label: string; count: number }[]; wonThisMonth: number; lostThisMonth: number };
+  pipeline: { stages: { stage: Stage; label: string; count: number }[]; total: number };
   attention: {
     overdueTasks: { _id: string; leadId: string; leadName: string | null; type: string; notes: string | null; dueAt: string; assigneeName?: string | null }[];
     overdueTotal: number;

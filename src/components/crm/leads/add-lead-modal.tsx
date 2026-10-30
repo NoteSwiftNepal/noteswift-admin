@@ -12,7 +12,7 @@ const NEPALI_MOBILE = /^9[678]\d{8}$/;
 const PHONE_ERROR = "Enter a 10-digit Nepali mobile number starting with 96, 97 or 98.";
 
 export function AddLeadModal({ open, onClose, reps, courses, onCreated }: { open: boolean; onClose: () => void; reps: Rep[]; courses: { _id: string; title: string }[]; onCreated: (id: string) => void }) {
-  const empty = { name: "", phone: "", guardianPhone: "", guardianName: "", courseId: "", school: "", district: "", grade: "", source: "walk_in" as ManualSource, email: "", ownerId: "none" };
+  const empty = { name: "", phone: "", guardianPhone: "", guardianName: "", courseId: "", school: "", district: "", grade: "", source: "walk_in" as ManualSource, ownerId: "none" };
   const [f, setF] = useState(empty);
   const [err, setErr] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export function AddLeadModal({ open, onClose, reps, courses, onCreated }: { open
   if (!open) return null;
   const set = (k: keyof typeof empty, v: string) => {
     setF((x) => ({ ...x, [k]: v }));
-    if (k === "phone" || k === "email") {
+    if (k === "phone") {
       setErr(null);
       setDuplicate(null);
     }
@@ -44,8 +44,8 @@ export function AddLeadModal({ open, onClose, reps, courses, onCreated }: { open
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const phone = f.phone.trim();
-    if (phone && !NEPALI_MOBILE.test(phone)) return setErr(PHONE_ERROR);
-    if (!phone && !f.email.trim()) return setErr("Enter the student's phone number or an email.");
+    // S8: as the prototype, the student's phone is required.
+    if (!NEPALI_MOBILE.test(phone)) return setErr(PHONE_ERROR);
     if (f.guardianPhone.trim() && !NEPALI_MOBILE.test(f.guardianPhone.trim())) return setErr(`Guardian phone: ${PHONE_ERROR.charAt(0).toLowerCase()}${PHONE_ERROR.slice(1)}`);
     setBusy(true);
     setErr(null);
@@ -53,8 +53,7 @@ export function AddLeadModal({ open, onClose, reps, courses, onCreated }: { open
     try {
       const r = await crmApi.createProspect({
         name: f.name.trim(),
-        phone: phone || undefined,
-        email: f.email.trim() || undefined,
+        phone,
         guardianName: f.guardianName.trim() || undefined,
         guardianPhone: f.guardianPhone.trim() || undefined,
         courseId: f.courseId || undefined,
@@ -98,7 +97,7 @@ export function AddLeadModal({ open, onClose, reps, courses, onCreated }: { open
               <input ref={firstRef} className="crm-input" required minLength={2} maxLength={200} value={f.name} onChange={(e) => set("name", e.target.value)} />
             </Field>
             <Field label="Student phone">
-              <input className="crm-input" inputMode="numeric" placeholder="98XXXXXXXX" maxLength={10} value={f.phone} onChange={(e) => set("phone", e.target.value.trim())} />
+              <input className="crm-input" inputMode="numeric" placeholder="98XXXXXXXX" maxLength={10} required value={f.phone} onChange={(e) => set("phone", e.target.value.trim())} />
             </Field>
             <Field label="Guardian phone">
               <input className="crm-input" inputMode="numeric" placeholder="Optional" maxLength={10} value={f.guardianPhone} onChange={(e) => set("guardianPhone", e.target.value.trim())} />
@@ -120,9 +119,6 @@ export function AddLeadModal({ open, onClose, reps, courses, onCreated }: { open
             </Field>
             <Field label="Source">
               <Sel value={f.source} onChange={(e) => set("source", e.target.value)} options={(Object.keys(MANUAL_SOURCE_LABELS) as ManualSource[]).map((s) => ({ value: s, label: MANUAL_SOURCE_LABELS[s] }))} />
-            </Field>
-            <Field label="Email">
-              <input className="crm-input" type="email" placeholder="Optional" maxLength={200} value={f.email} onChange={(e) => set("email", e.target.value)} />
             </Field>
             {reps.length > 0 && (
               <Field label="Assign to">

@@ -181,7 +181,7 @@ function TeamAllocation() {
           </DataState>
       </CrmCard>
 
-      {/* S7: the discount approvals card (quotes, R54) and the code allocation card (R59) are gone; the backend keeps both. */}
+      {/* The discount approvals card went with quotes (R62) and the code allocation card is hidden (R59). */}
 
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} onDone={(msg) => { toast({ title: msg }); load(); }} />
       <ProfileDialog rep={editRep} courses={courses} onClose={() => setEditRep(null)} onDone={() => { toast({ title: "Allocation updated" }); load(); }} />

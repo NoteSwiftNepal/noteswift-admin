@@ -287,6 +287,16 @@ function RulesCard({ schedule, onChanged }: { schedule: TargetSchedule; onChange
   const base = schedule.scheduled ?? schedule.current;
   const [form, setForm] = useState({ multiplier: String(base.multiplier), bonusThreshold: String(base.bonusThreshold), bonusRatePercent: String(base.bonusRatePercent), onTrackPercent: String(base.onTrackPercent) });
   const [busy, setBusy] = useState(false);
+  // The prototype's "Max discount a salesperson can give" (R57): Super Admin only, applies at once.
+  const [maxDiscount, setMaxDiscount] = useState<string | null>(null);
+  const [savedMax, setSavedMax] = useState<number | null>(null);
+  useEffect(() => {
+    if (!editable) return;
+    crmApi.settings().then((st) => {
+      setMaxDiscount(String(st.maxDiscountPercent));
+      setSavedMax(st.maxDiscountPercent);
+    }, () => setMaxDiscount(null));
+  }, [editable]);
   useEffect(() => {
     const b = schedule.scheduled ?? schedule.current;
     setForm({ multiplier: String(b.multiplier), bonusThreshold: String(b.bonusThreshold), bonusRatePercent: String(b.bonusRatePercent), onTrackPercent: String(b.onTrackPercent) });
@@ -300,7 +310,11 @@ function RulesCard({ schedule, onChanged }: { schedule: TargetSchedule; onChange
       const changes: Partial<TargetRules> = {};
       (Object.keys(form) as (keyof TargetRules)[]).forEach((k) => (changes[k] = Number(form[k])));
       await crmApi.updateTargetRules(changes);
-      toast({ title: "Rules saved", description: `They apply from ${schedule.nextMonth.label}.` });
+      if (maxDiscount !== null && Number(maxDiscount) !== savedMax) {
+        const st = await crmApi.updateMaxDiscount(Number(maxDiscount));
+        setSavedMax(st.maxDiscountPercent);
+      }
+      toast({ title: "Rules saved", description: `Target and bonus rules apply from ${schedule.nextMonth.label}; the discount limit applies now.` });
       onChanged();
     } catch (e: any) {
       toast({ title: "Not saved", description: e?.message, variant: "destructive" });
@@ -329,6 +343,12 @@ function RulesCard({ schedule, onChanged }: { schedule: TargetSchedule; onChange
         {field("bonusThreshold", "Bonus starts at (Rs credited in the month)")}
         {field("bonusRatePercent", "Bonus rate (%)")}
         {field("onTrackPercent", "On track at (% of expected)")}
+        {maxDiscount !== null && (
+          <div className="space-y-1">
+            <Label htmlFor="rule-max-discount">Max discount a salesperson can give (%)</Label>
+            <Input id="rule-max-discount" inputMode="decimal" value={maxDiscount} onChange={(e) => setMaxDiscount(e.target.value)} />
+          </div>
+        )}
       </div>
       <CrmNote>
         Example with the current rules: {rs(example)} credited → {c.bonusRatePercent}% × {rs(example).replace("Rs. ", "")} = <b>{rs(exampleBonus)}</b> bonus. Below {rs(c.bonusThreshold)} → no bonus.

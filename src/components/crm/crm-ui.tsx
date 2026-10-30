@@ -1,40 +1,14 @@
 "use client";
 
-// Small shared pieces of the Sales & CRM pages: status badges, an
+// Small shared pieces of the Sales & CRM pages: the task status pill, an
 // error/empty/loading frame, and a dialog that asks for a reason.
 import { ReactNode, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
-import { CrmPill, Tone } from "@/components/crm/ui";
+import { CrmPill } from "@/components/crm/ui";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { INTEREST_STAGE_LABELS, InterestStage, LEAD_STAGE_LABELS, LeadStage, LeadStatus } from "@/lib/crm/api";
-
-// Status → pill tone (docs/crm-prototype/UI_SPEC.md §5). Labels are unchanged.
-export function LeadStatusBadge({ status }: { status: LeadStatus }) {
-  return <CrmPill tone={status === "lost" ? "bad" : status === "nurture" ? "neutral" : "good"}>{status === "lost" ? "Lost" : status === "nurture" ? "Nurture" : "Active"}</CrmPill>;
-}
-
-const LEAD_STAGE_TONE: Record<LeadStage, Tone> = { new: "accent", contact_attempted: "neutral", contacted: "neutral", qualified: "accent" };
-export function LeadStageBadge({ stage }: { stage: LeadStage }) {
-  return <CrmPill tone={LEAD_STAGE_TONE[stage] ?? "neutral"}>{LEAD_STAGE_LABELS[stage] ?? stage}</CrmPill>;
-}
-
-const INTEREST_STAGE_TONE: Record<InterestStage, Tone> = { interested: "neutral", contacted: "neutral", qualified: "accent", quoted: "accent", payment_pending: "warn" };
-export function InterestStageBadge({ stage }: { stage: InterestStage }) {
-  return <CrmPill tone={INTEREST_STAGE_TONE[stage] ?? "neutral"}>{INTEREST_STAGE_LABELS[stage] ?? stage}</CrmPill>;
-}
-
-export function OutcomeBadge({ outcome, lostReason }: { outcome: "won" | "granted" | "lost" | null; lostReason?: string | null }) {
-  if (outcome === "won") return <CrmPill tone="good">Won</CrmPill>;
-  if (outcome === "lost") return <CrmPill tone="bad">{lostReason ? `Lost: ${lostReason}` : "Lost"}</CrmPill>;
-  return <CrmPill>{outcome === "granted" ? "Granted" : "Closed"}</CrmPill>;
-}
-
-export function DoNotContactBadge() {
-  return <CrmPill tone="bad">Do not contact</CrmPill>;
-}
 
 /** Task status: open (accent), overdue (bad), completed (good), cancelled (neutral). */
 export function TaskStatusBadge({ status, overdue }: { status: string; overdue?: boolean }) {

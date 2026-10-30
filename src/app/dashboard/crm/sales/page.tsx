@@ -6,9 +6,7 @@
 // tiles and says which actions each row allows.
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
@@ -19,29 +17,13 @@ import { MonthSelect, useTargetMonths } from "@/components/crm/targets";
 import { useSearchParams } from "next/navigation";
 import { BillRow, BillSummaryItem, BillTab, Pagination, Rep, crmApi, fmtDateTime, rs } from "@/lib/crm/api";
 
+// S8: the prototype's tabs (Cancelled sales are under All).
 const TABS: { value: BillTab; label: string }[] = [
-  { value: "waiting", label: "Waiting confirmation" },
+  { value: "waiting", label: "Waiting" },
   { value: "confirmed", label: "Confirmed" },
   { value: "rejected", label: "Rejected" },
-  { value: "cancelled", label: "Cancelled" },
   { value: "all", label: "All" },
 ];
-const METHODS = [
-  ["cash", "Cash"],
-  ["esewa-personal", "eSewa (personal)"],
-  ["bank-transfer", "Bank transfer"],
-  ["other", "Other"],
-  ["fonepay", "Fonepay"],
-  ["esewa-gateway", "eSewa (online)"],
-  ["connectips", "connectIPS"],
-] as const;
-const PATHS = [
-  ["sales_recorded", "Recorded by salesperson"],
-  ["online", "Online payment"],
-  ["single_code", "Code from a recorded sale"],
-  ["bulk_codes", "Organization (prepaid codes)"],
-  ["direct_grant", "Enrolled by a Super Admin"],
-] as const;
 const ANY = "any";
 
 export default function SalesBillsPage() {
@@ -57,14 +39,8 @@ function SalesBillsInner() {
   const { can } = useAdmin();
   const isAdmin = can("crm.view_all_leads");
   const [tab, setTab] = useState<BillTab>(isAdmin ? "waiting" : "all");
-  const [searchInput, setSearchInput] = useState("");
-  const [q, setQ] = useState("");
   const [repId, setRepId] = useState(ANY);
-  const [method, setMethod] = useState(ANY);
-  const [path, setPath] = useState(ANY);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  // Nepali month (S5): default the current month (or ?bsMonth= from a dashboard link); a date range clears it and vice versa.
+  // Nepali month (S5): default the current month (or ?bsMonth= from a dashboard link).
   const searchParams = useSearchParams();
   const { months } = useTargetMonths();
   const [bsMonth, setBsMonth] = useState<string | null>(searchParams.get("bsMonth"));
@@ -83,15 +59,8 @@ function SalesBillsInner() {
   const [confirmRow, setConfirmRow] = useState<BillRow | null>(null);
   const [reasonFor, setReasonFor] = useState<{ row: BillRow; kind: "reject" | "cancel" } | null>(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setQ(searchInput.trim());
-      setPage(1);
-    }, 400);
-    return () => clearTimeout(t);
-  }, [searchInput]);
-
-  const filters = { q: q || undefined, repId: repId === ANY ? undefined : repId, method: method === ANY ? undefined : method, path: path === ANY ? undefined : path, from: from || undefined, to: to || undefined, bsMonth: bsMonth || undefined };
+  // S8: Salesperson and Month only, as the prototype.
+  const filters = { repId: repId === ANY ? undefined : repId, bsMonth: bsMonth || undefined };
   const filterKey = JSON.stringify(filters);
 
   const load = useCallback(async () => {
@@ -124,7 +93,7 @@ function SalesBillsInner() {
 
   return (
     <div className="flex flex-col gap-4">
-      <CrmPageHeader crumb="Sales & Bills" title="Sales & Bills" subtitle={isAdmin ? "Every sale your team made, and its bill." : "Your sales and their bills."} />
+      <CrmPageHeader crumb="Sales & Bills" title="Sales & Bills" subtitle="Manual sales stay pending until an admin confirms the money arrived. App purchases verify automatically." />
 
       {summary.length > 0 && (
         <CrmKpis>
@@ -138,10 +107,6 @@ function SalesBillsInner() {
 
       <CrmCard flush>
         <div className="crm-card-b crm-toolbar">
-          <div className="relative min-w-0 flex-[1_1_220px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input aria-label="Search by receipt number or student" placeholder="Receipt no. or student" className="pl-8" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
-          </div>
           {isAdmin && reps.length > 0 && (
             <Select value={repId} onValueChange={(v) => setFilter(() => setRepId(v))}>
               <SelectTrigger className="w-full sm:w-[180px]" aria-label="Salesperson">
@@ -157,65 +122,25 @@ function SalesBillsInner() {
               </SelectContent>
             </Select>
           )}
-          <Select value={method} onValueChange={(v) => setFilter(() => setMethod(v))}>
-            <SelectTrigger className="w-full sm:w-[160px]" aria-label="Method">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY}>Any method</SelectItem>
-              {METHODS.map(([v, l]) => (
-                <SelectItem key={v} value={v}>
-                  {l}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={path} onValueChange={(v) => setFilter(() => setPath(v))}>
-            <SelectTrigger className="w-full sm:w-[200px]" aria-label="How">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY}>Any kind</SelectItem>
-              {PATHS.map(([v, l]) => (
-                <SelectItem key={v} value={v}>
-                  {l}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <MonthSelect
             months={months}
             value={bsMonth ?? ""}
             anyLabel="Any month"
-            onChange={(v) =>
-              setFilter(() => {
-                setBsMonth(v);
-                if (v) {
-                  setFrom("");
-                  setTo("");
-                }
-              })
-            }
+            onChange={(v) => setFilter(() => setBsMonth(v))}
           />
-          <div className="flex w-full items-center gap-2 sm:w-auto">
-            <Input type="date" aria-label="From" value={from} max={to || undefined} onChange={(e) => setFilter(() => { setFrom(e.target.value); setBsMonth(""); })} className="w-full sm:w-[150px]" />
-            <span className="crm-muted">–</span>
-            <Input type="date" aria-label="To" value={to} min={from || undefined} onChange={(e) => setFilter(() => { setTo(e.target.value); setBsMonth(""); })} className="w-full sm:w-[150px]" />
-          </div>
         </div>
         <CrmTabs label="Status" value={tab} onChange={(v) => { setTab(v); setPage(1); }} tabs={TABS.map((t) => ({ ...t, count: counts[t.value] ?? null }))} />
         <DataState loading={loading} error={error} onRetry={load} empty={rows.length === 0} emptyText={tab === "waiting" ? "Nothing waiting for confirmation." : "No sales here. Try another tab or clear the filters."}>
           <CrmTable>
             <thead>
               <tr>
-                <th>Receipt no.</th>
+                <th>Bill</th>
                 <th>Date</th>
                 <th>Student</th>
                 <th>Course</th>
-                <th>How</th>
                 <th className="crm-num">Amount</th>
-                <th>Recorded by</th>
-                {isAdmin && <th>Credit to</th>}
+                <th>Paid by</th>
+                {isAdmin && <th>Salesperson</th>}
                 <th>Status</th>
                 <th>
                   <span className="sr-only">Actions</span>
@@ -232,10 +157,6 @@ function SalesBillsInner() {
                   </td>
                   <td>{r.leadId ? <Link href={`/dashboard/crm/leads/${r.leadId}`} className="crm-link">{r.studentName}</Link> : r.studentName}</td>
                   <td>{r.courseUnconfirmed ? <CrmPill tone="warn">Course not confirmed</CrmPill> : r.courseTitle}</td>
-                  <td>
-                    {r.pathLabel}
-                    <span className="crm-sub">{r.methodLabel}</span>
-                  </td>
                   <td className="crm-num">
                     <b>{rs(r.amount)}</b>
                     {r.pricing && <span className="crm-sub">incl. VAT {rs(r.pricing.vatAmount)}</span>}
@@ -246,8 +167,16 @@ function SalesBillsInner() {
                     )}
                     {r.amountMismatch && <span className="crm-sub crm-late">received {rs(r.amountReceived)}</span>}
                   </td>
-                  <td>{r.organization ? <span className="crm-muted">Organization</span> : r.recordedByName ?? <span className="crm-muted">{r.pathLabel}</span>}</td>
-                  {isAdmin && <td>{r.organization ? <span className="crm-muted">—</span> : r.creditedToName ?? r.creditOwnerName ?? <span className="crm-muted">No salesperson</span>}</td>}
+                  <td>
+                    {r.methodLabel}
+                    <span className="crm-sub">{r.pathLabel}</span>
+                  </td>
+                  {isAdmin && (
+                    <td>
+                      {r.organization ? <span className="crm-muted">Organization</span> : r.creditedToName ?? r.creditOwnerName ?? <span className="crm-muted">No salesperson</span>}
+                      {r.recordedByName && r.recordedByName !== (r.creditedToName ?? r.creditOwnerName) && <span className="crm-sub">recorded by {r.recordedByName}</span>}
+                    </td>
+                  )}
                   <td>
                     <BillStatusPill status={r.status} label={r.statusLabel} />
                   </td>
