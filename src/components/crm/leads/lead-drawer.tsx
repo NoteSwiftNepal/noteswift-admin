@@ -3,8 +3,8 @@
 // The lead drawer (S8: exactly the prototype's LeadDrawer, R65). Header with
 // the stage and the actions Log call · Schedule follow-up · Assign course
 // (R67) · Record sale (R64) · WhatsApp · Mark lost (and Assign for Admin); for
-// a Lost lead only Reopen. Body: facts with the Courses row, the Stage select
-// (forward moves only, R68), open follow-ups, sales and the activity timeline. The contact gate, Do not contact and
+// a Lost lead only Reopen. Body: facts, the Courses section, the Stage select
+// (R69: either direction), open follow-ups, sales and the activity timeline. The contact gate, Do not contact and
 // Admin assignment stay because approved rules need them. Every action keeps
 // its backend call and permission; the backend decides what each role sees.
 import { KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -217,10 +217,6 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
                 { label: "School", value: p?.school || "—" },
                 { label: "District", value: p?.district || "—" },
                 ...(isAdmin ? [{ label: "Source", value: sourceLabel(lead) }, { label: "Added", value: fmtDateTime(lead.createdAt) }] : []),
-                {
-                  label: "Courses",
-                  value: <LeadCourses lead={lead} onCancel={(c) => setReasonAction({ title: `Cancel ${c.title}`, description: "The course is no longer waiting for payment; the student stays Interested in it.", confirmLabel: "Cancel assignment", destructive: true, success: "Assignment cancelled", run: (r) => crmApi.cancelLeadCourse(lead._id, c.assignmentId!, r) })} />,
-                },
                 { label: "Last contact", value: lead.lastContactAt ? relDateTime(lead.lastContactAt) : "Not contacted yet" },
                 {
                   label: "Owner",
@@ -244,7 +240,13 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
             />
             <DoNotContactLink lead={lead} canSet={can("crm.set_do_not_contact")} canClear={can("crm.clear_do_not_contact")} ask={setReasonAction} />
 
-            {!lost && <StageSelect lead={lead} canMove={can("crm.edit_leads")} canAssignCourse={can("crm.manage_pipeline")} onMoved={(label) => panelDone(label)()} onInterested={() => setMode({ kind: "course", mode: "interested" })} onError={fail} />}
+            <LeadCourses
+              lead={lead}
+              onAssign={!lost && can("crm.manage_pipeline") ? () => setMode({ kind: "course", mode: "interested" }) : null}
+              onCancel={(c) => setReasonAction({ title: `Cancel ${c.title}`, description: "The course is no longer waiting for payment; the student stays Interested in it.", confirmLabel: "Cancel assignment", destructive: true, success: "Assignment cancelled", run: (r) => crmApi.cancelLeadCourse(lead._id, c.assignmentId!, r) })}
+            />
+
+            {!lost && <StageSelect lead={lead} canMove={can("crm.edit_leads")} onMoved={(label) => panelDone(label)()} onInterested={() => setMode({ kind: "course", mode: "interested" })} onError={fail} />}
 
             <FollowUps lead={lead} act={act} />
 
@@ -353,45 +355,60 @@ function DoNotContactLink({ lead, canSet, canClear, ask }: { lead: LeadDetail; c
   );
 }
 
-/** The Courses fact (R67): one pill per course; a Payment pending one its creator or an Admin may cancel. */
-function LeadCourses({ lead, onCancel }: { lead: LeadDetail; onCancel: (c: LeadDetail["courses"][number]) => void }) {
-  if (!lead.courses?.length) return <span className="crm-muted">None yet</span>;
+/**
+ * The Courses section (R67; S8c layout): one row per course, the title on the
+ * left (wraps), the state pill and, where allowed, Cancel on the right.
+ */
+function LeadCourses({ lead, onAssign, onCancel }: { lead: LeadDetail; onAssign: (() => void) | null; onCancel: (c: LeadDetail["courses"][number]) => void }) {
+  const list = lead.courses ?? [];
   return (
-    <span className="flex flex-wrap items-center gap-1.5">
-      {lead.courses.map((c) => (
-        <span key={c.courseId} className="inline-flex items-center gap-1">
-          <CrmPill tone={LEAD_COURSE_STATE[c.state].tone}>
-            {c.title} · {LEAD_COURSE_STATE[c.state].label}
-          </CrmPill>
-          {c.state === "payment_pending" && c.canCancel && c.assignmentId && (
-            <button type="button" className="crm-link crm-small" onClick={() => onCancel(c)} aria-label={`Cancel ${c.title}`}>
-              Cancel
-            </button>
-          )}
-        </span>
-      ))}
-    </span>
+    <section>
+      <h3 className="crm-sec-h">Courses</h3>
+      {list.length === 0 ? (
+        <p className="crm-muted crm-small" style={{ margin: 0 }}>
+          None yet
+        </p>
+      ) : (
+        <div className="crm-list">
+          {list.map((c) => (
+            <div key={c.courseId} className="crm-li">
+              <span className="crm-course-title">{c.title}</span>
+              <span className="crm-actions">
+                <CrmPill tone={LEAD_COURSE_STATE[c.state].tone}>{LEAD_COURSE_STATE[c.state].label}</CrmPill>
+                {c.state === "payment_pending" && c.canCancel && c.assignmentId && (
+                  <button type="button" className="crm-link crm-small" onClick={() => onCancel(c)} aria-label={`Cancel ${c.title}`}>
+                    Cancel
+                  </button>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {onAssign && (
+        <button type="button" className="crm-link crm-small" style={{ marginTop: 6 }} onClick={onAssign}>
+          + Assign course
+        </button>
+      )}
+    </section>
   );
 }
 
 /**
- * R68: the "Stage" select, always under the facts on an active lead. New lead
- * can move to Contacted; New lead and Contacted to Interested, which opens
- * Assign course with Interested chosen. Payment pending and Enrolled are
- * read-only (set by sales); Interested has no manual step forward.
+ * R69: the "Stage" select, as the prototype. On a lead that isn't Lost,
+ * Payment pending or Enrolled: New lead, Contacted or Interested, either
+ * direction. Interested opens Assign course (Interested chosen); going back
+ * from Interested closes its open courses as "No longer interested". Payment
+ * pending and Enrolled are read-only text (set by sales).
  */
-function StageSelect({ lead, canMove, canAssignCourse, onMoved, onInterested, onError }: { lead: LeadDetail; canMove: boolean; canAssignCourse: boolean; onMoved: (label: string) => void; onInterested: () => void; onError: (e: any) => void }) {
+function StageSelect({ lead, canMove, onMoved, onInterested, onError }: { lead: LeadDetail; canMove: boolean; onMoved: (label: string) => void; onInterested: () => void; onError: (e: any) => void }) {
   const [busy, setBusy] = useState(false);
   const note = (
     <span className="crm-muted crm-small" style={{ fontWeight: 400 }}>
       Payment pending and Enrolled are set by sales.
     </span>
   );
-  const forward = [
-    ...(lead.stage === "new_lead" && canMove ? [{ value: "contacted", label: "Contacted" }] : []),
-    ...((lead.stage === "new_lead" || lead.stage === "contacted") && canAssignCourse ? [{ value: "interested", label: "Interested" }] : []),
-  ];
-  if (lead.stage === "payment_pending" || lead.stage === "enrolled" || forward.length === 0) {
+  if (lead.stage === "payment_pending" || lead.stage === "enrolled" || !canMove) {
     return (
       <div className="crm-f">
         Stage
@@ -401,12 +418,13 @@ function StageSelect({ lead, canMove, canAssignCourse, onMoved, onInterested, on
     );
   }
   const change = async (to: string) => {
+    if (to === lead.stage) return;
     if (to === "interested") return onInterested();
-    if (to !== "contacted") return;
     setBusy(true);
     try {
-      await crmApi.moveStage(lead._id, { to: "contacted" });
-      onMoved("Moved to Contacted");
+      const r = await crmApi.moveStage(lead._id, { to: to as "new_lead" | "contacted" });
+      const label = STAGE[to as "new_lead" | "contacted"].label;
+      onMoved(r.opportunitiesClosed ? `Moved to ${label}; ${r.opportunitiesClosed} course(s) closed` : `Moved to ${label}`);
     } catch (e: any) {
       onError(e);
     } finally {
@@ -415,8 +433,23 @@ function StageSelect({ lead, canMove, canAssignCourse, onMoved, onInterested, on
   };
   return (
     <Field label="Stage">
-      <Sel value="" disabled={busy} onChange={(e) => change(e.target.value)} options={[{ value: "", label: STAGE[lead.stage].label }, ...forward]} />
-      {note}
+      <Sel
+        value={lead.stage}
+        disabled={busy}
+        onChange={(e) => change(e.target.value)}
+        options={[
+          { value: "new_lead", label: "New lead" },
+          { value: "contacted", label: "Contacted" },
+          { value: "interested", label: "Interested" },
+        ]}
+      />
+      {lead.stage === "interested" ? (
+        <span className="crm-muted crm-small" style={{ fontWeight: 400 }}>
+          Moving back closes the open course(s) as &ldquo;No longer interested&rdquo;. Payment pending and Enrolled are set by sales.
+        </span>
+      ) : (
+        note
+      )}
     </Field>
   );
 }

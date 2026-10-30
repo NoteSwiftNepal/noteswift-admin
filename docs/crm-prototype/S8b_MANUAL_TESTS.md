@@ -76,3 +76,56 @@ This checklist is for the owner, to click through on **dev** (local backend on t
 ## 8. Phone width (390 px)
 
 - [ ] The action row wraps; the Courses pills wrap; the Assign course panel fields stack; no sideways page scroll.
+
+---
+
+# S8c: the Stage select both ways, and the Courses layout
+
+Same setup as section 0 (dev only). Rita = Sales (`+crm-sales1`), Bikash = Sales (`+crm-sales2`), Sita = Admin (`+crm-admin1`).
+
+## S8c.1 Stage moves (Rita, on "[DEMO] Nabin New")
+
+| ✓ | Steps | Expected |
+|---|---|---|
+| [ ] | Open Nabin (New lead) | Under Courses, the "Stage" select shows **New lead** with options New lead · Contacted · Interested, and the note "Payment pending and Enrolled are set by sales." |
+| [ ] | Pick Contacted | Toast "Moved to Contacted"; the pill, the tab and the select show Contacted. Activity "Stage: New lead → Contacted". |
+| [ ] | Pick New lead | Toast "Moved to New lead"; back in the New lead tab. Activity "Stage: Contacted → New lead". |
+| [ ] | Pick Interested | The Assign course panel opens with "Interested — no payment yet" chosen; the stage changes only after "Assign course". Then: Interested, the course in Courses as Interested. The note under the select now says moving back closes the open course(s). |
+| [ ] | Pick Contacted | Toast "Moved to Contacted; 1 course(s) closed". The course disappears from Courses; Activity "Stage: Interested → Contacted (1 open course(s) closed: No longer interested)". |
+| [ ] | Pick Interested again → choose the same course → Assign course | Interested again with that course. |
+
+## S8c.2 Refusal and read-only stages
+
+| ✓ | Steps | Expected |
+|---|---|---|
+| [ ] | Rita: Record sale on an Interested lead (cash), don't confirm | The lead is Payment pending; the Stage select is replaced by the text "Payment pending" and the note. |
+| [ ] | Same with Assign course → Payment pending instead of a sale | Same read-only text. Cancel the assignment: the select is back. |
+| [ ] | An Enrolled lead (e.g. [DEMO] Kiran Enrolled) | Read-only "Enrolled". |
+| [ ] | A Lost lead (e.g. [DEMO] Esha Bhatt) | No Stage select; the header shows Lost, the reason and "Reopen lead". |
+| [ ] | (Race, optional) Two tabs on an Interested lead: tab 1 Assign course → Payment pending; tab 2 (not reloaded) picks Contacted | Tab 2: "A sale or payment-pending course is waiting. Cancel it first." (or the Payment pending refusal); nothing closes. |
+
+## S8c.3 Other people
+
+| ✓ | Role | Steps | Expected |
+|---|---|---|---|
+| [ ] | Bikash | Open Nabin's URL (Rita's lead) | "This lead doesn't exist or isn't assigned to you." No select. |
+| [ ] | Sita, Super Admin | Any active lead | The same three options, both directions. |
+
+## S8c.4 Courses layout, no overlap
+
+Set up a lead with 3+ courses with long names (e.g. Assign course: two Interested, one Payment pending; or a student with enrolments).
+
+| ✓ | Width | Expected |
+|---|---|---|
+| [ ] | 1440px window (drawer 520px) | "Courses" is its own section under the facts grid, above Stage. One row per course: title on the left wrapping onto more lines, the pill (and Cancel) on the right. Nothing overlaps "Last contact", Owner or the Stage select. "+ Assign course" link at the end. |
+| [ ] | 1024px window | Same. |
+| [ ] | 520px window | Facts go to one column; course rows still wrap cleanly (the pill may drop under the title). |
+| [ ] | 390px phone | Drawer full width; action row wraps; header pills wrap; Courses rows and panels (Assign course, Record sale) stack with no sideways scroll. |
+| [ ] | A lead with no courses | "None yet" and "+ Assign course". |
+| [ ] | Long values in facts (long school name, long guardian) | They wrap inside their cell; no cell overlaps the next. |
+
+## S8c.5 Tab counts
+
+| ✓ | Steps | Expected |
+|---|---|---|
+| [ ] | Rita: note the New lead / Contacted / Interested counts, then move Nabin New lead → Contacted → Interested → New lead | Each move takes 1 from one tab and adds 1 to the other; All stays the same. |

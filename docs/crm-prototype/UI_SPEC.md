@@ -293,11 +293,12 @@ All colours are CSS variables on `:root`. In S1 they are scoped to the CRM area 
 - **Action row** (open leads): primary sm "Log call", sm "Schedule follow-up", sm "Assign course" (S8b, R67), sm "Record sale" (R64), sm "WhatsApp" (wa.me link), danger sm "Mark lost", and sm "Assign" for Admin. Lost leads get only "Reopen lead". The row wraps at phone width.
 - **Body, in order:**
   1. the active inline panel (one at a time);
-  2. a facts grid: Student phone, Guardian (name · phone), School, District, Source, Added, **Courses** (S8b: one pill per course, "Title · state": Enrolled good, Payment pending warn, Interested accent, Trial neutral; a small "Cancel" link on Payment pending entries the viewer may cancel, which asks for a reason; "None yet"), Last contact, Owner (a select for Admin);
-  3. the "Stage" select (R68), on every lead that isn't Lost: only the allowed forward options (New lead → Contacted / Interested, Contacted → Interested); picking Interested opens Assign course with Interested chosen. Interested, Payment pending and Enrolled show as text. Note: "Payment pending and Enrolled are set by sales.";
-  4. "Open follow-ups" list: type, note, due (red if overdue); good sm "Done" and sm "+1 day";
-  5. "Sales" list: bill no., course, "amount · method · date"; bill pill and sm "Bill";
-  6. "Activity" timeline.
+  2. a facts grid: Student phone, Guardian (name · phone), School, District, Source, Added, Last contact, Owner (a select for Admin). Every cell `min-width: 0`, values wrap (`overflow-wrap: anywhere`); one column below 520px;
+  3. **Courses** section (S8c; out of the facts grid): h3 "Courses", then one `.crm-li` row per course: the title on the left (wraps, `min-width: 0`), on the right the state pill (Enrolled good, Payment pending warn, Interested accent, Trial neutral) and, on Payment pending entries the viewer may cancel, a small "Cancel" link (asks for a reason); "None yet" when empty; a small "+ Assign course" link at the end (same panel as the action button; not on Lost);
+  4. the "Stage" select (R69), on leads that aren't Lost, Payment pending or Enrolled: New lead, Contacted, Interested, either direction. Interested opens Assign course with Interested chosen; going back from Interested closes its open courses (note under the select: "Moving back closes the open course(s) as "No longer interested"."). Payment pending and Enrolled show as text with "Payment pending and Enrolled are set by sales."; Lost shows its reason and Reopen in the header;
+  5. "Open follow-ups" list: type, note, due (red if overdue); good sm "Done" and sm "+1 day";
+  6. "Sales" list: bill no., course, "amount · method · date"; bill pill and sm "Bill";
+  7. "Activity" timeline.
 - **Panels:**
   - **Log a call:** What happened? (outcome select), Note, "Schedule next follow-up" checkbox → When and How. Buttons Save call / Cancel.
   - **Schedule follow-up:** Type, Due, Note. Buttons Schedule / Cancel.

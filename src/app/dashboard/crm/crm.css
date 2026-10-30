@@ -179,7 +179,7 @@ a.crm-kpi:hover, button.crm-kpi:hover { border-color: var(--crm-accent); }
 .crm-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
 .crm-facts > div { min-width: 0; }
 .crm-facts dt { font-size: 11.5px; color: var(--crm-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-.crm-facts dd { margin: 2px 0 0; word-break: break-word; }
+.crm-facts dd { margin: 2px 0 0; min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 520px) { .crm-facts { grid-template-columns: minmax(0, 1fr); } }
 
 /* Timeline */
@@ -240,6 +240,9 @@ label.crm-f.crm-row { flex-direction: row; align-items: center; gap: 8px; }
 .crm-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: var(--crm-surface); z-index: 41; display: flex; flex-direction: column; border-left: 1px solid var(--crm-line); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-right: env(safe-area-inset-right, 0px); outline: none; }
 .crm-drawer-h { padding: 16px 18px; border-bottom: 1px solid var(--crm-line); display: flex; flex-direction: column; gap: 10px; }
 .crm-drawer-h h1 { font-size: 19px; font-weight: 600; margin: 0; }
+.crm-drawer-h .min-w-0 > span { overflow-wrap: anywhere; }
+/* S8c: the drawer's Courses section, one .crm-li row per course (title left, pill and Cancel right). */
+.crm-course-title { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
 .crm-drawer-b { padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; flex: 1 1 auto; min-height: 0; }
 .crm-drawer-b section > h3, .crm-sec-h { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
 .crm-modal { position: fixed; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100% - 32px)); max-height: calc(100% - 48px); overflow-y: auto; background: var(--crm-surface); border: 1px solid var(--crm-line); border-radius: 16px; box-shadow: var(--crm-shadow); }

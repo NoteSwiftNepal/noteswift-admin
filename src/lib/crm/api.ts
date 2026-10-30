@@ -197,7 +197,8 @@ export const crmApi = {
   getLead: (id: string) => request<LeadDetail>("GET", `/leads/${id}`),
   updateLead: (id: string, patch: Record<string, unknown>) => request("PATCH", `/leads/${id}`, patch),
   /** R63 (S8): the only manual stage moves, forward only. */
-  moveStage: (id: string, body: { to: "contacted" } | { to: "interested"; courseId: string }) => request<{ stage: Stage }>("POST", `/leads/${id}/stage`, body),
+  // R69 (S8c): New lead, Contacted and Interested in either direction.
+  moveStage: (id: string, body: { to: "new_lead" | "contacted" } | { to: "interested"; courseId: string }) => request<{ stage: Stage; changed: boolean; opportunitiesClosed?: number }>("POST", `/leads/${id}/stage`, body),
   markLost: (id: string, reason: string) => request("POST", `/leads/${id}/lost`, { reason }),
   reopenLead: (id: string, reason: string) => request("POST", `/leads/${id}/reopen`, { reason }),
   setDoNotContact: (id: string, flag: boolean, reason: string) => request("POST", `/leads/${id}/do-not-contact`, { flag, reason }),
