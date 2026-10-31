@@ -30,6 +30,7 @@ type Mode =
   | { kind: "paymentPending" }
   | { kind: "sale"; courseId?: string }
   | { kind: "lost" }
+  | { kind: "temporary" }
   | { kind: "assign"; ownerId: string }
   | null;
 type CatalogCourse = { _id: string; title: string; price?: number; type?: string };
@@ -136,8 +137,9 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
   const pickStage = (to: Stage) => {
     if (to === "new_lead" || to === "contacted") setMode({ kind: "contactStage", to });
     else if (to === "interested") setMode({ kind: "interested" });
-    else if (to === "payment_pending") setMode({ kind: "paymentPending" });
+    else if (to === "payment_pending") setMode(lead?.stage === "temporary" ? { kind: "sale", courseId: lead ? firstOpenCourse(lead) : undefined } : { kind: "paymentPending" });
     else if (to === "lost") setMode({ kind: "lost" });
+    else if (to === "temporary") setMode({ kind: "temporary" });
   };
 
   return (
@@ -156,6 +158,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
           <>
             <div className="crm-actions">
               {lost || !can("crm.edit_leads") ? <CrmPill tone={st.tone}>{st.label}</CrmPill> : <StageMenu stage={lead.stage} options={lead.stageOptions} onPick={pickStage} />}
+              {lead.frozen && <CrmPill tone="neutral">Frozen</CrmPill>}
               {lost && lead.lostReason && <span className="crm-muted crm-small">{lead.lostReason}</span>}
               {dnc && <CrmPill tone="bad">Do not contact</CrmPill>}
             </div>
@@ -224,6 +227,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
               <PaymentPendingPanel lead={lead} courses={courses} onRecordSale={(courseId) => setMode({ kind: "sale", courseId })} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />
             )}
             {mode?.kind === "sale" && <RecordSalePanel key={mode.courseId || "sale"} leadId={leadId} interests={lead.interests} leadCourses={lead.courses} courses={courses} initialCourseId={mode.courseId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
+            {mode?.kind === "temporary" && <TemporaryPanel lead={lead} courses={courses} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "lost" && <LostPanel leadId={leadId} onDone={panelDone("Lead marked lost")} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "assign" && <AssignPanel lead={lead} reps={reps} initialOwnerId={mode.ownerId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
 
@@ -260,6 +264,8 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
             <LeadCourses
               lead={lead}
               onCancel={(c) => setReasonAction({ title: `Cancel ${c.title}`, description: "The course is no longer waiting for payment; the student stays Interested in it.", confirmLabel: "Cancel assignment", destructive: true, success: "Assignment cancelled", run: (r) => crmApi.cancelLeadCourse(lead._id, c.assignmentId!, r) })}
+              onFreeze={(c) => setReasonAction({ title: `Freeze ${c.title}`, description: "The student loses access to this course everywhere until it is unfrozen. Nothing is deleted.", confirmLabel: "Freeze", destructive: true, optional: true, success: "Course frozen", run: (r) => crmApi.freezeTemporary(lead._id, c.enrollmentId!, r || undefined) })}
+              onUnfreeze={(c) => setReasonAction({ title: `Unfreeze ${c.title}`, description: "The student gets access to this course again.", confirmLabel: "Unfreeze", optional: true, success: "Course unfrozen", run: () => crmApi.unfreezeTemporary(lead._id, c.enrollmentId!) })}
             />
 
             <FollowUps lead={lead} act={act} />
@@ -374,7 +380,8 @@ function DoNotContactLink({ lead, canSet, canClear, ask }: { lead: LeadDetail; c
  * one row per course, the title on the left (wraps), the state pill and,
  * where allowed, Cancel on the right.
  */
-function LeadCourses({ lead, onCancel }: { lead: LeadDetail; onCancel: (c: LeadDetail["courses"][number]) => void }) {
+type CourseRow = LeadDetail["courses"][number];
+function LeadCourses({ lead, onCancel, onFreeze, onUnfreeze }: { lead: LeadDetail; onCancel: (c: CourseRow) => void; onFreeze: (c: CourseRow) => void; onUnfreeze: (c: CourseRow) => void }) {
   const list = lead.courses ?? [];
   return (
     <section>
@@ -395,6 +402,16 @@ function LeadCourses({ lead, onCancel }: { lead: LeadDetail; onCancel: (c: LeadD
                     Cancel
                   </button>
                 )}
+                {c.state === "temporary" && c.canFreeze && c.enrollmentId && (
+                  <button type="button" className="crm-link crm-small" onClick={() => onFreeze(c)} aria-label={`Freeze ${c.title}`}>
+                    Freeze
+                  </button>
+                )}
+                {c.state === "temporary_frozen" && c.canUnfreeze && c.enrollmentId && (
+                  <button type="button" className="crm-link crm-small" onClick={() => onUnfreeze(c)} aria-label={`Unfreeze ${c.title}`}>
+                    Unfreeze
+                  </button>
+                )}
               </span>
             </div>
           ))}
@@ -404,9 +421,13 @@ function LeadCourses({ lead, onCancel }: { lead: LeadDetail; onCancel: (c: LeadD
   );
 }
 
-/** The lead's first Interested course (prefill for Payment pending and Record sale). */
+/** The course to prefill for Payment pending and Record sale: a temporary one first (R72), then Interested, then held. */
 function firstOpenCourse(lead: LeadDetail) {
-  return lead.courses?.find((c) => c.state === "interested")?.courseId ?? lead.courses?.find((c) => c.state === "payment_pending")?.courseId;
+  for (const st of ["temporary", "temporary_frozen", "interested", "payment_pending"]) {
+    const c = lead.courses?.find((x) => x.state === st);
+    if (c) return c.courseId;
+  }
+  return undefined;
 }
 
 /** Courses the student doesn't already have (not enrolled, not held, not already interested unless `keepInterested`). */
@@ -420,6 +441,49 @@ function assignable(lead: LeadDetail, courses: CatalogCourse[], keepInterested: 
 
 const stageToast = (r: { stage: Stage; changed: boolean; opportunitiesClosed?: number }, fallback: string) =>
   !r.changed ? `Already ${STAGE[r.stage].label}` : r.opportunitiesClosed ? `${fallback}; ${r.opportunitiesClosed} course(s) closed` : fallback;
+
+/**
+ * R72 (S10): Temporary enrollment. Real access now, no payment, no time limit;
+ * freezable from the Courses block. Courses the student doesn't have, the
+ * interested ones first.
+ */
+function TemporaryPanel({ lead, courses, onDone, onCancel }: { lead: LeadDetail; courses: CatalogCourse[]; onDone: (msg: string) => void; onCancel: () => void }) {
+  const interested = new Set((lead.courses ?? []).filter((c) => c.state === "interested").map((c) => c.courseId));
+  const options = assignable(lead, courses, true).sort((a, b) => Number(interested.has(b._id)) - Number(interested.has(a._id)));
+  const [courseId, setCourseId] = useState(options.find((c) => interested.has(c._id))?._id ?? "");
+  const [reason, setReason] = useState("");
+  const { busy, error, run } = useBusy();
+  return (
+    <Panel
+      title="Temporary enrollment"
+      submitLabel="Give access now"
+      onCancel={onCancel}
+      busy={busy}
+      error={error}
+      canSubmit={!!courseId}
+      onSubmit={() =>
+        run(async () => {
+          await crmApi.grantTemporary(lead._id, { courseId, reason: reason.trim() || undefined });
+          onDone("Temporary access given");
+        })
+      }
+    >
+      <div className="crm-form">
+        <Field label="Course" full>
+          <Sel
+            value={courseId}
+            onChange={(e) => setCourseId(e.target.value)}
+            options={[{ value: "", label: options.length ? "Choose a course" : "No course left to give" }, ...options.map((c) => ({ value: c._id, label: c.title + (interested.has(c._id) ? " (interested)" : "") }))]}
+          />
+        </Field>
+        <Field label="Reason (optional)" full>
+          <input className="crm-input" value={reason} maxLength={500} placeholder="e.g. paying next week" onChange={(e) => setReason(e.target.value)} />
+        </Field>
+      </div>
+      <span className="crm-muted crm-small">The student gets full access now, without paying, until you freeze it or they pay. It is not a sale.</span>
+    </Panel>
+  );
+}
 
 /** R70: New lead / Contacted. From Interested the open courses close as "No longer interested". */
 function ContactStagePanel({ lead, to, onDone, onCancel }: { lead: LeadDetail; to: "new_lead" | "contacted"; onDone: (msg: string) => void; onCancel: () => void }) {

@@ -49,7 +49,7 @@ export type Person = {
 };
 export type LeadStage = "new" | "contacted"; // the contact stage (R61, S8)
 // R61 (S8): the six stages every lead is in, derived by the server.
-export type Stage = "new_lead" | "contacted" | "interested" | "payment_pending" | "enrolled" | "lost";
+export type Stage = "new_lead" | "contacted" | "interested" | "temporary" | "payment_pending" | "enrolled" | "lost";
 export type LeadStatus = "active" | "nurture" | "lost";
 export type InterestStage = "interested" | "payment_pending";
 export type Channel = "call" | "whatsapp" | "sms" | "email";
@@ -63,6 +63,8 @@ export type LeadRow = {
   ownerName: string | null;
   status: LeadStatus;
   stage: Stage;
+  /** R72: Temporary enrollment with every temporary course frozen. */
+  frozen?: boolean;
   courseTitle: string | null;
   moreCourses: number;
   doNotContact: boolean;
@@ -74,7 +76,7 @@ export type LeadRow = {
   createdAt?: string;
 };
 export type ManualSource = "school_visit" | "referral" | "facebook_ad" | "walk_in" | "phone_enquiry" | "other";
-export type LeadView = "all" | "mine" | "new" | "contacted" | "interested" | "payment_pending" | "enrolled" | "lost" | "unassigned";
+export type LeadView = "all" | "mine" | "new" | "contacted" | "interested" | "temporary" | "payment_pending" | "enrolled" | "lost" | "unassigned";
 export type Pagination = { page: number; limit: number; total: number; pages: number };
 
 export type Interest = {
@@ -134,8 +136,9 @@ export type Activity = {
 };
 
 // R67 (S8b): one entry per course on the lead, the most advanced state first.
-export type LeadCourseState = "enrolled" | "payment_pending" | "interested" | "trial";
-export type LeadCourse = { courseId: string; title: string; state: LeadCourseState; since: string | null; assignmentId?: string; canCancel: boolean };
+export type LeadCourseState = "enrolled" | "payment_pending" | "temporary" | "temporary_frozen" | "interested" | "trial";
+// R72 (S10): a temporary course carries its enrollment and what the viewer may do.
+export type LeadCourse = { courseId: string; title: string; state: LeadCourseState; since: string | null; assignmentId?: string; canCancel: boolean; enrollmentId?: string; canFreeze?: boolean; canUnfreeze?: boolean };
 
 export type StageOption = { to: Stage; allowed: boolean; reason?: string };
 
@@ -145,6 +148,8 @@ export type LeadDetail = {
   person: Person;
   isCustomer: boolean;
   stage: Stage;
+  /** R72: Temporary enrollment with every temporary course frozen. */
+  frozen?: boolean;
   contactStage: LeadStage;
   saleWaiting: boolean;
   courseTitle: string | null;
@@ -204,8 +209,12 @@ export const crmApi = {
   // R70 (S9): the stage dropdown. Record sale stays its own call.
   moveStage: (
     id: string,
-    body: { to: "new_lead" | "contacted" } | { to: "interested"; courseId: string } | { to: "payment_pending"; mode: "later"; courseId: string; note?: string } | { to: "lost"; reason: string }
-  ) => request<{ stage: Stage; changed: boolean; opportunitiesClosed?: number; interestId?: string; assignmentId?: string }>("POST", `/leads/${id}/stage`, body),
+    body: { to: "new_lead" | "contacted" } | { to: "interested"; courseId: string } | { to: "payment_pending"; mode: "later"; courseId: string; note?: string } | { to: "lost"; reason: string } | { to: "temporary"; courseId: string; reason?: string }
+  ) => request<{ stage: Stage; changed: boolean; opportunitiesClosed?: number; interestId?: string; assignmentId?: string; enrollmentId?: string }>("POST", `/leads/${id}/stage`, body),
+  // R72 (S10): temporary enrollment.
+  grantTemporary: (id: string, body: { courseId: string; reason?: string }) => request<{ enrollmentId: string; trialsClosed: number }>("POST", `/leads/${id}/temporary-enrollments`, body),
+  freezeTemporary: (id: string, enrollmentId: string, reason?: string) => request<{ frozen: boolean; changed: boolean }>("POST", `/leads/${id}/temporary-enrollments/${enrollmentId}/freeze`, { reason }),
+  unfreezeTemporary: (id: string, enrollmentId: string) => request<{ frozen: boolean; changed: boolean }>("POST", `/leads/${id}/temporary-enrollments/${enrollmentId}/unfreeze`),
   markLost: (id: string, reason: string) => request("POST", `/leads/${id}/lost`, { reason }),
   reopenLead: (id: string, reason: string) => request("POST", `/leads/${id}/reopen`, { reason }),
   setDoNotContact: (id: string, flag: boolean, reason: string) => request("POST", `/leads/${id}/do-not-contact`, { flag, reason }),
@@ -446,6 +455,8 @@ export async function fetchCourseCatalog(): Promise<{ _id: string; title: string
 export const LEAD_COURSE_STATE: Record<LeadCourseState, { label: string; tone: "neutral" | "accent" | "good" | "warn" }> = {
   enrolled: { label: "Enrolled", tone: "good" },
   payment_pending: { label: "Payment pending", tone: "warn" },
+  temporary: { label: "Temporary", tone: "accent" },
+  temporary_frozen: { label: "Frozen", tone: "neutral" },
   interested: { label: "Interested", tone: "accent" },
   trial: { label: "Trial", tone: "neutral" },
 };
@@ -455,6 +466,7 @@ export const STAGE: Record<Stage, { label: string; tone: "neutral" | "accent" | 
   new_lead: { label: "New lead", tone: "accent" },
   contacted: { label: "Contacted", tone: "neutral" },
   interested: { label: "Interested", tone: "accent" },
+  temporary: { label: "Temporary enrollment", tone: "accent" },
   payment_pending: { label: "Payment pending", tone: "warn" },
   enrolled: { label: "Enrolled", tone: "good" },
   lost: { label: "Lost", tone: "bad" },

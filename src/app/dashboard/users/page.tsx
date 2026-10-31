@@ -1097,6 +1097,7 @@ export default function UsersPage() {
                                                     <div className="text-sm text-muted-foreground">
                                                       {enrollment.courseType} • {
                                                         enrollment.enrollmentType === 'regular' ? 'Paid' :
+                                                        enrollment.enrollmentType === 'temporary' ? (enrollment.status === 'frozen' ? 'Temporary (frozen)' : 'Temporary access') :
                                                         enrollment.enrollmentType === 'trial' ? 'Trial' :
                                                         enrollment.enrollmentType === 'admin_assigned' ? 'Admin Assigned' :
                                                         'Access Code'
@@ -1108,6 +1109,7 @@ export default function UsersPage() {
                                                   <Badge
                                                     variant={
                                                       enrollment.enrollmentType === 'trial' ? "outline" :
+                                                      enrollment.enrollmentType === 'temporary' ? "outline" :
                                                       enrollment.enrollmentType === 'access_code' ? "secondary" :
                                                       enrollment.enrollmentType === 'admin_assigned' ? "secondary" :
                                                       "default"
@@ -1115,6 +1117,7 @@ export default function UsersPage() {
                                                     className="mb-1"
                                                   >
                                                     {enrollment.enrollmentType === 'regular' ? 'Paid' :
+                                                     enrollment.enrollmentType === 'temporary' ? (enrollment.status === 'frozen' ? 'Frozen' : 'Temporary') :
                                                      enrollment.enrollmentType === 'trial' ? 'Trial' :
                                                      enrollment.enrollmentType === 'admin_assigned' ? 'Admin Assigned' :
                                                      'Access Code'}
@@ -1175,6 +1178,10 @@ export default function UsersPage() {
                                                 </div>
                                               )}
 
+                                              {enrollment.enrollmentType === 'temporary' ? (
+                                                // R72 (S10): managed from the student's CRM lead (freeze / unfreeze), converted by a payment.
+                                                <div className="mt-3 text-xs text-muted-foreground text-right">Temporary access from Sales &amp; CRM: freeze or unfreeze it on the student&apos;s lead.</div>
+                                              ) : (
                                               <div className="mt-3 flex justify-end">
                                                 <Button
                                                   variant="outline"
@@ -1186,6 +1193,7 @@ export default function UsersPage() {
                                                   Remove from Course
                                                 </Button>
                                               </div>
+                                              )}
                                             </div>
                                           ))}
                                         </div>
