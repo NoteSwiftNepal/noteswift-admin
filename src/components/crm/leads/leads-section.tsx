@@ -32,6 +32,7 @@ export function LeadsSection() {
     { value: "new", label: "New lead" },
     { value: "contacted", label: "Contacted" },
     { value: "interested", label: "Interested" },
+    { value: "temporary", label: "Temporary enrollment" },
     { value: "payment_pending", label: "Payment pending" },
     { value: "enrolled", label: "Enrolled" },
     { value: "lost", label: "Lost" },
@@ -284,7 +285,10 @@ export function LeadsSection() {
                       </td>
                       {isAdmin && <td>{r.ownerName || <CrmPill tone="warn">Unassigned</CrmPill>}</td>}
                       <td>
-                        <CrmPill tone={st.tone}>{st.label}</CrmPill>
+                        <span className="crm-actions">
+                          <CrmPill tone={st.tone}>{st.label}</CrmPill>
+                          {r.frozen && <CrmPill tone="neutral">Frozen</CrmPill>}
+                        </span>
                       </td>
                       <td className={`whitespace-nowrap ${r.overdue ? "crm-late" : ""}`}>{r.nextTaskDueAt ? relDateTime(r.nextTaskDueAt) : <span className="crm-muted">{closed ? "—" : "None set"}</span>}</td>
                       {isAdmin && <td className="crm-muted">{sourceLabel(r)}</td>}

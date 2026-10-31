@@ -351,7 +351,11 @@ export function RecordSalePanel({
   const { toast } = useToast();
   const openOnes = useMemo(() => {
     const price = (id: string) => interests.find((i) => i.courseId === id)?.listPrice ?? courses.find((c) => c._id === id)?.price ?? null;
-    const fromCourses = leadCourses.filter((c) => c.state === "payment_pending" || c.state === "interested").map((c) => ({ _id: c.courseId, courseId: c.courseId, title: c.title, listPrice: price(c.courseId) }));
+    // R72: temporary courses first (the sale converts them), then held and interested ones.
+    const order = ["temporary", "temporary_frozen", "payment_pending", "interested"];
+    const fromCourses = leadCourses
+      .filter((c) => order.includes(c.state))
+      .sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state)).map((c) => ({ _id: c.courseId, courseId: c.courseId, title: c.title, listPrice: price(c.courseId) }));
     const rest = interests.filter((i) => i.status === "open" && !fromCourses.some((c) => c.courseId === i.courseId)).map((i) => ({ _id: i._id, courseId: i.courseId, title: i.title, listPrice: i.listPrice }));
     return [...fromCourses, ...rest];
   }, [interests, leadCourses, courses]);
@@ -446,7 +450,7 @@ export function RecordSalePanel({
         <Field label="Course" full>
           <select className="crm-input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
             {openOnes.length > 0 && (
-              <optgroup label="Payment pending and interested">
+              <optgroup label="This student's courses">
                 {openOnes.map((i) => (
                   <option key={i._id} value={i.courseId}>
                     {i.title}
