@@ -22,4 +22,6 @@ For the owner, on **dev** only. **Never point the backend or a script at product
 | [ ] | Log call with a follow-up open | The checkbox reads "Update the next follow-up"; saving changes the existing one. |
 | [ ] | Mark the follow-up Done | The button reads Schedule follow-up again. |
 | [ ] | A Do not contact lead: schedule a Call | Refused with the reason. |
-| [ ] | Log call on a lead with no recent activity | Still blocked: scheduling is free, but the contact rule still applies when you start the call. |
+| [ ] | Log call on a lead with no recent activity (R76) | Allowed. The activity says "Sales follow-up". |
+| [ ] | Call the same lead 3 times, then try again | "Already contacted 3 times in the last 7 days". |
+| [ ] | Do not contact, Lost, or a lead of Bikash's | Still refused. |
