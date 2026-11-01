@@ -16,6 +16,7 @@ import { AddLeadModal } from "@/components/crm/leads/add-lead-modal";
 import { Dashboard, Rep, TARGET_STATUS_TONE, TASK_TYPE_LABELS, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
 
 const MONEY_TILES = new Set(["credited", "waiting", "company"]);
+const TILE_LABELS: Record<string, string> = { new_leads: "New leads", followups_today: "Follow-ups today", overdue: "Overdue", enrolled: "Won", credited: "Credited sales", waiting: "Waiting", company: "Company sales" };
 
 export default function CrmDashboardPage() {
   const router = useRouter();
@@ -56,7 +57,7 @@ export default function CrmDashboardPage() {
       <CrmPageHeader
         crumb="CRM Dashboard"
         title={team ? "CRM Dashboard" : "My sales"}
-        subtitle={data ? `${data.month.label} · sales and targets count confirmed payments only` : "Sales and targets count confirmed payments only"}
+        subtitle={data?.month.label}
         actions={
           <>
             <MonthSelect months={months} value={month || data?.month.key || ""} onChange={setMonth} />
@@ -76,9 +77,10 @@ export default function CrmDashboardPage() {
                 <CrmKpi
                   key={t.key}
                   href={t.link}
-                  label={t.label}
+                  label={TILE_LABELS[t.key] ?? t.label}
                   value={MONEY_TILES.has(t.key) ? rs(t.value) : t.value}
-                  caption={`${t.count !== undefined ? `${t.count} payment${t.count === 1 ? "" : "s"} · ` : ""}${t.includes}`}
+                  caption={t.count !== undefined ? `${t.count} payment${t.count === 1 ? "" : "s"}` : undefined}
+                  hint={t.includes}
                   tone={t.tone}
                 />
               ))}
@@ -95,7 +97,7 @@ export default function CrmDashboardPage() {
                   }
                 >
                   {!data.target.rows?.length ? (
-                    <div className="crm-empty">No salesperson has a salary or sales in this month yet.</div>
+                    <div className="crm-empty">No targets this month.</div>
                   ) : (
                     <div className="crm-list">
                       {data.target.rows.map((r) => (
@@ -148,19 +150,16 @@ export default function CrmDashboardPage() {
               }
             >
               {data.attention.overdueTasks.length === 0 && !data.attention.uncontactedNewLeads && !data.attention.waitingConfirmation && !data.attention.rejectedThisMonth ? (
-                <div className="crm-empty">Nothing urgent. Every lead has a next step.</div>
+                <div className="crm-empty">Nothing urgent.</div>
               ) : (
                 <div className="crm-list">
                   {data.attention.overdueTasks.map((t) => (
                     <div key={t._id} className="crm-li">
                       <div className="crm-who">
                         <b>{t.leadName || "Unnamed"}</b>{" "}
-                        <span className="crm-muted crm-small">
-                          · {TASK_TYPE_LABELS[t.type] || t.type}
-                          {t.notes ? ` · ${t.notes}` : ""}
-                        </span>
+                        <span className="crm-muted crm-small">· {TASK_TYPE_LABELS[t.type] || t.type}</span>
                         <span className="crm-sub crm-late">
-                          Overdue since {fmtDateTime(t.dueAt)}
+                          {fmtDateTime(t.dueAt)}
                           {team ? ` · ${t.assigneeName || "Unassigned"}` : ""}
                         </span>
                       </div>
@@ -174,9 +173,8 @@ export default function CrmDashboardPage() {
                     <div className="crm-li">
                       <div className="crm-who">
                         <b>
-                          {data.attention.uncontactedNewLeads} new lead{data.attention.uncontactedNewLeads === 1 ? "" : "s"} not contacted within 24 hours
+                          {data.attention.uncontactedNewLeads} new lead{data.attention.uncontactedNewLeads === 1 ? "" : "s"} not contacted
                         </b>
-                        <span className="crm-sub">Call new registrations quickly. Interest drops fast.</span>
                       </div>
                       <Button type="button" size="sm" variant="outline" asChild>
                         <Link href="/dashboard/crm/leads?view=new">View</Link>
@@ -187,9 +185,8 @@ export default function CrmDashboardPage() {
                     <div className="crm-li">
                       <div className="crm-who">
                         <b>
-                          {data.attention.waitingConfirmation} payment{data.attention.waitingConfirmation === 1 ? "" : "s"} waiting for confirmation
+                          {data.attention.waitingConfirmation} payment{data.attention.waitingConfirmation === 1 ? "" : "s"} to confirm
                         </b>
-                        <span className="crm-sub">Check the money arrived, then confirm so it counts toward targets.</span>
                       </div>
                       <Button type="button" size="sm" variant="outline" asChild>
                         <Link href="/dashboard/crm/sales">Review</Link>
@@ -200,9 +197,8 @@ export default function CrmDashboardPage() {
                     <div className="crm-li">
                       <div className="crm-who">
                         <b>
-                          {data.attention.rejectedThisMonth} of your payments rejected this month
+                          {data.attention.rejectedThisMonth} rejected payment{data.attention.rejectedThisMonth === 1 ? "" : "s"}
                         </b>
-                        <span className="crm-sub">See the reason on the bill, then record the payment again if needed.</span>
                       </div>
                       <Button type="button" size="sm" variant="outline" asChild>
                         <Link href="/dashboard/crm/sales">See</Link>

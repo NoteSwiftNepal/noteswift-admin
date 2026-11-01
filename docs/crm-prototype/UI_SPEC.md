@@ -252,6 +252,8 @@ All colours are CSS variables on `:root`. In S1 they are scoped to the CRM area 
 
 ## 4. Pages (top to bottom)
 
+**Dashboard clean-up (2026-11-01):** tiles show a short label and the value (plus the payment count on money tiles); what a tile includes moved to its hover hint. The subtitle is the month. Needs attention rows are one short line with no advice text.
+
 **CRM Dashboard** (Admin: "CRM Dashboard"; Sales: "My sales today"):
 1. Page header: title; subtitle "{month} · targets and sales count verified payments only"; primary "+ Add lead".
 2. KPI grid of 6 clickable tiles:
