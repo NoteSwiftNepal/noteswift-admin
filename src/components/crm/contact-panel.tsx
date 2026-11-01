@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Btn, Field, Panel, Sel, fromLocalInput, toLocalInput, useBusy } from "@/components/crm/leads/controls";
-import { Channel, OUTCOME_LABELS, crmApi } from "@/lib/crm/api";
+import { Channel, OUTCOME_LABELS, Task, crmApi } from "@/lib/crm/api";
 
 // The prototype's "How" choices for the next follow-up.
 export const FOLLOW_UP_TYPES = [
@@ -22,7 +22,7 @@ export const FOLLOW_UP_TYPES = [
 // Contact task types without a channel of their own are made by phone.
 export const taskChannel = (type: string) => (type === "payment_reminder" ? { channel: "call" } : {});
 
-export function ContactPanel({ leadId, phone, channel, onDone, onCancel }: { leadId: string; phone: string | null; channel: Channel; onDone: () => void; onCancel: () => void }) {
+export function ContactPanel({ leadId, phone, channel, openTask, onDone, onCancel }: { leadId: string; phone: string | null; channel: Channel; openTask?: Task | null; onDone: () => void; onCancel: () => void }) {
   const { toast } = useToast();
   const [blocked, setBlocked] = useState<string | null | undefined>(undefined); // undefined while checking
   const [attempt, setAttempt] = useState<{ attemptId: string; link?: string } | null>(null);
@@ -62,7 +62,9 @@ export function ContactPanel({ leadId, phone, channel, onDone, onCancel }: { lea
       await crmApi.outreachOutcome(attempt.attemptId, outcome, note.trim() || undefined);
       if (followOn && !noFollowUp) {
         try {
-          await crmApi.createTask(leadId, { type: followType, dueAt: fromLocalInput(followAt), ...taskChannel(followType) });
+          const body = { type: followType, dueAt: fromLocalInput(followAt), ...taskChannel(followType) };
+          if (openTask) await crmApi.updateTask(openTask._id, { ...body, expectedDueAt: openTask.dueAt });
+          else await crmApi.createTask(leadId, body);
         } catch (e: any) {
           toast({ title: "Saved, but the follow-up wasn't scheduled", description: e?.reasons?.[0] || e?.message, variant: "destructive" });
           onDone();
@@ -122,7 +124,7 @@ export function ContactPanel({ leadId, phone, channel, onDone, onCancel }: { lea
         </Field>
         {!noFollowUp && (
           <>
-            <Field label="Schedule next follow-up" full row>
+            <Field label={openTask ? "Update the next follow-up" : "Schedule next follow-up"} full row>
               <input type="checkbox" checked={followOn} onChange={(e) => setFollowOn(e.target.checked)} />
             </Field>
             {followOn && (

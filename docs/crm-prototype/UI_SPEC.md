@@ -440,3 +440,9 @@ Replaces the S10 stage option and panel, and the "Student will pay later" choice
 - **Tabs:** All · Payment pending · Enrolled · Lost · Unassigned (Admin), plus Temporary enrollment while such leads exist. New lead, Contacted and Interested leads are under All, with their stage pill.
 - **Toolbar:** From and To date inputs after the salesperson filter, with "Clear dates" when set. They filter the list and the tab counts by the day the lead came in (a backfilled lead: the student's signup day).
 
+## R75: visits and follow-ups (2026-11-01)
+
+- **Courses block:** a course the student only visited shows "Visited" (neutral), last. It doesn't change the stage.
+- **Interested panel:** any catalog course, visited ones first and marked "(visited)". Saving confirms it, and the lead becomes Interested.
+- **Follow-up:** the button reads "Schedule follow-up", or "Edit follow-up" when one is open (the panel opens filled in, button Save). In Log call the checkbox reads "Update the next follow-up" when one is open.
+
