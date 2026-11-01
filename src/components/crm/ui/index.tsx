@@ -36,7 +36,7 @@ export function CrmPageHeader({ title, subtitle, crumb, actions }: { title: Reac
   );
 }
 
-export function CrmKpi({ label, value, caption, tone, href }: { label: ReactNode; value: ReactNode; caption?: ReactNode; tone?: "good" | "warn" | "bad"; href?: string }) {
+export function CrmKpi({ label, value, caption, tone, href, hint }: { label: ReactNode; value: ReactNode; caption?: ReactNode; tone?: "good" | "warn" | "bad"; href?: string; hint?: string }) {
   const body = (
     <>
       <span className="crm-kpi-l">{label}</span>
@@ -45,11 +45,11 @@ export function CrmKpi({ label, value, caption, tone, href }: { label: ReactNode
     </>
   );
   return href ? (
-    <Link href={href} className={cn("crm-kpi", tone)}>
+    <Link href={href} title={hint} className={cn("crm-kpi", tone)}>
       {body}
     </Link>
   ) : (
-    <div className={cn("crm-kpi", tone)}>{body}</div>
+    <div title={hint} className={cn("crm-kpi", tone)}>{body}</div>
   );
 }
 
