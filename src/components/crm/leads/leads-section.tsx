@@ -133,6 +133,8 @@ export function LeadsSection() {
   };
 
   const activeReps = reps.filter((r) => r.status === "active");
+  // An invited rep has no name yet ("Pending Registration") and owns no leads; a deactivated one may.
+  const registeredReps = reps.filter((r) => r.status === "active" || r.status === "inactive");
   const allSelected = rows.length > 0 && rows.every((r) => selected.includes(r._id));
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
@@ -183,7 +185,7 @@ export function LeadsSection() {
             <select className="crm-input" style={{ flex: "0 1 200px" }} aria-label="Owner" value={filters.ownerId || "any"} onChange={(e) => setParam({ ownerId: e.target.value })}>
               <option value="any">All salespeople</option>
               <option value="none">Unassigned</option>
-              {reps.map((r) => (
+              {registeredReps.map((r) => (
                 <option key={r._id} value={r._id}>
                   {r.name}
                 </option>

@@ -83,7 +83,7 @@ function SalesBillsInner() {
     load();
   }, [load]);
   useEffect(() => {
-    if (can("crm.manage_reps")) crmApi.reps().then((r) => setReps(r), () => setReps([]));
+    if (can("crm.manage_reps")) crmApi.reps().then((r) => setReps(r.filter((x) => x.status === "active" || x.status === "inactive")), () => setReps([]));
   }, [can]);
 
   const setFilter = (fn: () => void) => {
