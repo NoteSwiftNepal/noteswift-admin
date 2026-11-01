@@ -435,3 +435,8 @@ Replaces the S10 stage option and panel, and the "Student will pay later" choice
 - **Leads tabs:** Temporary enrollment appears only while such leads exist (given before R73).
 - **Sales & Bills:** a Type column (Prepaid accent, Postpaid warn; "—" for older bills). An unpaid postpaid bill shows "Not paid yet" under Waiting, with Reject or Cancel but no Confirm. The confirm dialog shows the bill type.
 
+## R74: Leads tabs and date filter (2026-11-01)
+
+- **Tabs:** All · Payment pending · Enrolled · Lost · Unassigned (Admin), plus Temporary enrollment while such leads exist. New lead, Contacted and Interested leads are under All, with their stage pill.
+- **Toolbar:** From and To date inputs after the salesperson filter, with "Clear dates" when set. They filter the list and the tab counts by the day the lead came in (a backfilled lead: the student's signup day).
+
