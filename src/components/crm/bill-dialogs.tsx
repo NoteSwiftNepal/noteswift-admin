@@ -16,7 +16,7 @@ import { Field, Panel, Sel } from "@/components/crm/leads/controls";
 import { BILL_STATUS_TONE, Bill, BillRow, BillType, Interest, LeadCourse, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
 
 const STAMP_COLOR: Record<string, string> = { good: "var(--crm-good)", warn: "var(--crm-warn)", bad: "var(--crm-bad)", neutral: "var(--crm-muted)" };
-const STAMP_TEXT: Record<string, string> = { confirmed: "Paid · Confirmed", waiting: "Pending confirmation", rejected: "Rejected", cancelled: "Cancelled", invalid: "Invalid", other: "—" };
+const STAMP_TEXT: Record<string, string> = { confirmed: "Paid · Confirmed", unpaid: "Payment pending", waiting: "Pending confirmation", rejected: "Rejected", cancelled: "Cancelled", invalid: "Invalid", other: "—" };
 
 async function openScreenshot(id: string, toast: ReturnType<typeof useToast>["toast"]) {
   // Open the tab first (popup blockers allow it only in the click), then point it at the signed link.
@@ -112,7 +112,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
                   )}
                   <tr>
                     <td>
-                      <b>Total paid</b>
+                      <b>{bill.status === "unpaid" ? "Total due" : "Total paid"}</b>
                       {bill.totals.pricesIncludeVat && <span className="crm-sub">Prices include VAT</span>}
                     </td>
                     <td className="crm-num">
@@ -128,7 +128,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
             </p>
             <CrmFacts
               items={[
-                { label: "Paid by", value: `${bill.payment.methodLabel}${bill.payment.reference ? ` · ${bill.payment.reference}` : ""}` },
+                ...(bill.status === "unpaid" ? [] : [{ label: "Paid by", value: `${bill.payment.methodLabel}${bill.payment.reference ? ` · ${bill.payment.reference}` : ""}` }]),
                 { label: "How", value: bill.payment.pathLabel },
                 ...(bill.people.recordedBy ? [{ label: "Recorded by", value: bill.people.recordedBy }] : []),
                 ...(bill.people.confirmedBy ? [{ label: "Confirmed by", value: `${bill.people.confirmedBy}${bill.dates.decidedAt ? ` · ${fmtDateTime(bill.dates.decidedAt)}` : ""}` }] : []),
