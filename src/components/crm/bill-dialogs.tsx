@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { CrmFacts, CrmNote, CrmPill } from "@/components/crm/ui";
 import { Field, Panel, Sel } from "@/components/crm/leads/controls";
-import { BILL_STATUS_TONE, Bill, BillRow, Interest, LeadCourse, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
+import { BILL_STATUS_TONE, Bill, BillRow, BillType, Interest, LeadCourse, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
 
 const STAMP_COLOR: Record<string, string> = { good: "var(--crm-good)", warn: "var(--crm-warn)", bad: "var(--crm-bad)", neutral: "var(--crm-muted)" };
 const STAMP_TEXT: Record<string, string> = { confirmed: "Paid · Confirmed", waiting: "Pending confirmation", rejected: "Rejected", cancelled: "Cancelled", invalid: "Invalid", other: "—" };
@@ -256,6 +256,7 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
               ...(cur.discount && cur.discount.amount > 0
                 ? [{ label: "Discount", value: <span style={cur.discount.needsApproval ? { color: "var(--crm-warn)", fontWeight: 600 } : undefined}>{rs(cur.discount.amount)} ({cur.discount.percent}%)</span> }]
                 : []),
+              ...(row.billType ? [{ label: "Bill type", value: row.billType === "prepaid" ? "Prepaid (already enrolled)" : "Postpaid (temporary access until confirmed)" }] : []),
               { label: "Paid by", value: `${row.methodLabel}${bill?.payment.reference ? ` · ${bill.payment.reference}` : ""}` },
               { label: "Student", value: row.studentName },
               { label: "Course", value: cur.courseUnconfirmed ? <span className="crm-late">Course not confirmed</span> : cur.courseTitle },
@@ -335,10 +336,13 @@ export function RecordSalePanel({
   leadCourses = [],
   courses,
   initialCourseId,
+  initialBillType = "prepaid",
   onDone,
   onCancel,
 }: {
   leadId: string;
+  /** R73: Payment pending in the stage dropdown opens this on Postpaid. */
+  initialBillType?: BillType;
   interests: Interest[];
   /** The lead's courses (R67); Payment pending and Interested ones come first. */
   leadCourses?: LeadCourse[];
@@ -361,6 +365,9 @@ export function RecordSalePanel({
   }, [interests, leadCourses, courses]);
   const otherPaid = useMemo(() => courses.filter((c) => c.type !== "free" && (c.price ?? 0) > 0 && !openOnes.some((i) => i.courseId === c._id)), [courses, openOnes]);
   const [courseId, setCourseId] = useState((initialCourseId && [...openOnes.map((o) => o.courseId), ...otherPaid.map((c) => c._id)].includes(initialCourseId) ? initialCourseId : null) || openOnes[0]?.courseId || otherPaid[0]?._id || UNCONFIRMED);
+  // R73: prepaid enrolls now and needs the payment details; postpaid gives temporary access and needs neither.
+  const [billType, setBillType] = useState<BillType>(initialBillType);
+  const postpaid = billType === "postpaid";
   const [discount, setDiscount] = useState<string>(""); // "" until the server's public discount arrives
   const [amountReceived, setAmountReceived] = useState("");
   const [preview, setPreview] = useState<PaymentPreview | null>(null);
@@ -409,30 +416,35 @@ export function RecordSalePanel({
     setFile(f);
   };
 
+  const changeBillType = (next: string) => {
+    setBillType(next as BillType);
+    // A postpaid bill gives access now, so it needs a real course.
+    if (next === "postpaid" && unconfirmed) setCourseId(openOnes[0]?.courseId || otherPaid[0]?._id || UNCONFIRMED);
+  };
   const needsReference = method !== "cash" && !file;
   const amountOk = !unconfirmed || (/^\d+$/.test(amountReceived) && Number(amountReceived) > 0);
-  const valid = !!preview?.canRecord && amountOk && (!needsReference || reference.trim().length > 0) && received >= minDay && received <= dayInput(today);
+  const paymentOk = postpaid ? !unconfirmed : (!needsReference || reference.trim().length > 0) && received >= minDay && received <= dayInput(today);
+  const valid = !!preview?.canRecord && amountOk && paymentOk;
 
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
       const form = new FormData();
+      form.set("billType", billType);
       form.set("courseId", courseId);
       if (unconfirmed) form.set("amountReceived", amountReceived);
       else form.set("discount", discount || "0");
-      form.set("method", method);
-      if (reference.trim()) form.set("reference", reference.trim());
-      // The chosen day at the current time of day (or end of an earlier day), never in the future.
-      const now = new Date();
-      const day = new Date(`${received}T00:00:00`);
-      const receivedAt = received === dayInput(now) ? now : new Date(day.getTime() + 18 * 3600_000);
-      form.set("receivedAt", receivedAt.toISOString());
+      if (!postpaid) {
+        form.set("method", method);
+        if (reference.trim()) form.set("reference", reference.trim());
+        form.set("receivedAt", receivedAtOf(received).toISOString());
+        if (file) form.set("screenshot", file);
+      }
       if (note.trim()) form.set("note", note.trim());
       form.set("idempotencyKey", idempotencyKey);
-      if (file) form.set("screenshot", file);
       await crmApi.recordPayment(leadId, form);
-      toast({ title: "Sale recorded", description: "It counts once an Admin confirms it." });
+      toast(postpaid ? { title: "Postpaid bill created", description: "The student has access. Use Record sale when they pay." } : { title: "Prepaid bill created", description: unconfirmed ? "The student is enrolled once the course is set." : "The student is enrolled. An Admin verifies the payment." });
       onDone();
     } catch (e: any) {
       const msg = e?.status === 503 ? "Screenshot upload isn't set up yet. Enter the transaction ID instead." : e?.message || "Could not record the sale";
@@ -447,6 +459,9 @@ export function RecordSalePanel({
   return (
     <Panel title="Record sale" onSubmit={submit} submitLabel="Record sale" onCancel={onCancel} busy={busy} error={error} canSubmit={valid}>
       <div className="crm-form">
+        <Field label="Bill type" full>
+          <Sel value={billType} onChange={(e) => changeBillType(e.target.value)} options={[{ value: "prepaid", label: "Prepaid: the student has paid" }, { value: "postpaid", label: "Postpaid: the student will pay later" }]} />
+        </Field>
         <Field label="Course" full>
           <select className="crm-input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
             {openOnes.length > 0 && (
@@ -469,7 +484,7 @@ export function RecordSalePanel({
                 ))}
               </optgroup>
             )}
-            <option value={UNCONFIRMED}>Course not confirmed yet</option>
+            {!postpaid && <option value={UNCONFIRMED}>Course not confirmed yet</option>}
           </select>
         </Field>
         {unconfirmed ? (
@@ -481,18 +496,7 @@ export function RecordSalePanel({
             <input className="crm-input" type="number" min={0} max={p ? p.listPrice - 1 : undefined} step={1} value={discount} onChange={(e) => setDiscount(e.target.value)} />
           </Field>
         )}
-        <Field label="Paid by">
-          <Sel value={method} onChange={(e) => setMethod(e.target.value)} options={Object.entries(OFFLINE_METHOD_LABELS).map(([value, label]) => ({ value, label }))} />
-        </Field>
-        <Field label={method === "cash" ? "Receipt note (optional)" : "Transaction ID"} full>
-          <input className="crm-input" value={reference} maxLength={100} onChange={(e) => setReference(e.target.value)} placeholder={method === "cash" ? "e.g. Collected at school visit" : "e.g. 7Q4K29XA (or attach a screenshot)"} required={needsReference} />
-        </Field>
-        <Field label="Money received on">
-          <input className="crm-input" type="date" min={minDay} max={dayInput(today)} value={received} onChange={(e) => setReceived(e.target.value)} />
-        </Field>
-        <Field label="Screenshot (optional)">
-          <input className="crm-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
-        </Field>
+        {!postpaid && <PaymentFields method={method} setMethod={setMethod} reference={reference} setReference={setReference} received={received} setReceived={setReceived} minDay={minDay} maxDay={dayInput(today)} needsReference={needsReference} pickFile={pickFile} />}
         <Field label="Note (optional)" full>
           <textarea className="crm-input" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
         </Field>
@@ -520,7 +524,93 @@ export function RecordSalePanel({
           </>
         ) : null}
       </div>
-      <CrmNote>The sale counts after an Admin checks the payment. The student gets the course when it&apos;s confirmed.</CrmNote>
+      <CrmNote>
+        {postpaid
+          ? "The student gets access now and the lead moves to Payment pending. When they pay, use Record sale to add the payment."
+          : "The student is enrolled as soon as you create this bill. The sale counts after an Admin checks the payment; if it's rejected, the student loses the course."}
+      </CrmNote>
+    </Panel>
+  );
+}
+
+/** The chosen day at the current time of day (or end of an earlier day), never in the future. */
+function receivedAtOf(day: string) {
+  const now = new Date();
+  return day === dayInput(now) ? now : new Date(new Date(`${day}T00:00:00`).getTime() + 18 * 3600_000);
+}
+
+/** How the money was paid: the same fields on a prepaid bill and when a postpaid bill is paid. */
+function PaymentFields(p: { method: string; setMethod: (v: string) => void; reference: string; setReference: (v: string) => void; received: string; setReceived: (v: string) => void; minDay: string; maxDay: string; needsReference: boolean; pickFile: (f: File | null) => void }) {
+  return (
+    <>
+      <Field label="Paid by">
+        <Sel value={p.method} onChange={(e) => p.setMethod(e.target.value)} options={Object.entries(OFFLINE_METHOD_LABELS).map(([value, label]) => ({ value, label }))} />
+      </Field>
+      <Field label={p.method === "cash" ? "Receipt note (optional)" : "Transaction ID"} full>
+        <input className="crm-input" value={p.reference} maxLength={100} onChange={(e) => p.setReference(e.target.value)} placeholder={p.method === "cash" ? "e.g. Collected at school visit" : "e.g. 7Q4K29XA (or attach a screenshot)"} required={p.needsReference} />
+      </Field>
+      <Field label="Money received on">
+        <input className="crm-input" type="date" min={p.minDay} max={p.maxDay} value={p.received} onChange={(e) => p.setReceived(e.target.value)} />
+      </Field>
+      <Field label="Screenshot (optional)">
+        <input className="crm-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => p.pickFile(e.target.files?.[0] ?? null)} />
+      </Field>
+    </>
+  );
+}
+
+/** R73: the student paid a postpaid bill. The bill then waits for an Admin. */
+export function PostpaidPaymentPanel({ bill, courseTitle, onDone, onCancel }: { bill: { _id: string; amount: number }; courseTitle?: string; onDone: () => void; onCancel: () => void }) {
+  const { toast } = useToast();
+  const today = new Date();
+  const minDay = dayInput(new Date(today.getTime() - 7 * 86_400_000));
+  const [method, setMethod] = useState("cash");
+  const [reference, setReference] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [received, setReceived] = useState(dayInput(today));
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pickFile = (f: File | null) => {
+    setError(null);
+    if (!f) return setFile(null);
+    if (!SCREENSHOT_TYPES.includes(f.type)) return setError("The screenshot must be a JPG, PNG, WEBP or PDF file.");
+    if (f.size > MAX_SCREENSHOT) return setError("The screenshot is larger than 5 MB.");
+    setFile(f);
+  };
+  const needsReference = method !== "cash" && !file;
+  const valid = (!needsReference || reference.trim().length > 0) && received >= minDay && received <= dayInput(today);
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.set("method", method);
+      if (reference.trim()) form.set("reference", reference.trim());
+      form.set("receivedAt", receivedAtOf(received).toISOString());
+      if (note.trim()) form.set("note", note.trim());
+      if (file) form.set("screenshot", file);
+      await crmApi.recordPostpaidPayment(bill._id, form);
+      toast({ title: "Payment recorded", description: "An Admin verifies it next." });
+      onDone();
+    } catch (e: any) {
+      setError(e?.status === 503 ? "Screenshot upload isn't set up yet. Enter the transaction ID instead." : e?.message || "Could not record the payment");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel title="Record sale" onSubmit={submit} submitLabel="Record payment" onCancel={onCancel} busy={busy} error={error} canSubmit={valid}>
+      <span>
+        Postpaid bill{courseTitle ? ` · ${courseTitle}` : ""} · <b>{rs(bill.amount)}</b>
+      </span>
+      <div className="crm-form">
+        <PaymentFields method={method} setMethod={setMethod} reference={reference} setReference={setReference} received={received} setReceived={setReceived} minDay={minDay} maxDay={dayInput(today)} needsReference={needsReference} pickFile={pickFile} />
+        <Field label="Note (optional)" full>
+          <textarea className="crm-input" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+      </div>
+      <CrmNote>This goes to an Admin. When they verify it, the student&apos;s course becomes a normal enrollment.</CrmNote>
     </Panel>
   );
 }

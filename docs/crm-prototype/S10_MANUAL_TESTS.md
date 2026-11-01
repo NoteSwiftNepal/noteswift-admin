@@ -1,5 +1,7 @@
 # Phase S10 manual tests: temporary enrollment (freezable)
 
+> **Replaced by `R73_MANUAL_TESTS.md`** for giving access: temporary access now comes only from a postpaid bill. Sections 2 (freeze) and 4 still describe how frozen access behaves.
+
 For the owner, on **dev** only (local backend on the development database). Tick each box and note anything wrong next to it. **Never point the backend or a script at production.**
 
 ## 0. Setup (dev only)
