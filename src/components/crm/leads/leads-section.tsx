@@ -26,13 +26,15 @@ export function LeadsSection() {
   const { can } = useAdmin();
   const isAdmin = can("crm.view_all_leads");
 
+  const [counts, setCounts] = useState<Partial<Record<LeadView, number>>>({});
   // R61 (S8): the prototype's tabs, the six stages (and Unassigned for Admin).
   const views: { value: LeadView; label: string }[] = [
     { value: isAdmin ? "all" : "mine", label: "All" },
     { value: "new", label: "New lead" },
     { value: "contacted", label: "Contacted" },
     { value: "interested", label: "Interested" },
-    { value: "temporary", label: "Temporary enrollment" },
+    // R73: only for temporary access given before bills replaced it.
+    ...(counts.temporary ? [{ value: "temporary" as LeadView, label: "Temporary enrollment" }] : []),
     { value: "payment_pending", label: "Payment pending" },
     { value: "enrolled", label: "Enrolled" },
     { value: "lost", label: "Lost" },
@@ -50,7 +52,6 @@ export function LeadsSection() {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [counts, setCounts] = useState<Partial<Record<LeadView, number>>>({});
   const [courses, setCourses] = useState<{ _id: string; title: string; price?: number }[]>([]);
   const [reps, setReps] = useState<Rep[]>([]);
   const [selected, setSelected] = useState<string[]>([]);

@@ -16,10 +16,10 @@ import { ReasonDialog } from "@/components/crm/crm-ui";
 import { CrmEvent, CrmFacts, CrmPill, CrmTimeline } from "@/components/crm/ui";
 import { ContactPanel } from "@/components/crm/contact-panel";
 import { TaskPanel } from "@/components/crm/task-dialogs";
-import { RecordSalePanel } from "@/components/crm/bill-dialogs";
+import { PostpaidPaymentPanel, RecordSalePanel } from "@/components/crm/bill-dialogs";
 import { LeadSalesSection } from "@/components/crm/sales-panels";
 import { Btn, Field, Panel, Sel, useBusy } from "@/components/crm/leads/controls";
-import { Activity, CHANNEL_LABELS, Channel, LEAD_COURSE_STATE, LOST_REASONS, LeadDetail, OUTCOME_LABELS, PURPOSE_LABELS, Rep, STAGE, Stage, TASK_TYPE_LABELS, crmApi, fmtDateTime, relDateTime, sourceLabel } from "@/lib/crm/api";
+import { Activity, BillType, CHANNEL_LABELS, Channel, LEAD_COURSE_STATE, LOST_REASONS, LeadDetail, OUTCOME_LABELS, PURPOSE_LABELS, Rep, STAGE, Stage, TASK_TYPE_LABELS, crmApi, fmtDateTime, relDateTime, sourceLabel } from "@/lib/crm/api";
 import { StageMenu } from "@/components/crm/leads/stage-menu";
 
 type Mode =
@@ -27,10 +27,9 @@ type Mode =
   | { kind: "task" }
   | { kind: "contactStage"; to: "new_lead" | "contacted" }
   | { kind: "interested" }
-  | { kind: "paymentPending" }
-  | { kind: "sale"; courseId?: string }
+  | { kind: "sale"; courseId?: string; billType?: BillType }
+  | { kind: "postpaidPayment" }
   | { kind: "lost" }
-  | { kind: "temporary" }
   | { kind: "assign"; ownerId: string }
   | null;
 type CatalogCourse = { _id: string; title: string; price?: number; type?: string };
@@ -137,9 +136,8 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
   const pickStage = (to: Stage) => {
     if (to === "new_lead" || to === "contacted") setMode({ kind: "contactStage", to });
     else if (to === "interested") setMode({ kind: "interested" });
-    else if (to === "payment_pending") setMode(lead?.stage === "temporary" ? { kind: "sale", courseId: lead ? firstOpenCourse(lead) : undefined } : { kind: "paymentPending" });
+    else if (to === "payment_pending") setMode({ kind: "sale", courseId: lead ? firstOpenCourse(lead) : undefined, billType: "postpaid" });
     else if (to === "lost") setMode({ kind: "lost" });
-    else if (to === "temporary") setMode({ kind: "temporary" });
   };
 
   return (
@@ -181,7 +179,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
                   </Btn>
                 )}
                 {showSale && (
-                  <Btn sm onClick={() => setMode({ kind: "sale", courseId: firstOpenCourse(lead) })}>
+                  <Btn sm onClick={() => setMode(lead.unpaidBill ? { kind: "postpaidPayment" } : { kind: "sale", courseId: firstOpenCourse(lead) })}>
                     Record sale
                   </Btn>
                 )}
@@ -223,11 +221,10 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
             {mode?.kind === "task" && <TaskPanel leadId={leadId} onCreated={panelDone("Follow-up scheduled")} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "contactStage" && <ContactStagePanel key={mode.to} lead={lead} to={mode.to} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "interested" && <InterestedPanel lead={lead} courses={courses} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />}
-            {mode?.kind === "paymentPending" && (
-              <PaymentPendingPanel lead={lead} courses={courses} onRecordSale={(courseId) => setMode({ kind: "sale", courseId })} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />
+            {mode?.kind === "sale" && <RecordSalePanel key={`${mode.courseId || "sale"}-${mode.billType || "prepaid"}`} initialBillType={mode.billType} leadId={leadId} interests={lead.interests} leadCourses={lead.courses} courses={courses} initialCourseId={mode.courseId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
+            {mode?.kind === "postpaidPayment" && lead.unpaidBill && (
+              <PostpaidPaymentPanel bill={lead.unpaidBill} courseTitle={lead.courses?.find((c) => c.courseId === lead.unpaidBill?.courseId)?.title} onDone={panelDone()} onCancel={() => setModeRaw(null)} />
             )}
-            {mode?.kind === "sale" && <RecordSalePanel key={mode.courseId || "sale"} leadId={leadId} interests={lead.interests} leadCourses={lead.courses} courses={courses} initialCourseId={mode.courseId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
-            {mode?.kind === "temporary" && <TemporaryPanel lead={lead} courses={courses} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "lost" && <LostPanel leadId={leadId} onDone={panelDone("Lead marked lost")} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "assign" && <AssignPanel lead={lead} reps={reps} initialOwnerId={mode.ownerId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
 
@@ -442,49 +439,6 @@ function assignable(lead: LeadDetail, courses: CatalogCourse[], keepInterested: 
 const stageToast = (r: { stage: Stage; changed: boolean; opportunitiesClosed?: number }, fallback: string) =>
   !r.changed ? `Already ${STAGE[r.stage].label}` : r.opportunitiesClosed ? `${fallback}; ${r.opportunitiesClosed} course(s) closed` : fallback;
 
-/**
- * R72 (S10): Temporary enrollment. Real access now, no payment, no time limit;
- * freezable from the Courses block. Courses the student doesn't have, the
- * interested ones first.
- */
-function TemporaryPanel({ lead, courses, onDone, onCancel }: { lead: LeadDetail; courses: CatalogCourse[]; onDone: (msg: string) => void; onCancel: () => void }) {
-  const interested = new Set((lead.courses ?? []).filter((c) => c.state === "interested").map((c) => c.courseId));
-  const options = assignable(lead, courses, true).sort((a, b) => Number(interested.has(b._id)) - Number(interested.has(a._id)));
-  const [courseId, setCourseId] = useState(options.find((c) => interested.has(c._id))?._id ?? "");
-  const [reason, setReason] = useState("");
-  const { busy, error, run } = useBusy();
-  return (
-    <Panel
-      title="Temporary enrollment"
-      submitLabel="Give access now"
-      onCancel={onCancel}
-      busy={busy}
-      error={error}
-      canSubmit={!!courseId}
-      onSubmit={() =>
-        run(async () => {
-          await crmApi.grantTemporary(lead._id, { courseId, reason: reason.trim() || undefined });
-          onDone("Temporary access given");
-        })
-      }
-    >
-      <div className="crm-form">
-        <Field label="Course" full>
-          <Sel
-            value={courseId}
-            onChange={(e) => setCourseId(e.target.value)}
-            options={[{ value: "", label: options.length ? "Choose a course" : "No course left to give" }, ...options.map((c) => ({ value: c._id, label: c.title + (interested.has(c._id) ? " (interested)" : "") }))]}
-          />
-        </Field>
-        <Field label="Reason (optional)" full>
-          <input className="crm-input" value={reason} maxLength={500} placeholder="e.g. paying next week" onChange={(e) => setReason(e.target.value)} />
-        </Field>
-      </div>
-      <span className="crm-muted crm-small">The student gets full access now, without paying, until you freeze it or they pay. It is not a sale.</span>
-    </Panel>
-  );
-}
-
 /** R70: New lead / Contacted. From Interested the open courses close as "No longer interested". */
 function ContactStagePanel({ lead, to, onDone, onCancel }: { lead: LeadDetail; to: "new_lead" | "contacted"; onDone: (msg: string) => void; onCancel: () => void }) {
   const { busy, error, run } = useBusy();
@@ -518,55 +472,6 @@ function InterestedPanel({ lead, courses, onDone, onCancel }: { lead: LeadDetail
           <Sel value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "", label: options.length ? "Choose a course" : "No course left to add" }, ...options.map((c) => ({ value: c._id, label: c.title }))]} />
         </Field>
       </div>
-    </Panel>
-  );
-}
-
-/**
- * R70: Payment pending. "Money received: record sale" opens Record sale with
- * the interested course; "Student will pay later" holds a course for payment
- * (R67), no access. Registered students only.
- */
-function PaymentPendingPanel({ lead, courses, onRecordSale, onDone, onCancel }: { lead: LeadDetail; courses: CatalogCourse[]; onRecordSale: (courseId?: string) => void; onDone: (msg: string) => void; onCancel: () => void }) {
-  const { can } = useAdmin();
-  const registered = lead.kind === "student";
-  const [later, setLater] = useState(false);
-  const [courseId, setCourseId] = useState(firstOpenCourse(lead) ?? "");
-  const [note, setNote] = useState("");
-  const { busy, error, run } = useBusy();
-  const paid = assignable(lead, courses, true).filter((c) => c.type !== "free" && (c.price ?? 0) > 0);
-  const blocked = registered ? null : "Register the student first";
-  const saleBlocked = blocked ?? (lead.saleWaiting ? "A sale on this lead is already waiting for confirmation" : !can("crm.record_payments") ? "You can't record sales" : null);
-  return (
-    <Panel
-      title="Payment pending"
-      submitLabel={later ? "Save" : undefined}
-      onCancel={onCancel}
-      busy={busy}
-      error={error}
-      canSubmit={later && !!courseId && !blocked}
-      onSubmit={later ? () => run(async () => onDone(stageToast(await crmApi.moveStage(lead._id, { to: "payment_pending", mode: "later", courseId, note: note.trim() || undefined }), "Course held · Payment pending"))) : undefined}
-    >
-      <div className="crm-choices">
-        <button type="button" className="crm-choice" disabled={!!saleBlocked} onClick={() => onRecordSale(firstOpenCourse(lead))}>
-          <b>Money received: record sale</b>
-          <span>{saleBlocked ?? "Opens Record sale with the interested course. An Admin confirms the money."}</span>
-        </button>
-        <button type="button" className="crm-choice" aria-pressed={later} disabled={!!blocked} onClick={() => setLater(true)}>
-          <b>Student will pay later</b>
-          <span>{blocked ?? "Holds the course for payment. No access until they pay or a sale is confirmed."}</span>
-        </button>
-      </div>
-      {later && !blocked && (
-        <div className="crm-form">
-          <Field label="Course" full>
-            <Sel value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "", label: paid.length ? "Choose a course" : "No paid course left" }, ...paid.map((c) => ({ value: c._id, label: c.title }))]} />
-          </Field>
-          <Field label="Note (optional)" full>
-            <input className="crm-input" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
-          </Field>
-        </div>
-      )}
     </Panel>
   );
 }

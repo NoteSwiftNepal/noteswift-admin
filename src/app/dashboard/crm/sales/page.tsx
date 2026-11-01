@@ -135,6 +135,7 @@ function SalesBillsInner() {
             <thead>
               <tr>
                 <th>Bill</th>
+                <th>Type</th>
                 <th>Date</th>
                 <th>Student</th>
                 <th>Course</th>
@@ -151,6 +152,7 @@ function SalesBillsInner() {
               {rows.map((r) => (
                 <tr key={r._id}>
                   <td className="whitespace-nowrap font-semibold">{r.receiptNumber ?? <span className="crm-muted">—</span>}</td>
+                  <td>{r.billType ? <CrmPill tone={r.billType === "prepaid" ? "accent" : "warn"}>{r.billType === "prepaid" ? "Prepaid" : "Postpaid"}</CrmPill> : <span className="crm-muted">—</span>}</td>
                   <td className="whitespace-nowrap">
                     {fmtDateTime(r.date)}
                     {r.receivedAt && r.status === "waiting" && <span className="crm-sub">received {fmtDateTime(r.receivedAt)}</span>}

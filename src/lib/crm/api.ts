@@ -152,6 +152,8 @@ export type LeadDetail = {
   frozen?: boolean;
   contactStage: LeadStage;
   saleWaiting: boolean;
+  /** R73: the unpaid postpaid bill; Record sale adds its payment. */
+  unpaidBill: { _id: string; courseId: string | null; amount: number } | null;
   courseTitle: string | null;
   courses: LeadCourse[];
   /** R70: what the stage dropdown offers, decided by the server. */
@@ -211,8 +213,7 @@ export const crmApi = {
     id: string,
     body: { to: "new_lead" | "contacted" } | { to: "interested"; courseId: string } | { to: "payment_pending"; mode: "later"; courseId: string; note?: string } | { to: "lost"; reason: string } | { to: "temporary"; courseId: string; reason?: string }
   ) => request<{ stage: Stage; changed: boolean; opportunitiesClosed?: number; interestId?: string; assignmentId?: string; enrollmentId?: string }>("POST", `/leads/${id}/stage`, body),
-  // R72 (S10): temporary enrollment.
-  grantTemporary: (id: string, body: { courseId: string; reason?: string }) => request<{ enrollmentId: string; trialsClosed: number }>("POST", `/leads/${id}/temporary-enrollments`, body),
+  // R72 / R73: pause or resume the temporary access of a postpaid bill.
   freezeTemporary: (id: string, enrollmentId: string, reason?: string) => request<{ frozen: boolean; changed: boolean }>("POST", `/leads/${id}/temporary-enrollments/${enrollmentId}/freeze`, { reason }),
   unfreezeTemporary: (id: string, enrollmentId: string) => request<{ frozen: boolean; changed: boolean }>("POST", `/leads/${id}/temporary-enrollments/${enrollmentId}/unfreeze`),
   markLost: (id: string, reason: string) => request("POST", `/leads/${id}/lost`, { reason }),
@@ -268,6 +269,8 @@ export const crmApi = {
   paymentPreview: (leadId: string, q: { courseId?: string; interestId?: string; discount?: number | string }) => request<PaymentPreview>("GET", `/leads/${leadId}/payments/preview${qs(q)}`),
   setPaymentCourse: (id: string, courseId: string, discount?: number) => request<SalesPayment>("PATCH", `/payments/${id}/course`, { courseId, discount }),
   recordPayment: (leadId: string, form: FormData) => requestForm<SalesPayment>("POST", `/leads/${leadId}/payments`, form),
+  // R73: the student paid a postpaid bill.
+  recordPostpaidPayment: (paymentId: string, form: FormData) => requestForm<SalesPayment>("POST", `/payments/${paymentId}/record-payment`, form),
   confirmPayment: (id: string, expectedAmount: number) => request<SalesPayment>("POST", `/payments/${id}/confirm`, { checked: true, expectedAmount }),
   rejectPayment: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/reject`, { reason }),
   cancelPayment: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/cancel`, { reason }),
@@ -331,8 +334,10 @@ export type PaymentPreview = { canRecord: boolean; reason: string | null; code: 
 export type SaleDiscount = { amount: number; percent: number; limitPercent: number; needsApproval: boolean; approved: boolean };
 export type SalesPayment = { _id: string; status: string; amount: number; method: string; reference: string | null; hasScreenshot: boolean; receivedAt: string | null; receiptNumber: string | null; courseId: string | null; courseUnconfirmed: boolean; amountReceived: number | null; discount: { amount: number; percent: number; needsApproval: boolean } | null };
 export type BillTab = "waiting" | "confirmed" | "rejected" | "cancelled" | "all";
-export type BillStatus = "waiting" | "confirmed" | "rejected" | "cancelled" | "invalid" | "other";
+export type BillType = "prepaid" | "postpaid";
+export type BillStatus = "unpaid" | "waiting" | "confirmed" | "rejected" | "cancelled" | "invalid" | "other";
 export type BillRow = {
+  billType: BillType | null;
   _id: string;
   date: string;
   receivedAt: string | null;
@@ -391,7 +396,7 @@ export type Bill = {
   canViewScreenshot: boolean;
   footer: string;
 };
-export const BILL_STATUS_TONE: Record<BillStatus, "warn" | "good" | "bad" | "neutral"> = { waiting: "warn", confirmed: "good", rejected: "bad", cancelled: "neutral", invalid: "bad", other: "neutral" };
+export const BILL_STATUS_TONE: Record<BillStatus, "warn" | "good" | "bad" | "neutral"> = { unpaid: "warn", waiting: "warn", confirmed: "good", rejected: "bad", cancelled: "neutral", invalid: "bad", other: "neutral" };
 export const OFFLINE_METHOD_LABELS: Record<string, string> = { cash: "Cash", "esewa-personal": "eSewa", "bank-transfer": "Bank transfer", other: "Other" };
 export const PAYMENT_METHOD_LABELS: Record<string, string> = { ...OFFLINE_METHOD_LABELS, fonepay: "Fonepay", "esewa-gateway": "eSewa (online)", connectips: "connectIPS" };
 

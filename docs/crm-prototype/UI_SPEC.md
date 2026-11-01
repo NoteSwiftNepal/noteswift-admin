@@ -423,3 +423,15 @@ From R33 and the other approved rules:
 - **Bill view data:** no admin receipt endpoint yet (S3).
 - **"Discounts given" KPI:** only payments with a `pricing` snapshot have discount amounts. Sales-recorded ones will have one from S2; Super Admin offline sales don't.
 - **Guardian in search:** the leads search doesn't cover guardian phone until the S2 guardian fields exist.
+
+## R73: prepaid and postpaid bills (2026-11-01)
+
+Replaces the S10 stage option and panel, and the "Student will pay later" choice.
+
+- **Record sale** starts with **Bill type**: "Prepaid: the student has paid" (default) or "Postpaid: the student will pay later". Prepaid shows the payment fields. Postpaid shows only Course, Discount and Note, and has no "Course not confirmed yet".
+- **Stage dropdown:** no Temporary enrollment option. Payment pending opens Record sale on Postpaid.
+- **Lead with an unpaid postpaid bill:** the Record sale button opens the payment form (Paid by, Transaction ID, Money received on, Screenshot, Note; button "Record payment"), headed by the bill's course and amount.
+- **Courses block:** a postpaid course shows Temporary with Freeze, or Frozen with Unfreeze.
+- **Leads tabs:** Temporary enrollment appears only while such leads exist (given before R73).
+- **Sales & Bills:** a Type column (Prepaid accent, Postpaid warn; "—" for older bills). An unpaid postpaid bill shows "Not paid yet" under Waiting, with Reject or Cancel but no Confirm. The confirm dialog shows the bill type.
+
