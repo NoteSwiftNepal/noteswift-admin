@@ -132,6 +132,8 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
   const showSale = !!lead && can("crm.record_payments") && registered && !lost && SALE_STAGES.includes(lead.stage) && !lead.saleWaiting;
   const st = lead ? STAGE[lead.stage] : null;
   const lostOption = lead?.stageOptions?.find((o) => o.to === "lost");
+  // R75: one open follow-up per lead; the button edits it.
+  const openTask = lead?.tasks.find((t) => t.status === "open") ?? null;
   // R70: each dropdown option opens its panel at the top of the body.
   const pickStage = (to: Stage) => {
     if (to === "new_lead" || to === "contacted") setMode({ kind: "contactStage", to });
@@ -175,7 +177,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
                 </Btn>
                 {can("crm.manage_tasks") && (
                   <Btn sm onClick={() => setMode({ kind: "task" })}>
-                    Schedule follow-up
+                    {openTask ? "Edit follow-up" : "Schedule follow-up"}
                   </Btn>
                 )}
                 {showSale && (
@@ -217,8 +219,8 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
           </div>
         ) : (
           <>
-            {mode?.kind === "contact" && <ContactPanel key={mode.channel} leadId={leadId} phone={p?.phone ?? null} channel={mode.channel} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
-            {mode?.kind === "task" && <TaskPanel leadId={leadId} onCreated={panelDone("Follow-up scheduled")} onCancel={() => setModeRaw(null)} />}
+            {mode?.kind === "contact" && <ContactPanel key={mode.channel} leadId={leadId} phone={p?.phone ?? null} channel={mode.channel} openTask={openTask} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
+            {mode?.kind === "task" && <TaskPanel key={openTask?._id ?? "new"} leadId={leadId} task={openTask} onCreated={panelDone(openTask ? "Follow-up updated" : "Follow-up scheduled")} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "contactStage" && <ContactStagePanel key={mode.to} lead={lead} to={mode.to} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "interested" && <InterestedPanel lead={lead} courses={courses} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "sale" && <RecordSalePanel key={`${mode.courseId || "sale"}-${mode.billType || "prepaid"}`} initialBillType={mode.billType} leadId={leadId} interests={lead.interests} leadCourses={lead.courses} courses={courses} initialCourseId={mode.courseId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
@@ -420,7 +422,7 @@ function LeadCourses({ lead, onCancel, onFreeze, onUnfreeze }: { lead: LeadDetai
 
 /** The course to prefill for Payment pending and Record sale: a temporary one first (R72), then Interested, then held. */
 function firstOpenCourse(lead: LeadDetail) {
-  for (const st of ["temporary", "temporary_frozen", "interested", "payment_pending"]) {
+  for (const st of ["temporary", "temporary_frozen", "interested", "payment_pending", "visited"]) {
     const c = lead.courses?.find((x) => x.state === st);
     if (c) return c.courseId;
   }
@@ -432,7 +434,7 @@ function assignable(lead: LeadDetail, courses: CatalogCourse[], keepInterested: 
   const stateOf = (id: string) => lead.courses?.find((c) => c.courseId === id)?.state;
   return courses.filter((c) => {
     const st = stateOf(c._id);
-    return !st || st === "trial" || (keepInterested && st === "interested");
+    return !st || st === "trial" || st === "visited" || (keepInterested && st === "interested");
   });
 }
 
@@ -456,7 +458,9 @@ function ContactStagePanel({ lead, to, onDone, onCancel }: { lead: LeadDetail; t
 function InterestedPanel({ lead, courses, onDone, onCancel }: { lead: LeadDetail; courses: CatalogCourse[]; onDone: (msg: string) => void; onCancel: () => void }) {
   const [courseId, setCourseId] = useState("");
   const { busy, error, run } = useBusy();
-  const options = assignable(lead, courses, false);
+  // R75: any course; the ones the student visited come first.
+  const visited = new Set((lead.courses ?? []).filter((c) => c.state === "visited").map((c) => c.courseId));
+  const options = assignable(lead, courses, false).sort((a, b) => Number(visited.has(b._id)) - Number(visited.has(a._id)));
   return (
     <Panel
       title="Interested"
@@ -469,7 +473,7 @@ function InterestedPanel({ lead, courses, onDone, onCancel }: { lead: LeadDetail
     >
       <div className="crm-form">
         <Field label="Course" full>
-          <Sel value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "", label: options.length ? "Choose a course" : "No course left to add" }, ...options.map((c) => ({ value: c._id, label: c.title }))]} />
+          <Sel value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "", label: options.length ? "Choose the confirmed course" : "No course left to add" }, ...options.map((c) => ({ value: c._id, label: c.title + (visited.has(c._id) ? " (visited)" : "") }))]} />
         </Field>
       </div>
     </Panel>

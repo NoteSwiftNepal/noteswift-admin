@@ -136,7 +136,7 @@ export type Activity = {
 };
 
 // R67 (S8b): one entry per course on the lead, the most advanced state first.
-export type LeadCourseState = "enrolled" | "payment_pending" | "temporary" | "temporary_frozen" | "interested" | "trial";
+export type LeadCourseState = "enrolled" | "payment_pending" | "temporary" | "temporary_frozen" | "interested" | "trial" | "visited";
 // R72 (S10): a temporary course carries its enrollment and what the viewer may do.
 export type LeadCourse = { courseId: string; title: string; state: LeadCourseState; since: string | null; assignmentId?: string; canCancel: boolean; enrollmentId?: string; canFreeze?: boolean; canUnfreeze?: boolean };
 
@@ -237,6 +237,8 @@ export const crmApi = {
 
   tasks: (params: Record<string, string | number | undefined>) => request<{ items: Task[]; pagination: Pagination }>("GET", `/tasks${qs(params)}`),
   createTask: (leadId: string, body: Record<string, unknown>) => request<Task>("POST", `/leads/${leadId}/tasks`, body),
+  // R75: one open follow-up per lead; a second is an edit of the first.
+  updateTask: (taskId: string, body: Record<string, unknown>) => request<Task>("PATCH", `/tasks/${taskId}`, body),
   completeTask: (taskId: string, outcome: string, notes?: string) => request("POST", `/tasks/${taskId}/complete`, { outcome, notes }),
   cancelTask: (taskId: string, reason: string) => request("POST", `/tasks/${taskId}/cancel`, { reason }),
   rescheduleTask: (taskId: string, dueAt: string, reason?: string, expectedDueAt?: string) => request("POST", `/tasks/${taskId}/reschedule`, { dueAt, reason, expectedDueAt }),
@@ -464,6 +466,7 @@ export const LEAD_COURSE_STATE: Record<LeadCourseState, { label: string; tone: "
   temporary_frozen: { label: "Frozen", tone: "neutral" },
   interested: { label: "Interested", tone: "accent" },
   trial: { label: "Trial", tone: "neutral" },
+  visited: { label: "Visited", tone: "neutral" },
 };
 export const INTEREST_STAGE_LABELS: Record<InterestStage, string> = { interested: "Interested", payment_pending: "Payment pending" };
 // R61 (S8): the six stages with the prototype's pill tones.

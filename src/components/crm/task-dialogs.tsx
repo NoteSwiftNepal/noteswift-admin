@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, Panel, Sel, fromLocalInput, toLocalInput, useBusy } from "@/components/crm/leads/controls";
-import { crmApi } from "@/lib/crm/api";
+import { Task, crmApi } from "@/lib/crm/api";
 import { FOLLOW_UP_TYPES, taskChannel } from "@/components/crm/contact-panel";
 
 
@@ -33,18 +33,20 @@ function useSubmit() {
 }
 
 /** "Schedule follow-up" (S8, the prototype's panel): Type · Due · Note. The server chooses the contact purpose and runs the gate. */
-export function TaskPanel({ leadId, onCreated, onCancel }: { leadId: string; onCreated: () => void; onCancel: () => void }) {
-  const [type, setType] = useState("call");
-  const [dueAt, setDueAt] = useState(toLocalInput(new Date(Date.now() + 24 * 3600_000)));
-  const [notes, setNotes] = useState("");
+export function TaskPanel({ leadId, task, onCreated, onCancel }: { leadId: string; task?: Task | null; onCreated: () => void; onCancel: () => void }) {
+  const [type, setType] = useState<string>(task?.type ?? "call");
+  const [dueAt, setDueAt] = useState(toLocalInput(task ? new Date(task.dueAt) : new Date(Date.now() + 24 * 3600_000)));
+  const [notes, setNotes] = useState(task?.notes ?? "");
   const { busy, error, run } = useBusy();
   const submit = () =>
     run(async () => {
-      await crmApi.createTask(leadId, { type, dueAt: fromLocalInput(dueAt), notes: notes.trim() || undefined, ...taskChannel(type) });
+      const body = { type, dueAt: fromLocalInput(dueAt), notes: notes.trim(), ...taskChannel(type) };
+      if (task) await crmApi.updateTask(task._id, { ...body, expectedDueAt: task.dueAt });
+      else await crmApi.createTask(leadId, { ...body, notes: notes.trim() || undefined });
       onCreated();
     });
   return (
-    <Panel title="Schedule follow-up" onSubmit={submit} submitLabel="Schedule" onCancel={onCancel} busy={busy} error={error} canSubmit={!!dueAt}>
+    <Panel title={task ? "Edit follow-up" : "Schedule follow-up"} onSubmit={submit} submitLabel={task ? "Save" : "Schedule"} onCancel={onCancel} busy={busy} error={error} canSubmit={!!dueAt}>
       <div className="crm-form">
         <Field label="Type">
           <Sel value={type} onChange={(e) => setType(e.target.value)} options={FOLLOW_UP_TYPES} />
