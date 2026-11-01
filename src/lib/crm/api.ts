@@ -53,7 +53,7 @@ export type Stage = "new_lead" | "contacted" | "interested" | "temporary" | "pay
 export type LeadStatus = "active" | "nurture" | "lost";
 export type InterestStage = "interested" | "payment_pending";
 export type Channel = "call" | "whatsapp" | "sms" | "email";
-export type Purpose = "purchase_assistance" | "enquiry_response" | "marketing";
+export type Purpose = "purchase_assistance" | "enquiry_response" | "marketing" | "sales_followup";
 
 export type LeadRow = {
   _id: string;
@@ -485,7 +485,7 @@ const LEAD_SOURCE_LABELS: Record<string, string> = { registration: "App registra
 export const sourceLabel = (r: { source?: string; manualSource?: ManualSource | null }) => (r.manualSource ? MANUAL_SOURCE_LABELS[r.manualSource] : r.source ? LEAD_SOURCE_LABELS[r.source] ?? r.source.replace(/_/g, " ") : "—");
 // Reasons offered in the Mark lost panel (the backend takes any reason; these are the prototype's).
 export const LOST_REASONS = ["Too expensive", "Joined another institute", "Not interested", "Could not reach", "Wrong number", "Other"];
-export const PURPOSE_LABELS: Record<Purpose, string> = { purchase_assistance: "Help with a course", enquiry_response: "Reply to enquiry", marketing: "Marketing" };
+export const PURPOSE_LABELS: Record<Purpose, string> = { purchase_assistance: "Help with a course", enquiry_response: "Reply to enquiry", marketing: "Marketing", sales_followup: "Sales follow-up" };
 export const CHANNEL_LABELS: Record<Channel, string> = { call: "Call", whatsapp: "WhatsApp", sms: "SMS", email: "Email" };
 export const OUTCOME_LABELS: Record<string, string> = {
   connected: "Connected",
