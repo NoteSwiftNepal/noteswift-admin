@@ -27,12 +27,9 @@ export function LeadsSection() {
   const isAdmin = can("crm.view_all_leads");
 
   const [counts, setCounts] = useState<Partial<Record<LeadView, number>>>({});
-  // R61 (S8): the prototype's tabs, the six stages (and Unassigned for Admin).
+  // R74: All, then the stages that need attention (and Unassigned for Admin).
   const views: { value: LeadView; label: string }[] = [
     { value: isAdmin ? "all" : "mine", label: "All" },
-    { value: "new", label: "New lead" },
-    { value: "contacted", label: "Contacted" },
-    { value: "interested", label: "Interested" },
     // R73: only for temporary access given before bills replaced it.
     ...(counts.temporary ? [{ value: "temporary" as LeadView, label: "Temporary enrollment" }] : []),
     { value: "payment_pending", label: "Payment pending" },
@@ -41,9 +38,10 @@ export function LeadsSection() {
     ...(isAdmin ? [{ value: "unassigned" as LeadView, label: "Unassigned" }] : []),
   ];
   const requested = params.get("view") as LeadView | null;
-  const view: LeadView = requested && views.some((v) => v.value === requested) ? requested : views[0].value;
+  // The dashboard's "New leads" link still opens that stage, though it has no tab (R74).
+  const view: LeadView = requested && (views.some((v) => v.value === requested) || requested === "new") ? requested : views[0].value;
   const page = parseInt(params.get("page") || "1", 10) || 1;
-  const filters = { ownerId: params.get("ownerId") || "", q: params.get("q") || "" };
+  const filters = { ownerId: params.get("ownerId") || "", q: params.get("q") || "", from: params.get("from") || "", to: params.get("to") || "" };
   const filterKey = JSON.stringify(filters);
   const query = params.toString();
 
@@ -191,6 +189,20 @@ export function LeadsSection() {
                 </option>
               ))}
             </select>
+          )}
+          {/* R74: the day the lead came in. */}
+          <label className="crm-f crm-row" style={{ fontWeight: 400 }}>
+            From
+            <input className="crm-input" style={{ flex: "0 1 150px" }} type="date" aria-label="Added from" max={filters.to || undefined} value={filters.from} onChange={(e) => setParam({ from: e.target.value || null })} />
+          </label>
+          <label className="crm-f crm-row" style={{ fontWeight: 400 }}>
+            To
+            <input className="crm-input" style={{ flex: "0 1 150px" }} type="date" aria-label="Added to" min={filters.from || undefined} value={filters.to} onChange={(e) => setParam({ to: e.target.value || null })} />
+          </label>
+          {(filters.from || filters.to) && (
+            <button type="button" className="crm-link crm-small" onClick={() => setParam({ from: null, to: null })}>
+              Clear dates
+            </button>
           )}
         </div>
 
