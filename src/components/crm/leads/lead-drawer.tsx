@@ -5,8 +5,9 @@
 // stageOptions) and the actions Log call · Schedule follow-up · Record sale
 // (R64) · WhatsApp · Mark lost (and Assign for Admin); for a Lost lead only
 // Reopen. Body: the chosen panel, facts, the Courses block, open follow-ups,
-// sales and the activity timeline. The contact gate, Do not contact and
-// Admin assignment stay because approved rules need them. Every action keeps
+// sales and the activity timeline. The contact gate and Admin assignment stay
+// because approved rules need them. The course picker (R78) sets the course
+// Record sale and the Sales list work on, and is remembered on the lead. Every action keeps
 // its backend call and permission; the backend decides what each role sees.
 import { KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -16,7 +17,7 @@ import { ReasonDialog } from "@/components/crm/crm-ui";
 import { CrmEvent, CrmFacts, CrmPill, CrmTimeline } from "@/components/crm/ui";
 import { ContactPanel } from "@/components/crm/contact-panel";
 import { TaskPanel } from "@/components/crm/task-dialogs";
-import { PostpaidPaymentPanel, RecordSalePanel } from "@/components/crm/bill-dialogs";
+import { CoursePicker, PostpaidPaymentPanel, RecordSalePanel } from "@/components/crm/bill-dialogs";
 import { LeadSalesSection } from "@/components/crm/sales-panels";
 import { Btn, Field, Panel, Sel, useBusy } from "@/components/crm/leads/controls";
 import { Activity, BillType, CHANNEL_LABELS, Channel, LEAD_COURSE_STATE, LOST_REASONS, LeadDetail, OUTCOME_LABELS, PURPOSE_LABELS, Rep, STAGE, Stage, TASK_TYPE_LABELS, crmApi, fmtDateTime, relDateTime, sourceLabel } from "@/lib/crm/api";
@@ -28,7 +29,7 @@ type Mode =
   | { kind: "contactStage"; to: "new_lead" | "contacted" }
   | { kind: "interested" }
   | { kind: "sale"; courseId?: string; billType?: BillType }
-  | { kind: "postpaidPayment" }
+  | { kind: "postpaidPayment"; bill: { _id: string; courseId: string | null; amount: number } }
   | { kind: "lost" }
   | { kind: "assign"; ownerId: string }
   | null;
@@ -36,9 +37,9 @@ type CatalogCourse = { _id: string; title: string; price?: number; type?: string
 type ReasonAction = { title: string; description?: string; confirmLabel: string; destructive?: boolean; optional?: boolean; success: string; run: (reason: string) => Promise<unknown> } | null;
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-// R64: Record sale shows on registered students in these stages (Payment
-// pending only when no sale is waiting: an assignment waits for its payment).
-const SALE_STAGES = ["new_lead", "contacted", "interested", "enrolled", "payment_pending"];
+// R64: Record sale shows on registered students in these stages, per course
+// since R78: a bill waiting on one course leaves the others open.
+const SALE_STAGES = ["new_lead", "contacted", "interested", "enrolled", "temporary", "payment_pending"];
 
 export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { leadId: string; reps: Rep[]; courses: { _id: string; title: string; price?: number; type?: string }[]; onClose: () => void; onChanged: () => void }) {
   const { toast } = useToast();
@@ -49,6 +50,8 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
   const [error, setError] = useState<string | null>(null);
   const [mode, setModeRaw] = useState<Mode>(null);
   const [reasonAction, setReasonAction] = useState<ReasonAction>(null);
+  // R78: the course picked here, until the saved one comes back with the lead ("" = no course).
+  const [picked, setPicked] = useState<string | null>(null);
   const [salesKey, setSalesKey] = useState(0);
   const [activities, setActivities] = useState<{ items: Activity[]; page: number; total: number } | null>(null);
   const drawerRef = useRef<HTMLElement>(null);
@@ -68,6 +71,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
   useEffect(() => {
     setLead(null);
     setModeRaw(null);
+    setPicked(null);
     load();
   }, [load]);
   useEffect(() => {
@@ -126,10 +130,29 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
   const p = lead?.person;
   const name = p?.name || "Unnamed";
   const lost = lead?.status === "lost";
-  const dnc = !!lead?.doNotContact.flag;
   const registered = lead?.kind === "student";
-  // R64: hidden (not greyed) on Lost, on prospects, and while a sale waits for confirmation.
-  const showSale = !!lead && can("crm.record_payments") && registered && !lost && SALE_STAGES.includes(lead.stage) && !lead.saleWaiting;
+  const selected = picked ?? lead?.focusCourseId ?? (lead ? firstOpenCourse(lead) : undefined) ?? "";
+  const pickCourse = async (courseId: string) => {
+    const before = picked;
+    setPicked(courseId);
+    setModeRaw(null);
+    if (!can("crm.edit_leads")) return;
+    try {
+      await crmApi.setFocusCourse(leadId, courseId || null);
+    } catch (e) {
+      setPicked(before);
+      fail(e);
+    }
+  };
+  // R78: the selected course's own bill decides what Record sale does; a bill with no course may be for any course.
+  const openBills = lead?.openBills ?? [];
+  const courseBill = openBills.find((b) => b.courseId === selected) ?? null;
+  const noCourseBill = openBills.some((b) => !b.courseId);
+  const blocked = selected ? (!!courseBill && !courseBill.unpaid) || noCourseBill : openBills.length > 0;
+  const hasCourse = lead?.courses?.find((c) => c.courseId === selected)?.state === "enrolled";
+  // R64: hidden (not greyed) on Lost, on prospects, and while this course's sale waits for confirmation.
+  const showSale = !!lead && can("crm.record_payments") && registered && !lost && SALE_STAGES.includes(lead.stage) && !blocked && !hasCourse;
+  const openSale = (billType?: BillType) => setMode({ kind: "sale", courseId: selected || undefined, billType });
   const st = lead ? STAGE[lead.stage] : null;
   const lostOption = lead?.stageOptions?.find((o) => o.to === "lost");
   // R75: one open follow-up per lead; the button edits it.
@@ -138,7 +161,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
   const pickStage = (to: Stage) => {
     if (to === "new_lead" || to === "contacted") setMode({ kind: "contactStage", to });
     else if (to === "interested") setMode({ kind: "interested" });
-    else if (to === "payment_pending") setMode({ kind: "sale", courseId: lead ? firstOpenCourse(lead) : undefined, billType: "postpaid" });
+    else if (to === "payment_pending") openSale("postpaid");
     else if (to === "lost") setMode({ kind: "lost" });
   };
 
@@ -160,7 +183,6 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
               {lost || !can("crm.edit_leads") ? <CrmPill tone={st.tone}>{st.label}</CrmPill> : <StageMenu stage={lead.stage} options={lead.stageOptions} onPick={pickStage} />}
               {lead.frozen && <CrmPill tone="neutral">Frozen</CrmPill>}
               {lost && lead.lostReason && <span className="crm-muted crm-small">{lead.lostReason}</span>}
-              {dnc && <CrmPill tone="bad">Do not contact</CrmPill>}
             </div>
             {lost ? (
               can("crm.edit_leads") && (
@@ -181,7 +203,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
                   </Btn>
                 )}
                 {showSale && (
-                  <Btn sm onClick={() => setMode(lead.unpaidBill ? { kind: "postpaidPayment" } : { kind: "sale", courseId: firstOpenCourse(lead) })}>
+                  <Btn sm onClick={() => (courseBill?.unpaid ? setMode({ kind: "postpaidPayment", bill: courseBill }) : openSale())}>
                     Record sale
                   </Btn>
                 )}
@@ -200,6 +222,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
                 )}
               </div>
             )}
+            {!lost && <CoursePicker value={selected} leadCourses={lead.courses} courses={courses} onChange={pickCourse} />}
             {!registered && <span className="crm-muted crm-small">Not registered yet. The student must sign up before a sale can be recorded.</span>}
           </>
         )}
@@ -223,10 +246,8 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
             {mode?.kind === "task" && <TaskPanel key={openTask?._id ?? "new"} leadId={leadId} task={openTask} onCreated={panelDone(openTask ? "Follow-up updated" : "Follow-up scheduled")} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "contactStage" && <ContactStagePanel key={mode.to} lead={lead} to={mode.to} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "interested" && <InterestedPanel lead={lead} courses={courses} onDone={(m) => panelDone(m)()} onCancel={() => setModeRaw(null)} />}
-            {mode?.kind === "sale" && <RecordSalePanel key={`${mode.courseId || "sale"}-${mode.billType || "prepaid"}`} initialBillType={mode.billType} leadId={leadId} interests={lead.interests} leadCourses={lead.courses} courses={courses} initialCourseId={mode.courseId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
-            {mode?.kind === "postpaidPayment" && lead.unpaidBill && (
-              <PostpaidPaymentPanel bill={lead.unpaidBill} courseTitle={lead.courses?.find((c) => c.courseId === lead.unpaidBill?.courseId)?.title} onDone={panelDone()} onCancel={() => setModeRaw(null)} />
-            )}
+            {mode?.kind === "sale" && <RecordSalePanel key={`${mode.courseId || "sale"}-${mode.billType || "prepaid"}`} initialBillType={mode.billType} leadId={leadId} interests={lead.interests} leadCourses={lead.courses} courses={courses} initialCourseId={mode.courseId} lockCourse={!!mode.courseId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
+            {mode?.kind === "postpaidPayment" && <PostpaidPaymentPanel key={mode.bill._id} bill={mode.bill} courseTitle={lead.courses?.find((c) => c.courseId === mode.bill.courseId)?.title} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "lost" && <LostPanel leadId={leadId} onDone={panelDone("Lead marked lost")} onCancel={() => setModeRaw(null)} />}
             {mode?.kind === "assign" && <AssignPanel lead={lead} reps={reps} initialOwnerId={mode.ownerId} onDone={panelDone()} onCancel={() => setModeRaw(null)} />}
 
@@ -258,7 +279,6 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
                 },
               ]}
             />
-            <DoNotContactLink lead={lead} canSet={can("crm.set_do_not_contact")} canClear={can("crm.clear_do_not_contact")} ask={setReasonAction} />
 
             <LeadCourses
               lead={lead}
@@ -269,7 +289,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
 
             <FollowUps lead={lead} act={act} />
 
-            <LeadSalesSection leadId={leadId} refreshKey={salesKey} />
+            <LeadSalesSection leadId={leadId} refreshKey={salesKey} courseId={selected || undefined} />
 
             <section>
               <h3 className="crm-sec-h" style={{ marginBottom: 10 }}>
@@ -341,37 +361,6 @@ function guardianText(lead: LeadDetail) {
   const parents = p?.linkedParents?.length ? p.linkedParents : p?.linkedParent ? [p.linkedParent] : null;
   if (parents) return parents.map((x) => [x.name, x.phone].filter(Boolean).join(" · ")).join("; ") || "—";
   return [p?.guardianName, p?.guardianPhone].filter(Boolean).join(" · ") || "—";
-}
-
-/** The single Do not contact link at the bottom of the facts (set by those allowed; cleared by Admin only). */
-function DoNotContactLink({ lead, canSet, canClear, ask }: { lead: LeadDetail; canSet: boolean; canClear: boolean; ask: (a: ReasonAction) => void }) {
-  if (lead.doNotContact.flag) {
-    return (
-      <p className="crm-small" style={{ margin: 0 }}>
-        <span className="crm-late">Do not contact{lead.doNotContact.reason ? `: ${lead.doNotContact.reason}` : ""}</span>
-        {canClear && (
-          <>
-            {" · "}
-            <button type="button" className="crm-link" onClick={() => ask({ title: "Allow contact again", confirmLabel: "Clear do not contact", success: "Do not contact cleared", run: (r) => crmApi.setDoNotContact(lead._id, false, r) })}>
-              Clear
-            </button>
-          </>
-        )}
-      </p>
-    );
-  }
-  if (!canSet) return null;
-  return (
-    <p className="crm-small" style={{ margin: 0 }}>
-      <button
-        type="button"
-        className="crm-link"
-        onClick={() => ask({ title: "Do not contact", description: "Blocks every contact and cancels open contact follow-ups.", confirmLabel: "Set do not contact", destructive: true, success: "Do not contact set", run: (r) => crmApi.setDoNotContact(lead._id, true, r) })}
-      >
-        Do not contact
-      </button>
-    </p>
-  );
 }
 
 /**

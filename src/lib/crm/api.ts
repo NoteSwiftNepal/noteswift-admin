@@ -67,7 +67,6 @@ export type LeadRow = {
   frozen?: boolean;
   courseTitle: string | null;
   moreCourses: number;
-  doNotContact: boolean;
   openTasks: number;
   nextTaskDueAt: string | null;
   overdue: boolean;
@@ -154,6 +153,9 @@ export type LeadDetail = {
   saleWaiting: boolean;
   /** R73: the unpaid postpaid bill; Record sale adds its payment. */
   unpaidBill: { _id: string; courseId: string | null; amount: number } | null;
+  /** R78: open bills per course, and the course the lead is being processed for. */
+  openBills: { _id: string; courseId: string | null; amount: number; unpaid: boolean }[];
+  focusCourseId: string | null;
   courseTitle: string | null;
   courses: LeadCourse[];
   /** R70: what the stage dropdown offers, decided by the server. */
@@ -170,7 +172,6 @@ export type LeadDetail = {
   nextActionAt: string | null;
   firstContactAt: string | null;
   lastContactAt: string | null;
-  doNotContact: { flag: boolean; reason?: string | null; setAt?: string | null };
   channels: Record<Channel, boolean>;
   consent: { purpose: string; channel: Channel; status: "granted" | "withdrawn"; at: string; source: string | null }[];
   interests: Interest[];
@@ -218,7 +219,7 @@ export const crmApi = {
   unfreezeTemporary: (id: string, enrollmentId: string) => request<{ frozen: boolean; changed: boolean }>("POST", `/leads/${id}/temporary-enrollments/${enrollmentId}/unfreeze`),
   markLost: (id: string, reason: string) => request("POST", `/leads/${id}/lost`, { reason }),
   reopenLead: (id: string, reason: string) => request("POST", `/leads/${id}/reopen`, { reason }),
-  setDoNotContact: (id: string, flag: boolean, reason: string) => request("POST", `/leads/${id}/do-not-contact`, { flag, reason }),
+  setFocusCourse: (id: string, courseId: string | null) => request<{ focusCourseId: string | null }>("POST", `/leads/${id}/focus-course`, { courseId }),
   recordConsent: (id: string, body: { purpose: string; channel: Channel; status: "granted" | "withdrawn"; source?: string }) => request("POST", `/leads/${id}/consent`, body),
   setChannel: (id: string, channel: Channel, enabled: boolean, reason: string) => request("POST", `/leads/${id}/channels`, { channel, enabled, reason }),
   createProspect: (body: Record<string, unknown>) => request<{ lead: { _id: string } }>("POST", `/prospects`, body),
