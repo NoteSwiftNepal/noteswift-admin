@@ -21,6 +21,8 @@ import { BillRow, BillSummaryItem, BillTab, Pagination, Rep, crmApi, fmtDateTime
 const TABS: { value: BillTab; label: string }[] = [
   { value: "waiting", label: "Waiting" },
   { value: "confirmed", label: "Confirmed" },
+  { value: "tigg", label: "To record in Tigg" },
+  { value: "tigg_recorded", label: "Recorded in Tigg" },
   { value: "rejected", label: "Rejected" },
   { value: "all", label: "All" },
 ];
@@ -86,6 +88,17 @@ function SalesBillsInner() {
     if (can("crm.manage_reps")) crmApi.reps().then((r) => setReps(r.filter((x) => x.status === "active" || x.status === "inactive")), () => setReps([]));
   }, [can]);
 
+  // R80: the Admin has entered the sale into Tigg by hand (or undoes a mistaken click).
+  const setTigg = async (r: BillRow) => {
+    try {
+      await crmApi.setTiggRecorded(r._id, !r.tiggRecordedAt);
+      toast({ title: r.tiggRecordedAt ? "Moved back to To record" : "Recorded in Tigg" });
+      await load();
+    } catch (e: any) {
+      toast({ title: "Not done", description: e?.message, variant: "destructive" });
+    }
+  };
+
   const setFilter = (fn: () => void) => {
     fn();
     setPage(1);
@@ -129,7 +142,7 @@ function SalesBillsInner() {
             onChange={(v) => setFilter(() => setBsMonth(v))}
           />
         </div>
-        <CrmTabs label="Status" value={tab} onChange={(v) => { setTab(v); setPage(1); }} tabs={TABS.map((t) => ({ ...t, count: counts[t.value] ?? null }))} />
+        <CrmTabs label="Status" value={tab} onChange={(v) => { setTab(v); setPage(1); }} tabs={(can("crm.confirm_payments") ? TABS : TABS.filter((t) => !t.value.startsWith("tigg"))).map((t) => ({ ...t, count: counts[t.value] ?? null }))} />
         <DataState loading={loading} error={error} onRetry={load} empty={rows.length === 0} emptyText={tab === "waiting" ? "Nothing waiting for confirmation." : "No sales here. Try another tab or clear the filters."}>
           <CrmTable>
             <thead>
@@ -151,7 +164,12 @@ function SalesBillsInner() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r._id}>
-                  <td className="whitespace-nowrap font-semibold">{r.receiptNumber ?? <span className="crm-muted">—</span>}</td>
+                  <td className="whitespace-nowrap font-semibold">
+                    {r.invoiceNumber ?? r.receiptNumber ?? <span className="crm-muted">{r.proforma ? "Proforma" : "—"}</span>}
+                    {r.invoiceNumber && r.receiptNumber && <span className="crm-sub">{r.receiptNumber}</span>}
+                    {r.creditNoteNumber && <span className="crm-sub">{r.creditNoteNumber}</span>}
+                    {r.tiggRecordedAt && <span className="crm-sub">In Tigg · {r.tiggRecordedBy}</span>}
+                  </td>
                   <td>{r.billType ? <CrmPill tone={r.billType === "prepaid" ? "accent" : "warn"}>{r.billType === "prepaid" ? "Prepaid" : "Postpaid"}</CrmPill> : <span className="crm-muted">—</span>}</td>
                   <td className="whitespace-nowrap">
                     {fmtDateTime(r.date)}
@@ -187,6 +205,11 @@ function SalesBillsInner() {
                       <Button type="button" size="sm" variant="outline" onClick={() => setBillId(r._id)}>
                         Bill
                       </Button>
+                      {r.canRecordTigg && (tab === "tigg" || tab === "tigg_recorded") && (
+                        <Button type="button" size="sm" variant={r.tiggRecordedAt ? "ghost" : "default"} onClick={() => setTigg(r)}>
+                          {r.tiggRecordedAt ? "Undo" : "Record"}
+                        </Button>
+                      )}
                       {r.canConfirm && (
                         <Button type="button" size="sm" className={GOOD_BUTTON} onClick={() => setConfirmRow(r)}>
                           Confirm

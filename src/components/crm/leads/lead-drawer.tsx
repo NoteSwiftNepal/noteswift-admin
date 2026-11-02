@@ -289,7 +289,7 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
 
             <FollowUps lead={lead} act={act} />
 
-            <LeadSalesSection leadId={leadId} refreshKey={salesKey} courseId={selected || undefined} />
+            <LeadSalesSection leadId={leadId} refreshKey={salesKey} courseId={selected || undefined} onChanged={refresh} />
 
             <section>
               <h3 className="crm-sec-h" style={{ marginBottom: 10 }}>

@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { CrmFacts, CrmNote, CrmPill } from "@/components/crm/ui";
 import { Field, Panel, Sel } from "@/components/crm/leads/controls";
-import { BILL_STATUS_TONE, Bill, BillRow, BillType, Interest, LEAD_COURSE_STATE, LeadCourse, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
+import { BILL_STATUS_TONE, Bill, BillRow, BillType, Interest, LEAD_COURSE_STATE, LeadCourse, LeadPayment, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
 
 const STAMP_COLOR: Record<string, string> = { good: "var(--crm-good)", warn: "var(--crm-warn)", bad: "var(--crm-bad)", neutral: "var(--crm-muted)" };
 const STAMP_TEXT: Record<string, string> = { confirmed: "Paid · Confirmed", unpaid: "Payment pending", waiting: "Pending confirmation", rejected: "Rejected", cancelled: "Cancelled", invalid: "Invalid", other: "—" };
@@ -49,7 +49,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
     <Dialog open={!!paymentId} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>Bill {bill?.receiptNumber ?? ""}</DialogTitle>
+          <DialogTitle>{bill?.proforma ? "Proforma" : `Bill ${bill?.invoiceNumber ?? bill?.receiptNumber ?? ""}`}</DialogTitle>
           <DialogDescription className="sr-only">Payment receipt details</DialogDescription>
         </DialogHeader>
         {error ? (
@@ -65,7 +65,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
                 <b className="crm-display text-base">{bill.seller.name}</b>
                 <span className="crm-sub">{bill.seller.address}</span>
                 <span className="crm-sub">VAT No: {bill.seller.vatNumber}</span>
-                <span className="crm-sub">Payment receipt</span>
+                <span className="crm-sub">{bill.proforma ? "Proforma invoice" : bill.invoiceNumber ? "Tax invoice" : "Bill"}</span>
               </div>
               <span
                 className="crm-display self-start rounded-md border-2 px-2 py-0.5 text-xs font-bold uppercase tracking-[0.08em]"
@@ -76,7 +76,10 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
             </div>
             <CrmFacts
               items={[
+                { label: "Invoice no.", value: bill.invoiceNumber ?? (bill.proforma ? "Issued when the payment is recorded" : bill.billDetailsMissing ? "Issued when Sales enter how it was paid" : "—") },
                 { label: "Receipt no.", value: bill.receiptNumber ?? bill.receiptNote ?? "—" },
+                ...(bill.creditNoteNumber ? [{ label: "Credit note", value: bill.creditNoteNumber }] : []),
+                ...(bill.tiggRecordedAt ? [{ label: "Recorded in Tigg", value: `${bill.tiggRecordedBy ?? ""} · ${fmtDateTime(bill.tiggRecordedAt)}` }] : []),
                 { label: "Date", value: fmtDateTime(bill.dates.paidAt ?? bill.dates.recordedAt) },
                 { label: "Student", value: bill.student.name },
                 ...(bill.student.phone ? [{ label: "Phone", value: bill.student.phone }] : []),
@@ -149,6 +152,16 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
               <ExternalLink className="mr-1 h-4 w-4" /> View screenshot
             </Button>
           )}
+          {paymentId && (bill?.proforma || bill?.invoiceNumber) && (
+            <Button type="button" variant="outline" onClick={() => crmApi.downloadDocument(paymentId).catch((e: any) => toast({ title: "Could not download", description: e?.message, variant: "destructive" }))}>
+              <Download className="mr-1 h-4 w-4" /> {bill.proforma ? "Proforma" : "Tax invoice"}
+            </Button>
+          )}
+          {paymentId && bill?.creditNoteNumber && (
+            <Button type="button" variant="outline" onClick={() => crmApi.downloadDocument(paymentId, true).catch((e: any) => toast({ title: "Could not download", description: e?.message, variant: "destructive" }))}>
+              <Download className="mr-1 h-4 w-4" /> Credit note
+            </Button>
+          )}
           {bill?.canDownloadPdf && paymentId && (
             <Button
               type="button"
@@ -165,7 +178,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
                 }
               }}
             >
-              {downloading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />} Download PDF
+              {downloading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />} Receipt
             </Button>
           )}
           <Button type="button" onClick={() => onOpenChange(false)}>
@@ -651,6 +664,84 @@ export function PostpaidPaymentPanel({ bill, courseTitle, onDone, onCancel }: { 
         </Field>
       </div>
       <CrmNote>This goes to an Admin. When they verify it, the student&apos;s course becomes a normal enrollment.</CrmNote>
+    </Panel>
+  );
+}
+
+/**
+ * R81: correct a bill until it is confirmed. Sales on their own leads, Admin
+ * and Super Admin. Payment details only once a payment is recorded; the amount
+ * only before the tax invoice. The server decides; a refusal shows here.
+ */
+export function EditBillPanel({ bill, onDone, onCancel }: { bill: LeadPayment; onDone: () => void; onCancel: () => void }) {
+  const { toast } = useToast();
+  const waiting = bill.billStatus === "pending-confirmation";
+  const missing = !!bill.billDetailsMissing;
+  const today = new Date();
+  const [amount, setAmount] = useState(String(bill.amount ?? ""));
+  const [method, setMethod] = useState(bill.paymentMethod && bill.paymentMethod in OFFLINE_METHOD_LABELS ? bill.paymentMethod : "cash");
+  const [reference, setReference] = useState(bill.reference ?? "");
+  const [file, setFile] = useState<File | null>(null);
+  const [received, setReceived] = useState(dayInput(bill.receivedAt ? new Date(bill.receivedAt) : today));
+  const [address, setAddress] = useState(bill.buyerAddress ?? "");
+  const [pan, setPan] = useState(bill.buyerPan ?? "");
+  const [note, setNote] = useState(bill.note ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pickFile = (f: File | null) => {
+    setError(null);
+    if (!f) return setFile(null);
+    if (!SCREENSHOT_TYPES.includes(f.type)) return setError("The screenshot must be a JPG, PNG, WEBP or PDF file.");
+    if (f.size > MAX_SCREENSHOT) return setError("The screenshot is larger than 5 MB.");
+    setFile(f);
+  };
+  const invoiced = !!bill.invoiceNumber;
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      if (!invoiced) form.set("amount", amount);
+      if (waiting) {
+        form.set("method", method);
+        form.set("reference", reference.trim());
+        form.set("receivedAt", receivedAtOf(received).toISOString());
+        if (file) form.set("screenshot", file);
+      }
+      form.set("note", note.trim());
+      form.set("buyerAddress", address.trim());
+      form.set("buyerPan", pan.trim());
+      await crmApi.editBill(bill._id, form);
+      toast({ title: "Bill updated" });
+      onDone();
+    } catch (e: any) {
+      setError(e?.message || "Could not edit the bill");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel title="Edit bill" onSubmit={submit} submitLabel="Save" onCancel={onCancel} busy={busy} error={error} canSubmit={invoiced || /^\d+$/.test(amount)}>
+      <span>
+        {bill.courseTitle || "Course"}
+        {invoiced ? ` · ${bill.invoiceNumber}` : ""}
+      </span>
+      <div className="crm-form">
+        <Field label="Amount paid (Rs)">
+          <input className="crm-input" inputMode="numeric" value={amount} disabled={invoiced} onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))} />
+        </Field>
+        {waiting && <PaymentFields method={method} setMethod={setMethod} reference={reference} setReference={setReference} received={received} setReceived={setReceived} minDay={missing ? "2000-01-01" : dayInput(new Date(today.getTime() - 7 * 86_400_000))} maxDay={dayInput(today)} needsReference={method !== "cash" && !file && !bill.hasScreenshot} pickFile={pickFile} />}
+        <Field label="Buyer address (optional)" full>
+          <input className="crm-input" value={address} maxLength={300} onChange={(e) => setAddress(e.target.value)} />
+        </Field>
+        <Field label="Buyer PAN (for Rs 10,000 or more, or a VAT-registered buyer)" full>
+          <input className="crm-input" value={pan} maxLength={20} onChange={(e) => setPan(e.target.value)} />
+        </Field>
+        <Field label="Note (optional)" full>
+          <textarea className="crm-input" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+      </div>
+      {invoiced ? <CrmNote>This bill has a tax invoice, so its amount can&apos;t change. To change it, an Admin rejects the bill (a credit note is issued) and a new one is recorded.</CrmNote> : missing ? <CrmNote>Saving the payment details issues the tax invoice. An Admin then verifies the bill.</CrmNote> : null}
     </Panel>
   );
 }
