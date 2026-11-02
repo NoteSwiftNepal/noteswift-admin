@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react";
 import { useAdmin } from "@/context/admin-context";
 import { CrmPill, Tone } from "@/components/crm/ui";
 import { LeadPayment, PAYMENT_METHOD_LABELS, PAYMENT_PATH_LABELS, crmApi, rs } from "@/lib/crm/api";
-import { BillDialog } from "@/components/crm/bill-dialogs";
+import { BillDialog, EditBillPanel } from "@/components/crm/bill-dialogs";
 
 const PAYMENT_STATUS: Record<string, { label: string; tone: Tone }> = {
   completed: { label: "Paid", tone: "good" },
@@ -29,13 +29,14 @@ function paymentStatus(p: LeadPayment): { label: string; tone: Tone } {
  * amounts and credit. R78: with a course chosen, only its rows and the rows with
  * no course show; "All courses" shows the rest.
  */
-export function LeadSalesSection({ leadId, refreshKey = 0, courseId }: { leadId: string; refreshKey?: number; courseId?: string }) {
+export function LeadSalesSection({ leadId, refreshKey = 0, courseId, onChanged }: { leadId: string; refreshKey?: number; courseId?: string; onChanged?: () => void }) {
   const { can } = useAdmin();
   const full = can("crm.view_all_leads");
   const [payments, setPayments] = useState<LeadPayment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [billId, setBillId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [editing, setEditing] = useState<LeadPayment | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -81,7 +82,7 @@ export function LeadSalesSection({ leadId, refreshKey = 0, courseId }: { leadId:
             return (
               <div key={p._id} className="crm-li">
                 <div className="crm-who">
-                  <b>{p.receiptNumber || "—"}</b> <span className="crm-muted crm-small">· {p.courseTitle || "Course"}</span>
+                  <b>{p.receiptNumber || p.invoiceNumber || (p.billStatus === "awaiting-payment" ? "Proforma" : "—")}</b> <span className="crm-muted crm-small">· {p.courseTitle || "Course"}</span>
                   <span className="crm-sub">
                     {[p.amount !== undefined ? rs(p.amount) : null, p.paymentMethod ? PAYMENT_METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod : PAYMENT_PATH_LABELS[p.path] ?? p.path, fmtDate(p.date)].filter(Boolean).join(" · ")}
                     {full && p.status === "completed" ? ` · credit: ${p.creditedToMe ? "you" : p.creditReason?.replace(/_/g, " ") || "not decided yet"}` : p.creditedToMe ? " · credited to you" : ""}
@@ -93,6 +94,11 @@ export function LeadSalesSection({ leadId, refreshKey = 0, courseId }: { leadId:
                   {p.invalidated && <CrmPill tone="bad">Invalid</CrmPill>}
                   {p.kind === "complimentary" && <CrmPill>Free</CrmPill>}
                   {p.duplicatePaymentOf && <CrmPill tone="warn">Paid twice</CrmPill>}
+                  {p.editable && (
+                    <button type="button" className="crm-btn sm" onClick={() => setEditing(p)}>
+                      {p.billDetailsMissing ? "Add details" : "Edit"}
+                    </button>
+                  )}
                   {hasBill(p) && (
                     <button type="button" className="crm-btn sm" onClick={() => setBillId(p._id)}>
                       Bill
@@ -108,6 +114,17 @@ export function LeadSalesSection({ leadId, refreshKey = 0, courseId }: { leadId:
             </button>
           )}
         </div>
+      )}
+      {editing && (
+        <EditBillPanel
+          key={editing._id}
+          bill={editing}
+          onCancel={() => setEditing(null)}
+          onDone={() => {
+            setEditing(null);
+            onChanged?.();
+          }}
+        />
       )}
       <BillDialog paymentId={billId} onOpenChange={(v) => !v && setBillId(null)} />
     </section>

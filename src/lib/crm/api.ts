@@ -273,6 +273,10 @@ export const crmApi = {
   setPaymentCourse: (id: string, courseId: string, discount?: number) => request<SalesPayment>("PATCH", `/payments/${id}/course`, { courseId, discount }),
   recordPayment: (leadId: string, form: FormData) => requestForm<SalesPayment>("POST", `/leads/${leadId}/payments`, form),
   // R73: the student paid a postpaid bill.
+  // R81: correct a bill until it is confirmed.
+  editBill: (paymentId: string, form: FormData) => requestForm<SalesPayment>("PATCH", `/payments/${paymentId}`, form),
+  // R80: entered into Tigg by hand, or undone.
+  setTiggRecorded: (id: string, recorded: boolean) => request<{ recorded: boolean; changed: boolean }>("POST", `/payments/${id}/tigg`, { recorded }),
   recordPostpaidPayment: (paymentId: string, form: FormData) => requestForm<SalesPayment>("POST", `/payments/${paymentId}/record-payment`, form),
   confirmPayment: (id: string, expectedAmount: number) => request<SalesPayment>("POST", `/payments/${id}/confirm`, { checked: true, expectedAmount }),
   rejectPayment: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/reject`, { reason }),
@@ -297,24 +301,28 @@ export const crmApi = {
   updateMaxDiscount: async (maxDiscountPercent: number) => ((await request<any>("PUT", `/settings`, { maxDiscountPercent })).settings as { maxDiscountPercent: number }),
   updateTargetRules: async (targets: Partial<TargetRules>) => ((await request<any>("PUT", `/settings`, { targets })).settings as { targets: TargetSchedule }),
   /** Downloads the PDF receipt (R46) and saves it with the server's file name. */
-  downloadReceipt: async (id: string) => {
-    const res = await fetch(`${CRM}/payments/${id}/receipt.pdf`, { ...createFetchOptions("GET"), cache: "no-store" });
-    if (!res.ok) {
-      const json = await res.json().catch(() => null);
-      throw new CrmApiError(json?.error || `Request failed (${res.status})`, res.status, json?.code);
-    }
-    const blob = await res.blob();
-    const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") || "")?.[1] || "NoteSwift-receipt.pdf";
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  },
+  downloadReceipt: (id: string) => downloadPdf(`/payments/${id}/receipt.pdf`),
+  /** R80: the proforma or tax invoice, or the credit note. */
+  downloadDocument: (id: string, creditNote = false) => downloadPdf(`/payments/${id}/document.pdf${creditNote ? "?kind=credit_note" : ""}`),
 };
 
 /** Multipart request (no JSON content type, so the browser sets the boundary). */
+async function downloadPdf(path: string) {
+  const res = await fetch(`${CRM}${path}`, { ...createFetchOptions("GET"), cache: "no-store" });
+  if (!res.ok) {
+    const json = await res.json().catch(() => null);
+    throw new CrmApiError(json?.error || `Request failed (${res.status})`, res.status, json?.code);
+  }
+  const blob = await res.blob();
+  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") || "")?.[1] || "NoteSwift-receipt.pdf";
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 async function requestForm<T>(method: string, path: string, form: FormData): Promise<T> {
   const options = createFetchOptions(method);
   const headers = { ...(options.headers as Record<string, string>) };
@@ -336,7 +344,7 @@ export type SalePrice = { listPrice: number; publicDiscount: number; discount: n
 export type PaymentPreview = { canRecord: boolean; reason: string | null; code: string | null; courseId: string | null; interestId: string | null; unconfirmed: boolean; price: SalePrice | null; needsApproval: boolean };
 export type SaleDiscount = { amount: number; percent: number; limitPercent: number; needsApproval: boolean; approved: boolean };
 export type SalesPayment = { _id: string; status: string; amount: number; method: string; reference: string | null; hasScreenshot: boolean; receivedAt: string | null; receiptNumber: string | null; courseId: string | null; courseUnconfirmed: boolean; amountReceived: number | null; discount: { amount: number; percent: number; needsApproval: boolean } | null };
-export type BillTab = "waiting" | "confirmed" | "rejected" | "cancelled" | "all";
+export type BillTab = "waiting" | "confirmed" | "tigg" | "tigg_recorded" | "rejected" | "cancelled" | "all";
 export type BillType = "prepaid" | "postpaid";
 export type BillStatus = "unpaid" | "waiting" | "confirmed" | "rejected" | "cancelled" | "invalid" | "other";
 export type BillRow = {
@@ -345,6 +353,14 @@ export type BillRow = {
   date: string;
   receivedAt: string | null;
   receiptNumber: string | null;
+  invoiceNumber: string | null;
+  invoiceIssuedAt: string | null;
+  creditNoteNumber: string | null;
+  tiggRecordedAt: string | null;
+  tiggRecordedBy: string | null;
+  billDetailsMissing: boolean;
+  proforma: boolean;
+  canRecordTigg: boolean;
   studentName: string;
   leadId: string | null;
   courseTitle: string;
@@ -378,6 +394,12 @@ export type Bill = {
   status: BillStatus;
   statusLabel: string;
   receiptNumber: string | null;
+  invoiceNumber: string | null;
+  creditNoteNumber: string | null;
+  proforma: boolean;
+  billDetailsMissing: boolean;
+  tiggRecordedAt: string | null;
+  tiggRecordedBy: string | null;
   receiptNote: string | null;
   student: { name: string; phone: string | null };
   leadId: string | null;
@@ -435,6 +457,14 @@ export type LeadPayment = {
   // Sales-recorded payments (R26): the recorder also sees these on their own rows.
   recordedByMe?: boolean;
   receivedAt?: string | null;
+  // R81: who can edit the bill gets these while it is not confirmed.
+  editable?: boolean;
+  billStatus?: string;
+  billDetailsMissing?: boolean;
+  invoiceNumber?: string | null;
+  note?: string | null;
+  buyerAddress?: string | null;
+  buyerPan?: string | null;
   rejection?: { at: string; reason: string } | null;
   cancellation?: { at: string; reason: string } | null;
   receiptNumber?: string | null;
