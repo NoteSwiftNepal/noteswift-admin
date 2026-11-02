@@ -15,6 +15,7 @@ const PAYMENT_STATUS: Record<string, { label: string; tone: Tone }> = {
   failed: { label: "Failed", tone: "bad" },
   "pending-gateway": { label: "Pending", tone: "warn" },
   "pending-confirmation": { label: "Waiting confirmation", tone: "warn" },
+  "awaiting-payment": { label: "Payment pending", tone: "warn" },
 };
 function paymentStatus(p: LeadPayment): { label: string; tone: Tone } {
   if (p.status === "cancelled") return p.rejection ? { label: "Rejected", tone: "bad" } : { label: "Cancelled", tone: "neutral" };
@@ -25,14 +26,16 @@ function paymentStatus(p: LeadPayment): { label: string; tone: Tone } {
  * The drawer's "Sales" section (S1b, as the prototype): one row per payment
  * (receipt number, course, amount where allowed, method, date, status, Bill).
  * Sales get status only, plus amounts on their own rows (R26); Admin also
- * amounts and credit.
+ * amounts and credit. R78: with a course chosen, only its rows and the rows with
+ * no course show; "All courses" shows the rest.
  */
-export function LeadSalesSection({ leadId, refreshKey = 0 }: { leadId: string; refreshKey?: number }) {
+export function LeadSalesSection({ leadId, refreshKey = 0, courseId }: { leadId: string; refreshKey?: number; courseId?: string }) {
   const { can } = useAdmin();
   const full = can("crm.view_all_leads");
   const [payments, setPayments] = useState<LeadPayment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [billId, setBillId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -50,6 +53,10 @@ export function LeadSalesSection({ leadId, refreshKey = 0 }: { leadId: string; r
   const hasBill = (p: LeadPayment) =>
     full ? p.path === "sales_recorded" || (p.status === "completed" && (p.kind === "qualifying" || p.kind === "bulk" || p.invalidated)) : !!(p.recordedByMe || p.creditedToMe);
 
+  useEffect(() => setShowAll(false), [courseId]);
+  const shown = payments?.filter((p) => showAll || !courseId || !p.courseId || p.courseId === courseId) ?? [];
+  const hidden = (payments?.length ?? 0) - shown.length;
+
   return (
     <section>
       <h3 className="crm-sec-h">Sales</h3>
@@ -64,11 +71,12 @@ export function LeadSalesSection({ leadId, refreshKey = 0 }: { leadId: string; r
         <p className="crm-muted crm-small flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
         </p>
-      ) : payments.length === 0 ? (
+      ) : shown.length === 0 && hidden === 0 ? (
         <p className="crm-muted crm-small">No sales yet.</p>
       ) : (
         <div className="crm-list">
-          {payments.map((p) => {
+          {shown.length === 0 && <p className="crm-muted crm-small">No sales for this course.</p>}
+          {shown.map((p) => {
             const st = paymentStatus(p);
             return (
               <div key={p._id} className="crm-li">
@@ -94,6 +102,11 @@ export function LeadSalesSection({ leadId, refreshKey = 0 }: { leadId: string; r
               </div>
             );
           })}
+          {hidden > 0 && (
+            <button type="button" className="crm-link crm-small" onClick={() => setShowAll(true)}>
+              All courses ({hidden} more)
+            </button>
+          )}
         </div>
       )}
       <BillDialog paymentId={billId} onOpenChange={(v) => !v && setBillId(null)} />

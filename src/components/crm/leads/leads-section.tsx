@@ -287,11 +287,6 @@ export function LeadsSection() {
                       <td>
                         <b>{r.person?.name || "Unnamed"}</b>
                         {sub && <span className="crm-sub">{sub}</span>}
-                        {r.doNotContact && (
-                          <span className="mt-1 flex">
-                            <CrmPill tone="bad">Do not contact</CrmPill>
-                          </span>
-                        )}
                       </td>
                       <td className="whitespace-nowrap">{r.person?.phone || <span className="crm-muted">—</span>}</td>
                       <td>

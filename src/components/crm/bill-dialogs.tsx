@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { CrmFacts, CrmNote, CrmPill } from "@/components/crm/ui";
 import { Field, Panel, Sel } from "@/components/crm/leads/controls";
-import { BILL_STATUS_TONE, Bill, BillRow, BillType, Interest, LeadCourse, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
+import { BILL_STATUS_TONE, Bill, BillRow, BillType, Interest, LEAD_COURSE_STATE, LeadCourse, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
 
 const STAMP_COLOR: Record<string, string> = { good: "var(--crm-good)", warn: "var(--crm-warn)", bad: "var(--crm-bad)", neutral: "var(--crm-muted)" };
 const STAMP_TEXT: Record<string, string> = { confirmed: "Paid · Confirmed", unpaid: "Payment pending", waiting: "Pending confirmation", rejected: "Rejected", cancelled: "Cancelled", invalid: "Invalid", other: "—" };
@@ -323,6 +323,41 @@ const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? 
 const UNCONFIRMED = "unconfirmed";
 
 /**
+ * R78: the course a lead is being processed for: the lead's own courses first
+ * (with their state), then the other paid courses. "No course" leaves Record
+ * sale free to pick one or "Course not confirmed yet".
+ */
+export function CoursePicker({ value, leadCourses = [], courses, onChange }: { value: string; leadCourses?: LeadCourse[]; courses: { _id: string; title: string; price?: number; type?: string }[]; onChange: (courseId: string) => void }) {
+  const others = courses.filter((c) => c.type !== "free" && (c.price ?? 0) > 0 && !leadCourses.some((l) => l.courseId === c._id));
+  return (
+    <label className="crm-small">
+      <span className="crm-muted">Processing for</span>
+      <select className="crm-input" aria-label="Course this lead is being processed for" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">No course</option>
+        {leadCourses.length > 0 && (
+          <optgroup label="This student's courses">
+            {leadCourses.map((c) => (
+              <option key={c.courseId} value={c.courseId}>
+                {c.title} · {LEAD_COURSE_STATE[c.state].label}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {others.length > 0 && (
+          <optgroup label="Other courses">
+            {others.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.title}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+    </label>
+  );
+}
+
+/**
  * "Record sale" (S7, R55–R58), the prototype's panel in the lead drawer. The
  * course list holds the lead's Payment pending and Interested courses (S8b),
  * then the other paid courses, then "Course not confirmed yet". The discount starts at the
@@ -337,10 +372,13 @@ export function RecordSalePanel({
   courses,
   initialCourseId,
   initialBillType = "prepaid",
+  lockCourse = false,
   onDone,
   onCancel,
 }: {
   leadId: string;
+  /** R78: the course was chosen in the drawer's picker; it is shown, not changed here. */
+  lockCourse?: boolean;
   /** R73: Payment pending in the stage dropdown opens this on Postpaid. */
   initialBillType?: BillType;
   interests: Interest[];
@@ -364,7 +402,9 @@ export function RecordSalePanel({
     return [...fromCourses, ...rest];
   }, [interests, leadCourses, courses]);
   const otherPaid = useMemo(() => courses.filter((c) => c.type !== "free" && (c.price ?? 0) > 0 && !openOnes.some((i) => i.courseId === c._id)), [courses, openOnes]);
-  const [courseId, setCourseId] = useState((initialCourseId && [...openOnes.map((o) => o.courseId), ...otherPaid.map((c) => c._id)].includes(initialCourseId) ? initialCourseId : null) || openOnes[0]?.courseId || otherPaid[0]?._id || UNCONFIRMED);
+  const listed = !!initialCourseId && [...openOnes.map((o) => o.courseId), ...otherPaid.map((c) => c._id)].includes(initialCourseId);
+  const locked = lockCourse && listed;
+  const [courseId, setCourseId] = useState((listed ? initialCourseId : null) || openOnes[0]?.courseId || otherPaid[0]?._id || UNCONFIRMED);
   // R73: prepaid enrolls now and needs the payment details; postpaid gives temporary access and needs neither.
   const [billType, setBillType] = useState<BillType>(initialBillType);
   const postpaid = billType === "postpaid";
@@ -463,7 +503,7 @@ export function RecordSalePanel({
           <Sel value={billType} onChange={(e) => changeBillType(e.target.value)} options={[{ value: "prepaid", label: "Prepaid: the student has paid" }, { value: "postpaid", label: "Postpaid: the student will pay later" }]} />
         </Field>
         <Field label="Course" full>
-          <select className="crm-input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+          <select className="crm-input" value={courseId} disabled={locked} onChange={(e) => setCourseId(e.target.value)}>
             {openOnes.length > 0 && (
               <optgroup label="This student's courses">
                 {openOnes.map((i) => (
