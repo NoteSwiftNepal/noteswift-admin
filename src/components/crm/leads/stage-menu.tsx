@@ -3,13 +3,16 @@
 // The stage dropdown (R70, S9): the drawer header's stage pill, with a chevron,
 // opening a menu of the six stages. What is allowed, and why not, comes from
 // the server's stageOptions; picking an option hands it to the drawer, which
-// opens that option's panel. Esc and a click outside close the menu.
-import { KeyboardEvent, useEffect, useRef, useState } from "react";
+// opens that option's panel. Esc and a click outside close the menu. In the
+// Leads table (R86) the menu is placed on the page (`floating`), so the
+// table's scroll area doesn't cut it off; scrolling closes it.
+import { CSSProperties, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { STAGE, Stage, StageOption } from "@/lib/crm/api";
 
-export function StageMenu({ stage, options, onPick }: { stage: Stage; options: StageOption[]; onPick: (to: Stage) => void }) {
+export function StageMenu({ stage, options, onPick, floating = false }: { stage: Stage; options: StageOption[]; onPick: (to: Stage) => void; floating?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [place, setPlace] = useState<CSSProperties | undefined>(undefined);
   const wrapRef = useRef<HTMLSpanElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const st = STAGE[stage];
@@ -20,10 +23,22 @@ export function StageMenu({ stage, options, onPick }: { stage: Stage; options: S
       if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", close);
+    const shut = () => setOpen(false);
+    if (floating) {
+      const r = btnRef.current!.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom > 340;
+      setPlace({ position: "fixed", left: Math.max(8, Math.min(r.left, window.innerWidth - 328)), ...(below ? { top: r.bottom + 6 } : { bottom: window.innerHeight - r.top + 6 }), zIndex: 40 });
+      window.addEventListener("scroll", shut, true);
+      window.addEventListener("resize", shut);
+    }
     // Focus the first enabled option when the menu opens.
     wrapRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("scroll", shut, true);
+      window.removeEventListener("resize", shut);
+    };
+  }, [open, floating]);
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (!open) return;
@@ -50,7 +65,7 @@ export function StageMenu({ stage, options, onPick }: { stage: Stage; options: S
         </span>
       </button>
       {open && (
-        <div className="crm-menu" role="menu" aria-label="Move to stage">
+        <div className="crm-menu" role="menu" aria-label="Move to stage" style={floating ? place : undefined}>
           {options.map((o) => (
             <button
               key={o.to}

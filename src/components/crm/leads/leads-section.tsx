@@ -13,7 +13,8 @@ import { useAdmin } from "@/context/admin-context";
 import { CrmPageHeader, CrmPill } from "@/components/crm/ui";
 import { LeadDrawer } from "@/components/crm/leads/lead-drawer";
 import { AddLeadModal } from "@/components/crm/leads/add-lead-modal";
-import { LeadOwnerAdmin, LeadRow, LeadView, Pagination, Rep, STAGE, crmApi, fetchCourseCatalog, relDateTime, sourceLabel } from "@/lib/crm/api";
+import { StageMenu } from "@/components/crm/leads/stage-menu";
+import { LeadOwnerAdmin, LeadRow, LeadView, Pagination, Rep, STAGE, Stage, crmApi, fetchCourseCatalog, relDateTime, sourceLabel } from "@/lib/crm/api";
 
 const BASE = "/dashboard/crm/leads";
 const PAGE_SIZE = 25;
@@ -28,8 +29,12 @@ export function LeadsSection() {
 
   const [counts, setCounts] = useState<Partial<Record<LeadView, number>>>({});
   // R74: All, then the stages that need attention (and Unassigned for Admin).
+  // R86: New lead, Contacted and Interested are back as filters.
   const views: { value: LeadView; label: string }[] = [
     { value: isAdmin ? "all" : "mine", label: "All" },
+    { value: "new", label: "New lead" },
+    { value: "contacted", label: "Contacted" },
+    { value: "interested", label: "Interested" },
     // R73: only for temporary access given before bills replaced it.
     ...(counts.temporary ? [{ value: "temporary" as LeadView, label: "Temporary enrollment" }] : []),
     { value: "payment_pending", label: "Payment pending" },
@@ -38,8 +43,7 @@ export function LeadsSection() {
     ...(isAdmin ? [{ value: "unassigned" as LeadView, label: "Unassigned" }] : []),
   ];
   const requested = params.get("view") as LeadView | null;
-  // The dashboard's "New leads" link still opens that stage, though it has no tab (R74).
-  const view: LeadView = requested && (views.some((v) => v.value === requested) || requested === "new") ? requested : views[0].value;
+  const view: LeadView = requested && views.some((v) => v.value === requested) ? requested : views[0].value;
   const page = parseInt(params.get("page") || "1", 10) || 1;
   const filters = { ownerId: params.get("ownerId") || "", q: params.get("q") || "", from: params.get("from") || "", to: params.get("to") || "" };
   const filterKey = JSON.stringify(filters);
@@ -58,6 +62,8 @@ export function LeadsSection() {
   const [bulkReason, setBulkReason] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  // R86: a stage picked in the table that needs the drawer's panel (a course, a reason, a bill).
+  const [stageFor, setStageFor] = useState<{ leadId: string; to: Stage } | null>(null);
   const opener = useRef<HTMLElement | null>(null);
   const openedHere = useRef(false);
 
@@ -121,7 +127,23 @@ export function LeadsSection() {
     openedHere.current = true;
     router.push(`${BASE}/${id}${query ? `?${query}` : ""}`, { scroll: false });
   };
+  // R86: New lead and Contacted move at once; the others open the lead at that stage's panel.
+  const pickStage = async (r: LeadRow, to: Stage, el: HTMLElement | null) => {
+    if ((to === "new_lead" || to === "contacted") && r.stage !== "interested") {
+      try {
+        await crmApi.moveStage(r._id, { to });
+        toast({ title: `Moved to ${STAGE[to].label}` });
+        refresh();
+      } catch (e: any) {
+        toast({ title: "Not moved", description: e?.message, variant: "destructive" });
+      }
+      return;
+    }
+    setStageFor({ leadId: r._id, to });
+    openLead(r._id, el);
+  };
   const closeLead = () => {
+    setStageFor(null);
     if (openedHere.current) router.back();
     else router.replace(`${BASE}${query ? `?${query}` : ""}`, { scroll: false });
   };
@@ -302,8 +324,12 @@ export function LeadsSection() {
                       </td>
                       {isAdmin && <td>{r.ownerName || <CrmPill tone="warn">Unassigned</CrmPill>}</td>}
                       <td>
-                        <span className="crm-actions">
-                          <CrmPill tone={st.tone}>{st.label}</CrmPill>
+                        <span className="crm-actions" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                          {can("crm.edit_leads") && r.stage !== "lost" && r.stageOptions ? (
+                            <StageMenu floating stage={r.stage} options={r.stageOptions} onPick={(to) => void pickStage(r, to, document.activeElement as HTMLElement | null)} />
+                          ) : (
+                            <CrmPill tone={st.tone}>{st.label}</CrmPill>
+                          )}
                           {r.frozen && <CrmPill tone="neutral">Frozen</CrmPill>}
                         </span>
                       </td>
@@ -335,7 +361,7 @@ export function LeadsSection() {
       {leadId && (
         <>
           <div className="crm-overlay" onClick={closeLead} />
-          <LeadDrawer key={leadId} leadId={leadId} reps={owners} courses={courses} onClose={closeLead} onChanged={refresh} />
+          <LeadDrawer key={leadId} leadId={leadId} reps={owners} courses={courses} initialStage={stageFor?.leadId === leadId ? stageFor.to : undefined} onClose={closeLead} onChanged={refresh} />
         </>
       )}
       <AddLeadModal

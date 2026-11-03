@@ -63,6 +63,8 @@ export type LeadRow = {
   ownerName: string | null;
   status: LeadStatus;
   stage: Stage;
+  /** R86: the list's stage dropdown. */
+  stageOptions?: StageOption[];
   /** R72: Temporary enrollment with every temporary course frozen. */
   frozen?: boolean;
   courseTitle: string | null;

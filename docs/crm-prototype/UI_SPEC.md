@@ -9,6 +9,8 @@ Scope (R33):
 - No dark mode for now. The prototype has dark tokens; they are listed for later and not implemented.
 - ~~The lead profile stays a full page.~~ Since S1b (R53, 2026-10-29) the lead opens in the prototype's side drawer over the Leads list; `/dashboard/crm/leads/[leadId]` is the list with the drawer open.
 
+**R86 (2026-11-03):** the Leads tabs are All · New lead · Contacted · Interested · Payment pending · Enrolled · Lost (· Unassigned for Admin), for Sales too. The Stage column's pill is the stage dropdown (the drawer's menu, same choices from the server) for anyone who can edit leads; Lost stays a plain pill. New lead and Contacted apply at once (from Interested they open the drawer, which warns that open courses close); Interested, Payment pending and Lost open the lead's drawer at that panel.
+
 **R83 (2026-11-03):** Sales & Bills tabs are Waiting · To record in Tigg · Confirmed · Rejected · All. The Admin's button is **Verify** (dialog "Verify sale"); a verified bill shows the accent "Verified · record in Tigg" pill. In To record in Tigg a Super Admin presses **Record in Tigg**, pastes Tigg's receipt number and gets Confirmed; Confirmed rows offer Undo (Super Admin). The bill shows "Verified by" and "Confirmed in Tigg by".
 
 **R78, R79 (2026-11-02):** the drawer header has a "Processing for" course picker under the actions, remembered on the lead. Record sale and the Sales list follow it: the panel shows the course locked, and the list shows that course with an "All courses" link. Record sale also shows at Temporary enrollment. Do not contact is removed everywhere; where older text below mentions it, this note wins.

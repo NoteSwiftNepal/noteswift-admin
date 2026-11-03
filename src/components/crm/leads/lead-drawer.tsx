@@ -41,7 +41,8 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 // since R78: a bill waiting on one course leaves the others open.
 const SALE_STAGES = ["new_lead", "contacted", "interested", "enrolled", "temporary", "payment_pending"];
 
-export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { leadId: string; reps: Rep[]; courses: { _id: string; title: string; price?: number; type?: string }[]; onClose: () => void; onChanged: () => void }) {
+/** `initialStage` (R86): a stage picked in the Leads table; its panel opens once the lead loads. */
+export function LeadDrawer({ leadId, reps, courses, onClose, onChanged, initialStage }: { leadId: string; reps: Rep[]; courses: { _id: string; title: string; price?: number; type?: string }[]; onClose: () => void; onChanged: () => void; initialStage?: Stage }) {
   const { toast } = useToast();
   const { can } = useAdmin();
   const isAdmin = can("crm.view_all_leads");
@@ -164,6 +165,13 @@ export function LeadDrawer({ leadId, reps, courses, onClose, onChanged }: { lead
     else if (to === "payment_pending") openSale("postpaid");
     else if (to === "lost") setMode({ kind: "lost" });
   };
+  // R86: the stage picked in the Leads table opens its panel here, once.
+  const initialDone = useRef(false);
+  useEffect(() => {
+    if (!lead || !initialStage || initialDone.current) return;
+    initialDone.current = true;
+    if (lead.stageOptions?.some((o) => o.to === initialStage && o.allowed)) pickStage(initialStage);
+  }, [lead]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <aside ref={drawerRef} className="crm-drawer" role="dialog" aria-modal="true" aria-label={lead ? `Lead ${name}` : "Lead"} onKeyDown={onKeyDown} tabIndex={-1}>
