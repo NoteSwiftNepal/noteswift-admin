@@ -275,8 +275,9 @@ export const crmApi = {
   // R73: the student paid a postpaid bill.
   // R81: correct a bill until it is confirmed.
   editBill: (paymentId: string, form: FormData) => requestForm<SalesPayment>("PATCH", `/payments/${paymentId}`, form),
-  // R80: entered into Tigg by hand, or undone.
-  setTiggRecorded: (id: string, recorded: boolean) => request<{ recorded: boolean; changed: boolean }>("POST", `/payments/${id}/tigg`, { recorded }),
+  // R80, R83: entered into Tigg by hand, or undone.
+  // R83: Super Admin only; recording needs the receipt number copied from Tigg.
+  setTiggRecorded: (id: string, recorded: boolean, receiptNumber?: string) => request<{ recorded: boolean; changed: boolean; receiptNumber: string | null }>("POST", `/payments/${id}/tigg`, { recorded, receiptNumber }),
   recordPostpaidPayment: (paymentId: string, form: FormData) => requestForm<SalesPayment>("POST", `/payments/${paymentId}/record-payment`, form),
   confirmPayment: (id: string, expectedAmount: number) => request<SalesPayment>("POST", `/payments/${id}/confirm`, { checked: true, expectedAmount }),
   rejectPayment: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/reject`, { reason }),
@@ -344,9 +345,10 @@ export type SalePrice = { listPrice: number; publicDiscount: number; discount: n
 export type PaymentPreview = { canRecord: boolean; reason: string | null; code: string | null; courseId: string | null; interestId: string | null; unconfirmed: boolean; price: SalePrice | null; needsApproval: boolean };
 export type SaleDiscount = { amount: number; percent: number; limitPercent: number; needsApproval: boolean; approved: boolean };
 export type SalesPayment = { _id: string; status: string; amount: number; method: string; reference: string | null; hasScreenshot: boolean; receivedAt: string | null; receiptNumber: string | null; courseId: string | null; courseUnconfirmed: boolean; amountReceived: number | null; discount: { amount: number; percent: number; needsApproval: boolean } | null };
-export type BillTab = "waiting" | "confirmed" | "tigg" | "tigg_recorded" | "rejected" | "cancelled" | "all";
+// R83: Confirmed = recorded in Tigg; "tigg" lists verified sales waiting for that.
+export type BillTab = "waiting" | "tigg" | "confirmed" | "rejected" | "cancelled" | "all";
 export type BillType = "prepaid" | "postpaid";
-export type BillStatus = "unpaid" | "waiting" | "confirmed" | "rejected" | "cancelled" | "invalid" | "other";
+export type BillStatus = "unpaid" | "waiting" | "verified" | "confirmed" | "rejected" | "cancelled" | "invalid" | "other";
 export type BillRow = {
   billType: BillType | null;
   _id: string;
@@ -421,7 +423,7 @@ export type Bill = {
   canViewScreenshot: boolean;
   footer: string;
 };
-export const BILL_STATUS_TONE: Record<BillStatus, "warn" | "good" | "bad" | "neutral"> = { unpaid: "warn", waiting: "warn", confirmed: "good", rejected: "bad", cancelled: "neutral", invalid: "bad", other: "neutral" };
+export const BILL_STATUS_TONE: Record<BillStatus, "warn" | "good" | "bad" | "neutral" | "accent"> = { unpaid: "warn", waiting: "warn", verified: "accent", confirmed: "good", rejected: "bad", cancelled: "neutral", invalid: "bad", other: "neutral" };
 export const OFFLINE_METHOD_LABELS: Record<string, string> = { cash: "Cash", "esewa-personal": "eSewa", "bank-transfer": "Bank transfer", other: "Other" };
 export const PAYMENT_METHOD_LABELS: Record<string, string> = { ...OFFLINE_METHOD_LABELS, fonepay: "Fonepay", "esewa-gateway": "eSewa (online)", connectips: "connectIPS" };
 

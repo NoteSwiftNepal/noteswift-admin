@@ -15,8 +15,8 @@ import { CrmFacts, CrmNote, CrmPill } from "@/components/crm/ui";
 import { Field, Panel, Sel } from "@/components/crm/leads/controls";
 import { BILL_STATUS_TONE, Bill, BillRow, BillType, Interest, LEAD_COURSE_STATE, LeadCourse, LeadPayment, OFFLINE_METHOD_LABELS, PaymentPreview, crmApi, fetchCourseCatalog, fmtDateTime, rs } from "@/lib/crm/api";
 
-const STAMP_COLOR: Record<string, string> = { good: "var(--crm-good)", warn: "var(--crm-warn)", bad: "var(--crm-bad)", neutral: "var(--crm-muted)" };
-const STAMP_TEXT: Record<string, string> = { confirmed: "Paid · Confirmed", unpaid: "Payment pending", waiting: "Pending confirmation", rejected: "Rejected", cancelled: "Cancelled", invalid: "Invalid", other: "—" };
+const STAMP_COLOR: Record<string, string> = { good: "var(--crm-good)", warn: "var(--crm-warn)", bad: "var(--crm-bad)", neutral: "var(--crm-muted)", accent: "var(--crm-accent)" };
+const STAMP_TEXT: Record<string, string> = { verified: "Verified", confirmed: "Paid · Confirmed", unpaid: "Payment pending", waiting: "Pending confirmation", rejected: "Rejected", cancelled: "Cancelled", invalid: "Invalid", other: "—" };
 
 async function openScreenshot(id: string, toast: ReturnType<typeof useToast>["toast"]) {
   // Open the tab first (popup blockers allow it only in the click), then point it at the signed link.
@@ -79,7 +79,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
                 { label: "Invoice no.", value: bill.invoiceNumber ?? (bill.proforma ? "Issued when the payment is recorded" : bill.billDetailsMissing ? "Issued when Sales enter how it was paid" : "—") },
                 { label: "Receipt no.", value: bill.receiptNumber ?? bill.receiptNote ?? "—" },
                 ...(bill.creditNoteNumber ? [{ label: "Credit note", value: bill.creditNoteNumber }] : []),
-                ...(bill.tiggRecordedAt ? [{ label: "Recorded in Tigg", value: `${bill.tiggRecordedBy ?? ""} · ${fmtDateTime(bill.tiggRecordedAt)}` }] : []),
+                ...(bill.tiggRecordedAt ? [{ label: "Confirmed in Tigg by", value: `${bill.tiggRecordedBy ?? ""} · ${fmtDateTime(bill.tiggRecordedAt)}` }] : []),
                 { label: "Date", value: fmtDateTime(bill.dates.paidAt ?? bill.dates.recordedAt) },
                 { label: "Student", value: bill.student.name },
                 ...(bill.student.phone ? [{ label: "Phone", value: bill.student.phone }] : []),
@@ -134,7 +134,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
                 ...(bill.status === "unpaid" ? [] : [{ label: "Paid by", value: `${bill.payment.methodLabel}${bill.payment.reference ? ` · ${bill.payment.reference}` : ""}` }]),
                 { label: "How", value: bill.payment.pathLabel },
                 ...(bill.people.recordedBy ? [{ label: "Recorded by", value: bill.people.recordedBy }] : []),
-                ...(bill.people.confirmedBy ? [{ label: "Confirmed by", value: `${bill.people.confirmedBy}${bill.dates.decidedAt ? ` · ${fmtDateTime(bill.dates.decidedAt)}` : ""}` }] : []),
+                ...(bill.people.confirmedBy ? [{ label: "Verified by", value: `${bill.people.confirmedBy}${bill.dates.decidedAt ? ` · ${fmtDateTime(bill.dates.decidedAt)}` : ""}` }] : []),
                 ...(bill.people.rejectedBy ? [{ label: "Rejected by", value: bill.people.rejectedBy }] : []),
                 ...(bill.people.creditedTo ? [{ label: "Credited to", value: bill.people.creditedTo }] : bill.status === "waiting" ? [{ label: "Credit goes to", value: bill.people.creditOwner ?? "No salesperson" }] : []),
                 ...(bill.courseUnconfirmed ? [{ label: "Course", value: <span className="crm-late">Course not confirmed</span> }] : []),
@@ -191,7 +191,8 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
 }
 
 /**
- * Confirm a recorded sale: shows what was recorded and needs the "money
+ * Verify a recorded sale (R83: the button the Admin presses; Confirmed comes
+ * later, when the Super Admin records it in Tigg): shows what was recorded and needs the "money
  * arrived" tick (R20). A flagged discount is approved by confirming (R57); a
  * sale without a course, or whose amount received doesn't match the course's
  * total, gets its course set here first (R58).
@@ -228,7 +229,7 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
       const p = await crmApi.setPaymentCourse(row._id, courseId, discount === "" ? undefined : Number(discount));
       const title = courses.find((c) => c._id === courseId)?.title || "Course";
       setCur({ amount: p.amount, amountReceived: p.amountReceived, courseUnconfirmed: false, courseTitle: title, discount: p.discount ? { ...p.discount, limitPercent: 0, approved: false } : null });
-      toast({ title: "Course set", description: p.amountReceived !== null && p.amountReceived !== p.amount ? "The amount received doesn't match the course's total." : "The sale can be confirmed now." });
+      toast({ title: "Course set", description: p.amountReceived !== null && p.amountReceived !== p.amount ? "The amount received doesn't match the course's total." : "The sale can be verified now." });
       onDone();
     } catch (e: any) {
       setError(e?.message || "Could not set the course");
@@ -243,13 +244,13 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
     setError(null);
     try {
       await crmApi.confirmPayment(row._id, cur.amount);
-      toast({ title: "Sale confirmed", description: "The student has the course and the sale counts." });
+      toast({ title: "Sale verified", description: "The student has the course for good and the sale counts. It now waits to be recorded in Tigg." });
       onOpenChange(false);
       onDone();
     } catch (e: any) {
-      const msg = e?.code === "AMOUNT_CHANGED" ? "The amount changed meanwhile. Close this and open it again." : e?.message || "Could not confirm";
+      const msg = e?.code === "AMOUNT_CHANGED" ? "The amount changed meanwhile. Close this and open it again." : e?.message || "Could not verify";
       setError(msg);
-      toast({ title: "Not confirmed", description: msg, variant: "destructive" });
+      toast({ title: "Not verified", description: msg, variant: "destructive" });
     } finally {
       setBusy(false);
     }
@@ -258,8 +259,8 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
     <Dialog open={!!row} onOpenChange={(v) => !busy && onOpenChange(v)}>
       <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Confirm sale</DialogTitle>
-          <DialogDescription>The student gets the course and the sale counts once you confirm.</DialogDescription>
+          <DialogTitle>Verify sale</DialogTitle>
+          <DialogDescription>Once you verify, the student keeps the course for good and the sale counts. A Super Admin then records it in Tigg.</DialogDescription>
         </DialogHeader>
         {row && cur && (
           <CrmFacts
@@ -269,7 +270,7 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
               ...(cur.discount && cur.discount.amount > 0
                 ? [{ label: "Discount", value: <span style={cur.discount.needsApproval ? { color: "var(--crm-warn)", fontWeight: 600 } : undefined}>{rs(cur.discount.amount)} ({cur.discount.percent}%)</span> }]
                 : []),
-              ...(row.billType ? [{ label: "Bill type", value: row.billType === "prepaid" ? "Prepaid (already enrolled)" : "Postpaid (temporary access until confirmed)" }] : []),
+              ...(row.billType ? [{ label: "Bill type", value: row.billType === "prepaid" ? "Prepaid (temporary access until verified)" : "Postpaid (temporary access until verified)" }] : []),
               { label: "Paid by", value: `${row.methodLabel}${bill?.payment.reference ? ` · ${bill.payment.reference}` : ""}` },
               { label: "Student", value: row.studentName },
               { label: "Course", value: cur.courseUnconfirmed ? <span className="crm-late">Course not confirmed</span> : cur.courseTitle },
@@ -279,7 +280,7 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
             ]}
           />
         )}
-        {cur?.discount?.needsApproval && cur.discount.amount > 0 && <CrmNote>Needs approval: confirming approves this discount.</CrmNote>}
+        {cur?.discount?.needsApproval && cur.discount.amount > 0 && <CrmNote>Needs approval: verifying approves this discount.</CrmNote>}
         {mismatch && cur && (
           <p className="crm-late text-sm">
             {rs(cur.amountReceived)} was received but the course&apos;s total is {rs(cur.amount)}. Reject it, or change the course or discount below.
@@ -320,7 +321,7 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
             Cancel
           </Button>
           <Button type="button" className="bg-[var(--crm-good)] text-white hover:bg-[var(--crm-good)] hover:brightness-110" onClick={submit} disabled={busy || !checked || needsCourse}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Confirm sale
+            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Verify sale
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -743,6 +744,78 @@ export function EditBillPanel({ bill, onDone, onCancel }: { bill: LeadPayment; o
       </div>
       {invoiced ? <CrmNote>This bill has a tax invoice, so its amount can&apos;t change. To change it, an Admin rejects the bill (a credit note is issued) and a new one is recorded.</CrmNote> : missing ? <CrmNote>Saving the payment details issues the tax invoice. An Admin then verifies the bill.</CrmNote> : null}
     </Panel>
+  );
+}
+
+/**
+ * R83: the Super Admin has entered a verified sale into Tigg and copies Tigg's
+ * receipt number here; the bill becomes Confirmed. The server checks the
+ * number is not on another bill.
+ */
+export function RecordInTiggDialog({ row, onOpenChange, onDone }: { row: BillRow | null; onOpenChange: (v: boolean) => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [receipt, setReceipt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setReceipt("");
+    setError(null);
+  }, [row?._id]);
+  const submit = async () => {
+    if (!row) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await crmApi.setTiggRecorded(row._id, true, receipt.trim());
+      toast({ title: "Confirmed", description: `Recorded in Tigg with receipt ${receipt.trim()}.` });
+      onOpenChange(false);
+      onDone();
+    } catch (e: any) {
+      setError(e?.message || "Could not record it");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open={!!row} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>Record in Tigg</DialogTitle>
+          <DialogDescription>Enter this sale in Tigg first, then copy Tigg&apos;s receipt number here. The bill becomes Confirmed.</DialogDescription>
+        </DialogHeader>
+        {row && (
+          <CrmFacts
+            items={[
+              { label: "Invoice no.", value: row.invoiceNumber ?? "Issued when you record it" },
+              { label: "Student", value: row.studentName },
+              { label: "Course", value: row.courseTitle },
+              { label: "Amount", value: rs(row.amount) },
+              ...(row.pricing ? [{ label: "VAT included", value: rs(row.pricing.vatAmount) }] : []),
+              { label: "Paid by", value: row.methodLabel },
+            ]}
+          />
+        )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+          className="flex flex-col gap-2"
+        >
+          <Label htmlFor="tigg-receipt">Receipt number from Tigg</Label>
+          <input id="tigg-receipt" className="crm-input" value={receipt} maxLength={50} autoFocus onChange={(e) => setReceipt(e.target.value)} />
+          {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || !receipt.trim()}>
+              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record and confirm
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
