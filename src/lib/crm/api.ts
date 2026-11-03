@@ -197,7 +197,10 @@ export type Rep = {
   createdAt: string;
   lastLogin: string | null;
   profile: { isAvailable: boolean; capacity: number | null; activeLeadCount: number; grades: number[]; districts: string[]; courseIds: string[]; lastAssignedAt: string | null };
+  /** R85: an Admin or Super Admin offered as a lead owner (Super Admin only); not a Sales account. */
+  isAdmin?: boolean;
 };
+export type LeadOwnerAdmin = { _id: string; name: string; role: "admin" | "super_admin"; isMe: boolean };
 
 export type OutreachDecision = { allowed: boolean; reasons: string[]; basis: { signalType: string; signalAt: string } | null };
 
@@ -255,6 +258,8 @@ export const crmApi = {
   cancelLeadCourse: (leadId: string, assignmentId: string, reason: string) => request("POST", `/leads/${leadId}/courses/${assignmentId}/cancel`, { reason }),
 
   reps: () => request<Rep[]>("GET", `/reps`),
+  // R85: the Admins and Super Admins a Super Admin may give leads to.
+  leadOwnerAdmins: () => request<LeadOwnerAdmin[]>("GET", `/lead-owner-admins`),
   inviteRep: (email: string, message?: string) => request<{ emailSent: boolean; invitationUrl: string; message: string }>("POST", `/reps/invite`, { email, message }),
   updateRepProfile: (adminId: string, body: Record<string, unknown>) => request("PUT", `/reps/${adminId}/profile`, body),
   deactivateRep: (adminId: string, reason: string, reassignTo?: string | null) => request<{ leadsMoved: number }>("POST", `/reps/${adminId}/deactivate`, { reason, reassignTo }),

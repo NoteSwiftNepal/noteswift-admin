@@ -13,7 +13,7 @@ import { useAdmin } from "@/context/admin-context";
 import { CrmPageHeader, CrmPill } from "@/components/crm/ui";
 import { LeadDrawer } from "@/components/crm/leads/lead-drawer";
 import { AddLeadModal } from "@/components/crm/leads/add-lead-modal";
-import { LeadRow, LeadView, Pagination, Rep, STAGE, crmApi, fetchCourseCatalog, relDateTime, sourceLabel } from "@/lib/crm/api";
+import { LeadOwnerAdmin, LeadRow, LeadView, Pagination, Rep, STAGE, crmApi, fetchCourseCatalog, relDateTime, sourceLabel } from "@/lib/crm/api";
 
 const BASE = "/dashboard/crm/leads";
 const PAGE_SIZE = 25;
@@ -52,6 +52,7 @@ export function LeadsSection() {
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<{ _id: string; title: string; price?: number }[]>([]);
   const [reps, setReps] = useState<Rep[]>([]);
+  const [adminOwners, setAdminOwners] = useState<LeadOwnerAdmin[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkTo, setBulkTo] = useState("");
   const [bulkReason, setBulkReason] = useState("");
@@ -109,6 +110,8 @@ export function LeadsSection() {
   useEffect(() => {
     fetchCourseCatalog().then(setCourses);
     if (can("crm.manage_reps")) crmApi.reps().then(setReps, () => setReps([]));
+    // R85: a Super Admin may also give leads to themselves and to other Admins.
+    if (can("admins.manage")) crmApi.leadOwnerAdmins().then(setAdminOwners, () => setAdminOwners([]));
   }, [can]);
 
   // The drawer: opening pushes /leads/[id] (Back closes it); closing goes back
@@ -133,8 +136,12 @@ export function LeadsSection() {
   };
 
   const activeReps = reps.filter((r) => r.status === "active");
+  // R85: Admins as owners, after the Sales team; "(you)" marks the signed-in Super Admin.
+  const admins: Rep[] = adminOwners.map((a) => ({ _id: a._id, name: `${a.name}${a.isMe ? " (you)" : ""} · ${a.role === "super_admin" ? "Super Admin" : "Admin"}`, email: "", status: "active", createdAt: "", lastLogin: null, profile: null as any, isAdmin: true }));
+  const owners = [...reps, ...admins];
+  const activeOwners = [...activeReps, ...admins];
   // An invited rep has no name yet ("Pending Registration") and owns no leads; a deactivated one may.
-  const registeredReps = reps.filter((r) => r.status === "active" || r.status === "inactive");
+  const registeredReps = [...reps.filter((r) => r.status === "active" || r.status === "inactive"), ...admins];
   const allSelected = rows.length > 0 && rows.every((r) => selected.includes(r._id));
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
@@ -183,7 +190,7 @@ export function LeadsSection() {
           <input className="crm-input" type="search" placeholder="Search name, phone, school" aria-label="Search leads" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           {isAdmin && (
             <select className="crm-input" style={{ flex: "0 1 200px" }} aria-label="Owner" value={filters.ownerId || "any"} onChange={(e) => setParam({ ownerId: e.target.value })}>
-              <option value="any">All salespeople</option>
+              <option value="any">{admins.length ? "All owners" : "All salespeople"}</option>
               <option value="none">Unassigned</option>
               {registeredReps.map((r) => (
                 <option key={r._id} value={r._id}>
@@ -224,7 +231,7 @@ export function LeadsSection() {
               <option value="">Assign to…</option>
               <option value="auto">Round-robin</option>
               <option value="none">Unassigned</option>
-              {activeReps.map((r) => (
+              {activeOwners.map((r) => (
                 <option key={r._id} value={r._id}>
                   {r.name}
                 </option>
@@ -328,7 +335,7 @@ export function LeadsSection() {
       {leadId && (
         <>
           <div className="crm-overlay" onClick={closeLead} />
-          <LeadDrawer key={leadId} leadId={leadId} reps={reps} courses={courses} onClose={closeLead} onChanged={refresh} />
+          <LeadDrawer key={leadId} leadId={leadId} reps={owners} courses={courses} onClose={closeLead} onChanged={refresh} />
         </>
       )}
       <AddLeadModal
