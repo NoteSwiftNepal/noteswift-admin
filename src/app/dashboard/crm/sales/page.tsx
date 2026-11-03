@@ -158,8 +158,9 @@ function SalesBillsInner() {
               {rows.map((r) => (
                 <tr key={r._id}>
                   <td className="whitespace-nowrap font-semibold">
-                    {r.invoiceNumber ?? r.receiptNumber ?? <span className="crm-muted">{r.proforma ? "Proforma" : "—"}</span>}
-                    {r.invoiceNumber && r.receiptNumber && <span className="crm-sub">{r.receiptNumber}</span>}
+                    {/* R84: the invoice number until Tigg's receipt number replaces it. */}
+                    {r.receiptNumber ?? r.invoiceNumber ?? <span className="crm-muted">—</span>}
+                    {!r.receiptNumber && r.proforma && <span className="crm-sub">Proforma</span>}
                     {r.creditNoteNumber && <span className="crm-sub">{r.creditNoteNumber}</span>}
                     {r.tiggRecordedAt && <span className="crm-sub">In Tigg · {r.tiggRecordedBy}</span>}
                   </td>

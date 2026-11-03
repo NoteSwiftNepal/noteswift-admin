@@ -49,7 +49,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
     <Dialog open={!!paymentId} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>{bill?.proforma ? "Proforma" : `Bill ${bill?.invoiceNumber ?? bill?.receiptNumber ?? ""}`}</DialogTitle>
+          <DialogTitle>{`${bill?.proforma ? "Proforma" : "Bill"} ${bill?.receiptNumber ?? bill?.invoiceNumber ?? ""}`}</DialogTitle>
           <DialogDescription className="sr-only">Payment receipt details</DialogDescription>
         </DialogHeader>
         {error ? (
@@ -76,8 +76,9 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
             </div>
             <CrmFacts
               items={[
-                { label: "Invoice no.", value: bill.invoiceNumber ?? (bill.proforma ? "Issued when the payment is recorded" : bill.billDetailsMissing ? "Issued when Sales enter how it was paid" : "—") },
-                { label: "Receipt no.", value: bill.receiptNumber ?? bill.receiptNote ?? "—" },
+                // R84: the receipt number from Tigg replaces the invoice number.
+                bill.receiptNumber ? { label: "Receipt no.", value: bill.receiptNumber } : { label: "Invoice no.", value: bill.invoiceNumber ?? "—" },
+                ...(bill.receiptNumber ? [] : [{ label: "Receipt no.", value: bill.receiptNote ?? "—" }]),
                 ...(bill.creditNoteNumber ? [{ label: "Credit note", value: bill.creditNoteNumber }] : []),
                 ...(bill.tiggRecordedAt ? [{ label: "Confirmed in Tigg by", value: `${bill.tiggRecordedBy ?? ""} · ${fmtDateTime(bill.tiggRecordedAt)}` }] : []),
                 { label: "Date", value: fmtDateTime(bill.dates.paidAt ?? bill.dates.recordedAt) },
@@ -670,9 +671,9 @@ export function PostpaidPaymentPanel({ bill, courseTitle, onDone, onCancel }: { 
 }
 
 /**
- * R81: correct a bill until it is confirmed. Sales on their own leads, Admin
+ * R81: correct a bill until it is verified. Sales on their own leads, Admin
  * and Super Admin. Payment details only once a payment is recorded; the amount
- * only before the tax invoice. The server decides; a refusal shows here.
+ * at any time (R84: the invoice number stays). The server decides; a refusal shows here.
  */
 export function EditBillPanel({ bill, onDone, onCancel }: { bill: LeadPayment; onDone: () => void; onCancel: () => void }) {
   const { toast } = useToast();
@@ -696,13 +697,12 @@ export function EditBillPanel({ bill, onDone, onCancel }: { bill: LeadPayment; o
     if (f.size > MAX_SCREENSHOT) return setError("The screenshot is larger than 5 MB.");
     setFile(f);
   };
-  const invoiced = !!bill.invoiceNumber;
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
       const form = new FormData();
-      if (!invoiced) form.set("amount", amount);
+      form.set("amount", amount);
       if (waiting) {
         form.set("method", method);
         form.set("reference", reference.trim());
@@ -722,14 +722,14 @@ export function EditBillPanel({ bill, onDone, onCancel }: { bill: LeadPayment; o
     }
   };
   return (
-    <Panel title="Edit bill" onSubmit={submit} submitLabel="Save" onCancel={onCancel} busy={busy} error={error} canSubmit={invoiced || /^\d+$/.test(amount)}>
+    <Panel title="Edit bill" onSubmit={submit} submitLabel="Save" onCancel={onCancel} busy={busy} error={error} canSubmit={/^\d+$/.test(amount)}>
       <span>
         {bill.courseTitle || "Course"}
-        {invoiced ? ` · ${bill.invoiceNumber}` : ""}
+        {bill.invoiceNumber ? ` · ${bill.invoiceNumber}` : ""}
       </span>
       <div className="crm-form">
         <Field label="Amount paid (Rs)">
-          <input className="crm-input" inputMode="numeric" value={amount} disabled={invoiced} onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))} />
+          <input className="crm-input" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))} />
         </Field>
         {waiting && <PaymentFields method={method} setMethod={setMethod} reference={reference} setReference={setReference} received={received} setReceived={setReceived} minDay={missing ? "2000-01-01" : dayInput(new Date(today.getTime() - 7 * 86_400_000))} maxDay={dayInput(today)} needsReference={method !== "cash" && !file && !bill.hasScreenshot} pickFile={pickFile} />}
         <Field label="Buyer address (optional)" full>
@@ -742,7 +742,7 @@ export function EditBillPanel({ bill, onDone, onCancel }: { bill: LeadPayment; o
           <textarea className="crm-input" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
         </Field>
       </div>
-      {invoiced ? <CrmNote>This bill has a tax invoice, so its amount can&apos;t change. To change it, an Admin rejects the bill (a credit note is issued) and a new one is recorded.</CrmNote> : missing ? <CrmNote>Saving the payment details issues the tax invoice. An Admin then verifies the bill.</CrmNote> : null}
+      {missing ? <CrmNote>Check how it was paid and save. An Admin then verifies the bill.</CrmNote> : null}
     </Panel>
   );
 }
