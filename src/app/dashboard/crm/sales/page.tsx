@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/context/admin-context";
 import { CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmPill, CrmTable, CrmTabs, GOOD_BUTTON } from "@/components/crm/ui";
 import { DataState, ReasonDialog } from "@/components/crm/crm-ui";
-import { BillDialog, BillStatusPill, ConfirmPaymentDialog } from "@/components/crm/bill-dialogs";
+import { BillDialog, BillStatusPill, ConfirmPaymentDialog, RecordInTiggDialog } from "@/components/crm/bill-dialogs";
 import { MonthSelect, useTargetMonths } from "@/components/crm/targets";
 import { useSearchParams } from "next/navigation";
 import { BillRow, BillSummaryItem, BillTab, Pagination, Rep, crmApi, fmtDateTime, rs } from "@/lib/crm/api";
@@ -20,9 +20,9 @@ import { BillRow, BillSummaryItem, BillTab, Pagination, Rep, crmApi, fmtDateTime
 // S8: the prototype's tabs (Cancelled sales are under All).
 const TABS: { value: BillTab; label: string }[] = [
   { value: "waiting", label: "Waiting" },
-  { value: "confirmed", label: "Confirmed" },
+  // R83: verified sales wait to be recorded in Tigg; Confirmed = recorded there.
   { value: "tigg", label: "To record in Tigg" },
-  { value: "tigg_recorded", label: "Recorded in Tigg" },
+  { value: "confirmed", label: "Confirmed" },
   { value: "rejected", label: "Rejected" },
   { value: "all", label: "All" },
 ];
@@ -88,16 +88,9 @@ function SalesBillsInner() {
     if (can("crm.manage_reps")) crmApi.reps().then((r) => setReps(r.filter((x) => x.status === "active" || x.status === "inactive")), () => setReps([]));
   }, [can]);
 
-  // R80: the Admin has entered the sale into Tigg by hand (or undoes a mistaken click).
-  const setTigg = async (r: BillRow) => {
-    try {
-      await crmApi.setTiggRecorded(r._id, !r.tiggRecordedAt);
-      toast({ title: r.tiggRecordedAt ? "Moved back to To record" : "Recorded in Tigg" });
-      await load();
-    } catch (e: any) {
-      toast({ title: "Not done", description: e?.message, variant: "destructive" });
-    }
-  };
+  // R83: the Super Admin records a verified sale in Tigg with Tigg's receipt number, or undoes it.
+  const [tiggRow, setTiggRow] = useState<BillRow | null>(null);
+  const [undoRow, setUndoRow] = useState<BillRow | null>(null);
 
   const setFilter = (fn: () => void) => {
     fn();
@@ -106,7 +99,7 @@ function SalesBillsInner() {
 
   return (
     <div className="flex flex-col gap-4">
-      <CrmPageHeader crumb="Sales & Bills" title="Sales & Bills" subtitle="Manual sales stay pending until an admin confirms the money arrived. App purchases verify automatically." />
+      <CrmPageHeader crumb="Sales & Bills" title="Sales & Bills" subtitle="An Admin verifies that the money arrived (app purchases verify themselves). A sale is Confirmed once a Super Admin records it in Tigg with Tigg's receipt number." />
 
       {summary.length > 0 && (
         <CrmKpis>
@@ -142,8 +135,8 @@ function SalesBillsInner() {
             onChange={(v) => setFilter(() => setBsMonth(v))}
           />
         </div>
-        <CrmTabs label="Status" value={tab} onChange={(v) => { setTab(v); setPage(1); }} tabs={(can("crm.confirm_payments") ? TABS : TABS.filter((t) => !t.value.startsWith("tigg"))).map((t) => ({ ...t, count: counts[t.value] ?? null }))} />
-        <DataState loading={loading} error={error} onRetry={load} empty={rows.length === 0} emptyText={tab === "waiting" ? "Nothing waiting for confirmation." : "No sales here. Try another tab or clear the filters."}>
+        <CrmTabs label="Status" value={tab} onChange={(v) => { setTab(v); setPage(1); }} tabs={(can("crm.confirm_payments") ? TABS : TABS.filter((t) => t.value !== "tigg")).map((t) => ({ ...t, count: counts[t.value] ?? null }))} />
+        <DataState loading={loading} error={error} onRetry={load} empty={rows.length === 0} emptyText={tab === "waiting" ? "Nothing waiting for verification." : tab === "tigg" ? "Nothing waiting to be recorded in Tigg." : "No sales here. Try another tab or clear the filters."}>
           <CrmTable>
             <thead>
               <tr>
@@ -206,14 +199,19 @@ function SalesBillsInner() {
                       <Button type="button" size="sm" variant="outline" onClick={() => setBillId(r._id)}>
                         Bill
                       </Button>
-                      {r.canRecordTigg && (tab === "tigg" || tab === "tigg_recorded") && (
-                        <Button type="button" size="sm" variant={r.tiggRecordedAt ? "ghost" : "default"} onClick={() => setTigg(r)}>
-                          {r.tiggRecordedAt ? "Undo" : "Record"}
+                      {r.canRecordTigg && !r.tiggRecordedAt && (
+                        <Button type="button" size="sm" className={GOOD_BUTTON} onClick={() => setTiggRow(r)}>
+                          Record in Tigg
+                        </Button>
+                      )}
+                      {r.canRecordTigg && r.tiggRecordedAt && tab === "confirmed" && (
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setUndoRow(r)}>
+                          Undo
                         </Button>
                       )}
                       {r.canConfirm && (
                         <Button type="button" size="sm" className={GOOD_BUTTON} onClick={() => setConfirmRow(r)}>
-                          Confirm
+                          Verify
                         </Button>
                       )}
                       {r.canReject && (
@@ -251,6 +249,24 @@ function SalesBillsInner() {
 
       <BillDialog paymentId={billId} onOpenChange={(v) => !v && setBillId(null)} />
       <ConfirmPaymentDialog row={confirmRow} onOpenChange={(v) => !v && setConfirmRow(null)} onDone={load} />
+      <RecordInTiggDialog row={tiggRow} onOpenChange={(v) => !v && setTiggRow(null)} onDone={load} />
+      {undoRow && (
+        <ReasonDialog
+          open={!!undoRow}
+          onOpenChange={(v) => !v && setUndoRow(null)}
+          title="Undo the Tigg record"
+          description={`Moves ${undoRow.invoiceNumber ?? "this bill"} back to To record in Tigg and removes receipt ${undoRow.receiptNumber ?? ""}. Fix the entry in Tigg too.`}
+          confirmLabel="Undo"
+          optional
+          destructive
+          onConfirm={async () => {
+            await crmApi.setTiggRecorded(undoRow._id, false);
+            toast({ title: "Moved back to To record in Tigg" });
+            setUndoRow(null);
+            await load();
+          }}
+        />
+      )}
       <ReasonDialog
         open={!!reasonFor}
         onOpenChange={(v) => !v && setReasonFor(null)}
