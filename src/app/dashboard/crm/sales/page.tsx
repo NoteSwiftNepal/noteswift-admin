@@ -62,7 +62,20 @@ function SalesBillsInner() {
   const [reasonFor, setReasonFor] = useState<{ row: BillRow; kind: "reject" | "cancel" } | null>(null);
 
   // S8: Salesperson and Month only, as the prototype.
-  const filters = { repId: repId === ANY ? undefined : repId, bsMonth: bsMonth || undefined };
+  // R87: search by bill, receipt or credit note number, student, buyer, course (and phone for Sales and Super Admin).
+  // A search looks across every month, so an old bill is found without changing the month first.
+  const [searchInput, setSearchInput] = useState("");
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (searchInput.trim() !== q) {
+        setQ(searchInput.trim());
+        setPage(1);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]); // eslint-disable-line react-hooks/exhaustive-deps
+  const filters = { repId: repId === ANY ? undefined : repId, bsMonth: q ? undefined : bsMonth || undefined, q: q || undefined };
   const filterKey = JSON.stringify(filters);
 
   const load = useCallback(async () => {
@@ -113,6 +126,15 @@ function SalesBillsInner() {
 
       <CrmCard flush>
         <div className="crm-card-b crm-toolbar">
+          <input
+            id="bills-search"
+            className="crm-input"
+            type="search"
+            placeholder={can("orders.view_sensitive") || !isAdmin ? "Search bill no., receipt, student, phone, course" : "Search bill no., receipt, student, course"}
+            aria-label="Search sales and bills"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
           {isAdmin && reps.length > 0 && (
             <Select value={repId} onValueChange={(v) => setFilter(() => setRepId(v))}>
               <SelectTrigger className="w-full sm:w-[180px]" aria-label="Salesperson">
@@ -128,15 +150,14 @@ function SalesBillsInner() {
               </SelectContent>
             </Select>
           )}
-          <MonthSelect
-            months={months}
-            value={bsMonth ?? ""}
-            anyLabel="Any month"
-            onChange={(v) => setFilter(() => setBsMonth(v))}
-          />
+          {q ? (
+            <span className="crm-muted crm-small">Searching all months</span>
+          ) : (
+            <MonthSelect months={months} value={bsMonth ?? ""} anyLabel="Any month" onChange={(v) => setFilter(() => setBsMonth(v))} />
+          )}
         </div>
         <CrmTabs label="Status" value={tab} onChange={(v) => { setTab(v); setPage(1); }} tabs={(can("crm.confirm_payments") ? TABS : TABS.filter((t) => t.value !== "tigg")).map((t) => ({ ...t, count: counts[t.value] ?? null }))} />
-        <DataState loading={loading} error={error} onRetry={load} empty={rows.length === 0} emptyText={tab === "waiting" ? "Nothing waiting for verification." : tab === "tigg" ? "Nothing waiting to be recorded in Tigg." : "No sales here. Try another tab or clear the filters."}>
+        <DataState loading={loading} error={error} onRetry={load} empty={rows.length === 0} emptyText={q ? `Nothing matches “${q}” in this tab. Try another tab or a different search.` : tab === "waiting" ? "Nothing waiting for verification." : tab === "tigg" ? "Nothing waiting to be recorded in Tigg." : "No sales here. Try another tab or clear the filters."}>
           <CrmTable>
             <thead>
               <tr>
