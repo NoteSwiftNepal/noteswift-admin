@@ -49,7 +49,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
     <Dialog open={!!paymentId} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100vh-48px)] overflow-y-auto sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>{`${bill?.proforma ? "Proforma" : "Bill"} ${bill?.receiptNumber ?? bill?.invoiceNumber ?? ""}`}</DialogTitle>
+          <DialogTitle>{`Bill ${bill?.receiptNumber ?? bill?.invoiceNumber ?? ""}`}</DialogTitle>
           <DialogDescription className="sr-only">Payment receipt details</DialogDescription>
         </DialogHeader>
         {error ? (
@@ -65,7 +65,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
                 <b className="crm-display text-base">{bill.seller.name}</b>
                 <span className="crm-sub">{bill.seller.address}</span>
                 <span className="crm-sub">VAT No: {bill.seller.vatNumber}</span>
-                <span className="crm-sub">{bill.proforma ? "Proforma invoice" : bill.invoiceNumber ? "Tax invoice" : "Bill"}</span>
+                <span className="crm-sub">{bill.invoiceNumber ? "Invoice" : "Bill"}</span>
               </div>
               <span
                 className="crm-display self-start rounded-md border-2 px-2 py-0.5 text-xs font-bold uppercase tracking-[0.08em]"
@@ -155,7 +155,7 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
           )}
           {paymentId && (bill?.proforma || bill?.invoiceNumber) && (
             <Button type="button" variant="outline" onClick={() => crmApi.downloadDocument(paymentId).catch((e: any) => toast({ title: "Could not download", description: e?.message, variant: "destructive" }))}>
-              <Download className="mr-1 h-4 w-4" /> {bill.proforma ? "Proforma" : "Tax invoice"}
+              <Download className="mr-1 h-4 w-4" /> Invoice
             </Button>
           )}
           {paymentId && bill?.creditNoteNumber && (

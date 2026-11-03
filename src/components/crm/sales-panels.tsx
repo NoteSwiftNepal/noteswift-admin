@@ -82,7 +82,7 @@ export function LeadSalesSection({ leadId, refreshKey = 0, courseId, onChanged }
             return (
               <div key={p._id} className="crm-li">
                 <div className="crm-who">
-                  <b>{p.receiptNumber || p.invoiceNumber || (p.billStatus === "awaiting-payment" ? "Proforma" : "—")}</b> <span className="crm-muted crm-small">· {p.courseTitle || "Course"}</span>
+                  <b>{p.receiptNumber || p.invoiceNumber || "—"}</b> <span className="crm-muted crm-small">· {p.courseTitle || "Course"}</span>
                   <span className="crm-sub">
                     {[p.amount !== undefined ? rs(p.amount) : null, p.paymentMethod ? PAYMENT_METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod : PAYMENT_PATH_LABELS[p.path] ?? p.path, fmtDate(p.date)].filter(Boolean).join(" · ")}
                     {full && p.status === "completed" ? ` · credit: ${p.creditedToMe ? "you" : p.creditReason?.replace(/_/g, " ") || "not decided yet"}` : p.creditedToMe ? " · credited to you" : ""}
