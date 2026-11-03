@@ -376,7 +376,7 @@ export function CoursePicker({ value, leadCourses = [], courses, onChange }: { v
  * then the other paid courses, then "Course not confirmed yet". The discount starts at the
  * course's public discount; the server prices it (preview) and flags a
  * discount above the limit. Sales on their own leads, Admin and Super Admin
- * on any lead; someone else always confirms.
+ * on any lead; someone else confirms, except a Super Admin may confirm their own (R82).
  */
 export function RecordSalePanel({
   leadId,
