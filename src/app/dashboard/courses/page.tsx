@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 // import { useRouter } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
@@ -680,13 +681,15 @@ export default function CoursesManagementPage() {
   };
 
   const filteredCourses = courses.filter(course => course.type === activeTab);
+  const debouncedEnrollmentSearch = useDebouncedValue(enrollmentFilters.search);
 
-  // Filter enrollments based on current filters
+  // Filter enrollments based on current filters (the search waits for typing to pause)
+  const enrollmentSearch = debouncedEnrollmentSearch.toLowerCase();
   const filteredEnrollments = enrollments.filter(enrollment => {
-    const matchesSearch = enrollmentFilters.search === '' ||
-      enrollment.studentName?.toLowerCase().includes(enrollmentFilters.search.toLowerCase()) ||
-      enrollment.studentEmail?.toLowerCase().includes(enrollmentFilters.search.toLowerCase()) ||
-      enrollment.courseName?.toLowerCase().includes(enrollmentFilters.search.toLowerCase());
+    const matchesSearch = enrollmentSearch === '' ||
+      enrollment.studentName?.toLowerCase().includes(enrollmentSearch) ||
+      enrollment.studentEmail?.toLowerCase().includes(enrollmentSearch) ||
+      enrollment.courseName?.toLowerCase().includes(enrollmentSearch);
 
     const matchesCourse = enrollmentFilters.course === 'all' || enrollment.courseId === enrollmentFilters.course;
     const matchesEnrollmentType = enrollmentFilters.enrollmentType === 'all' || enrollment.enrollmentType === enrollmentFilters.enrollmentType;

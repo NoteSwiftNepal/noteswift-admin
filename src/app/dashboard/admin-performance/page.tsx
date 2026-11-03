@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,6 +132,7 @@ export default function AdminPerformancePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState('all');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search);
   const [roleFilter, setRoleFilter] = useState<'all' | ProductRole>('all');
   const [showIdle, setShowIdle] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('paymentCollected');
@@ -187,7 +189,7 @@ export default function AdminPerformancePage() {
 
   const { activeRows, idleRows } = useMemo(() => {
     if (!data) return { activeRows: [], idleRows: [] };
-    const term = search.trim().toLowerCase();
+    const term = debouncedSearch.trim().toLowerCase();
     const filtered = data.admins.filter((a) =>
       (roleFilter === 'all' || productRoleOf(a.role) === roleFilter) &&
       (!term || a.name?.toLowerCase().includes(term) || a.email?.toLowerCase().includes(term))
@@ -202,7 +204,7 @@ export default function AdminPerformancePage() {
       return sortDesc ? -cmp : cmp;
     });
     return { activeRows: sorted.filter(hasActivity), idleRows: sorted.filter((a) => !hasActivity(a)) };
-  }, [data, search, roleFilter, sortKey, sortDesc]);
+  }, [data, debouncedSearch, roleFilter, sortKey, sortDesc]);
 
   const rows = showIdle ? [...activeRows, ...idleRows] : activeRows;
 

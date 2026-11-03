@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -284,8 +285,17 @@ export default function OrdersPaymentsPage() {
   };
 
   const searchCodes = async (query: string) => {
+    lastCodeSearch.current = query.trim();
     await runCodesQuery(query.trim() || undefined);
   };
+  // The codes search runs on its own once typing pauses; Enter or the button run it at once.
+  const lastCodeSearch = useRef('');
+  const debouncedCodeSearch = useDebouncedValue(codeSearchQuery);
+  useEffect(() => {
+    if (activeTab !== 'codes' || debouncedCodeSearch.trim() === lastCodeSearch.current) return;
+    searchCodes(debouncedCodeSearch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedCodeSearch]);
 
   const fetchAdmins = async () => {
     try {

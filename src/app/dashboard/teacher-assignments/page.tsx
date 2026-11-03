@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +75,7 @@ export default function TeacherAssignmentsPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebouncedValue(searchQuery);
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [isBulkAssignDialogOpen, setIsBulkAssignDialogOpen] = useState(false);
   // Support multiple course-subject pairs for cross-course assignment
@@ -298,8 +300,8 @@ export default function TeacherAssignmentsPage() {
   };
 
   const filteredTeachers = teachers.filter(teacher =>
-    `${teacher.firstName} ${teacher.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    teacher.email.toLowerCase().includes(searchQuery.toLowerCase())
+    `${teacher.firstName} ${teacher.lastName}`.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+    teacher.email.toLowerCase().includes(debouncedSearch.toLowerCase())
   );
 
   if (loading) {

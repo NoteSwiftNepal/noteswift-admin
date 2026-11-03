@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2, GraduationCap, School } from "lucide-react";
 import { AssignCourseDialog, AssignCourseFormData, AssignCourseMode } from "@/components/users/AssignCourseDialog";
@@ -278,6 +279,7 @@ export default function UsersPage() {
   const [studentsHasMore, setStudentsHasMore] = useState(false);
   const [studentsTotal, setStudentsTotal] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedTeacherSearch = useDebouncedValue(searchTerm);
   const [studentSearch, setStudentSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -699,8 +701,8 @@ export default function UsersPage() {
   // Filter teachers
   const filteredTeachers = teachers
     .filter(teacher => {
-      return (teacher.full_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-             (teacher.email?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+      return (teacher.full_name?.toLowerCase() || '').includes(debouncedTeacherSearch.toLowerCase()) ||
+             (teacher.email?.toLowerCase() || '').includes(debouncedTeacherSearch.toLowerCase());
     })
     .sort((a, b) => {
       switch (sortBy) {

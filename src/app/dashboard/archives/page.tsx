@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -168,8 +169,16 @@ export default function ArchivesPage() {
     }
   }, [activeTab, classesPagination.page, assignmentsPagination.page, fetchLiveClasses, fetchAssignments]);
 
-  const handleSearch = () => {
-    setSearchQuery(searchInput);
+  // The search runs on its own once typing pauses; Enter or the button run it at once.
+  const debouncedInput = useDebouncedValue(searchInput);
+  useEffect(() => {
+    if (debouncedInput.trim() === searchQuery.trim()) return;
+    handleSearch(debouncedInput);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedInput]);
+
+  const handleSearch = (text: string = searchInput) => {
+    setSearchQuery(text);
     if (activeTab === 'classes') {
       setClassesPagination(p => ({ ...p, page: 1 }));
     } else if (activeTab === 'assignments') {
@@ -363,7 +372,7 @@ export default function ArchivesPage() {
               />
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSearch} variant="default">
+              <Button onClick={() => handleSearch()} variant="default">
                 <Search className="h-4 w-4 mr-2" />
                 Search
               </Button>

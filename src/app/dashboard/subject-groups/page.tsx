@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -106,6 +107,18 @@ export default function SubjectGroupsPage() {
     fetchGroups();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The search runs on its own once typing pauses (the status filter still uses Apply).
+  const debouncedSearch = useDebouncedValue(search);
+  const searchStarted = React.useRef(false);
+  useEffect(() => {
+    if (!searchStarted.current) {
+      searchStarted.current = true;
+      return;
+    }
+    fetchGroups(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
   const handleFilterChange = () => {
     fetchGroups(1);

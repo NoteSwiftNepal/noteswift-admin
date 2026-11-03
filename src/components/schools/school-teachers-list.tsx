@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, UserPlus, UserMinus } from "lucide-react";
@@ -19,6 +20,7 @@ export function SchoolTeachersList({ schoolId }: SchoolTeachersListProps) {
   const [allTeachers, setAllTeachers] = useState<TeacherSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm);
 
   const load = async () => {
     try {
@@ -62,7 +64,7 @@ export function SchoolTeachersList({ schoolId }: SchoolTeachersListProps) {
 
   const unassignedTeachers = allTeachers
     .filter((t) => !t.schoolId)
-    .filter((t) => name(t).toLowerCase().includes(searchTerm.toLowerCase()) || t.email.toLowerCase().includes(searchTerm.toLowerCase()));
+    .filter((t) => name(t).toLowerCase().includes(debouncedSearch.toLowerCase()) || t.email.toLowerCase().includes(debouncedSearch.toLowerCase()));
 
   if (loading) {
     return <div className="text-center py-8">Loading teachers...</div>;

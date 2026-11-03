@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ export function AdminList({ schoolId }: AdminListProps = {}) {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const { admin: currentAdmin, canDeleteAdmin } = useAdmin();
 
   useEffect(() => {
@@ -78,8 +80,8 @@ export function AdminList({ schoolId }: AdminListProps = {}) {
 
   const filteredAdmins = admins
     .filter(admin =>
-      admin.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      admin.email.toLowerCase().includes(searchTerm.toLowerCase())
+      admin.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      admin.email.toLowerCase().includes(debouncedSearch.toLowerCase())
     )
     .sort((a, b) => getRolePriority(a.role) - getRolePriority(b.role));
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export function SchoolList() {
   const [schools, setSchools] = useState<School[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const [addOpen, setAddOpen] = useState(false);
   const { can } = useAdmin();
   const canManageSchools = can('schools.manage');
@@ -73,8 +75,8 @@ export function SchoolList() {
   };
 
   const filteredSchools = schools.filter(school =>
-    school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    school.shortCode.toLowerCase().includes(searchTerm.toLowerCase())
+    school.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+    school.shortCode.toLowerCase().includes(debouncedSearch.toLowerCase())
   );
 
   if (loading) {
