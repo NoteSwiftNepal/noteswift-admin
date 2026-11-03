@@ -199,6 +199,7 @@ function SalesBillsInner() {
                   )}
                   <td>
                     <BillStatusPill status={r.status} label={r.statusLabel} />
+                    {r.confirmNote && <span className="crm-sub">{r.confirmNote}</span>}
                   </td>
                   <td>
                     <div className="crm-actions flex-nowrap">

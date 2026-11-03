@@ -361,6 +361,8 @@ export type BillRow = {
   billDetailsMissing: boolean;
   proforma: boolean;
   canRecordTigg: boolean;
+  /** Why an approver sees no Confirm on an open bill. */
+  confirmNote?: string | null;
   studentName: string;
   leadId: string | null;
   courseTitle: string;
