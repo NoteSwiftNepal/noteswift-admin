@@ -108,6 +108,8 @@ export const API_ENDPOINTS = {
     STUDENT_STATS: `${API_BASE_URL}/api/admin/users/students/stats`,
     BAN: (id: string) => `${API_BASE_URL}/api/admin/users/${id}/ban`,
     UNBAN: (id: string) => `${API_BASE_URL}/api/admin/users/${id}/unban`,
+    // { isStaff }: a staff member's own student account (Users → Staff)
+    STAFF: (id: string) => `${API_BASE_URL}/api/admin/users/${id}/staff`,
   },
   ENROLLMENTS: {
     LIST: `${API_BASE_URL}/api/admin/enrollments`,

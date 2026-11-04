@@ -102,6 +102,7 @@ const links: NavLink[] = [
     children: [
       { href: "/dashboard/users?tab=students", label: "Students" },
       { href: "/dashboard/users?tab=teachers", label: "Teachers" },
+      { href: "/dashboard/users?tab=staff", label: "Staff" },
     ],
   },
   { href: "/dashboard/reports", label: "Reports", icon: LineChart },

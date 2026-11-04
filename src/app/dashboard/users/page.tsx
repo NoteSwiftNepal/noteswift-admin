@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2, GraduationCap, School } from "lucide-react";
+import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2, GraduationCap, School, UserCog } from "lucide-react";
 import { AssignCourseDialog, AssignCourseFormData, AssignCourseMode } from "@/components/users/AssignCourseDialog";
 import { useAdmin } from "@/context/admin-context";
 import { ManageSchoolDialog } from "@/components/users/ManageSchoolDialog";
@@ -64,6 +64,8 @@ interface Student {
   profileImage: string | null;
   enrolledCourses: string[];
   isBanned?: boolean;
+  // A staff member's own student account (Users → Staff).
+  isStaff?: boolean;
   status?: StudentStatus;
   realEnrolledCoursesCount?: number;
   realEnrollments?: any[];
@@ -286,6 +288,7 @@ export default function UsersPage() {
   const [joinedFilter, setJoinedFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
   const [studentStats, setStudentStats] = useState<StudentStats | null>(null);
+  const [staffCount, setStaffCount] = useState<number | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserDetails | TeacherDetails | null>(null);
   const [userDetailsLoading, setUserDetailsLoading] = useState(false);
   const [courses, setCourses] = useState<{ _id: string; title: string }[]>([]);
@@ -385,17 +388,22 @@ export default function UsersPage() {
     }
   };
 
+  // Real students only; staff accounts are counted for their own tab.
   const fetchStudentStats = async () => {
     try {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
       const url = gradeFilter !== 'all'
-        ? `${API_ENDPOINTS.USERS.STUDENT_STATS}?grade=${gradeFilter}`
-        : API_ENDPOINTS.USERS.STUDENT_STATS;
-      const res = await fetch(url, createFetchOptions('GET'));
+        ? `${API_ENDPOINTS.USERS.STUDENT_STATS}?grade=${gradeFilter}&staff=exclude`
+        : `${API_ENDPOINTS.USERS.STUDENT_STATS}?staff=exclude`;
+      const [res, staffRes] = await Promise.all([
+        fetch(url, createFetchOptions('GET')),
+        fetch(`${API_ENDPOINTS.USERS.STUDENT_STATS}?staff=only`, createFetchOptions('GET')),
+      ]);
       if (res.ok) {
         const json = await res.json();
         setStudentStats(json.data);
       }
+      if (staffRes.ok) setStaffCount((await staffRes.json()).data?.total ?? null);
     } catch (error) {
       console.error('Error fetching student stats:', error);
     }
@@ -420,6 +428,8 @@ export default function UsersPage() {
       if (gradeFilter !== 'all') params.set('grade', gradeFilter);
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (joinedFilter !== 'all') params.set('joinedWithin', joinedFilter);
+      // Students and Staff are the same list split by the staff mark.
+      params.set('staff', activeTab === 'staff' ? 'only' : 'exclude');
 
       const res = await fetch(`${API_ENDPOINTS.USERS.LIST}?${params.toString()}`, createFetchOptions('GET'));
       if (res.ok) {
@@ -454,7 +464,7 @@ export default function UsersPage() {
     }, 350);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentSearch, gradeFilter, statusFilter, joinedFilter, sortBy]);
+  }, [studentSearch, gradeFilter, statusFilter, joinedFilter, sortBy, activeTab === 'staff']);
 
   // The stat row is scoped to grade only — not search/status/joined-date —
   // so it answers "how is Grade 12 doing" when a grade is picked, and
@@ -586,6 +596,23 @@ export default function UsersPage() {
     } catch (error) {
       console.error('Error removing enrollment:', error);
       toast({ title: 'Failed to remove enrollment', variant: 'destructive' });
+    }
+  };
+
+  // A staff member's own student account moves to the Staff tab (or back).
+  const handleToggleStaff = async () => {
+    if (!selectedUser || selectedUser.type !== 'student') return;
+    const isStaff = !!(selectedUser as any).isStaff;
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(API_ENDPOINTS.USERS.STAFF(selectedUser._id), createFetchOptions('POST', { isStaff: !isStaff }));
+      if (!response.ok) throw new Error('Failed to update');
+      toast({ title: isStaff ? 'Moved back to Students' : 'Added as staff', description: isStaff ? `${selectedUser.full_name} is listed as a student again.` : `${selectedUser.full_name} is now listed under Staff.` });
+      await fetchUserDetails(selectedUser._id, 'student');
+      refreshAfterStudentAction();
+    } catch (error) {
+      console.error('Error updating the staff mark:', error);
+      toast({ title: 'Could not update the account', variant: 'destructive' });
     }
   };
 
@@ -781,18 +808,27 @@ export default function UsersPage() {
         onValueChange={(tab) => router.push(`/dashboard/users?tab=${tab}`)}
         className="w-full"
       >
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="students">
             Students ({studentStats?.total ?? studentsWithEnrollments.length})
           </TabsTrigger>
           <TabsTrigger value="teachers">
             Teachers ({filteredTeachers.length})
           </TabsTrigger>
+          <TabsTrigger value="staff">
+            Staff ({staffCount ?? '—'})
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="students" className="space-y-6">
+        {/* Students and Staff share this view: Staff lists the student accounts staff made to see the app as a student. */}
+        <TabsContent value={activeTab === 'staff' ? 'staff' : 'students'} className="space-y-6">
+          {activeTab === 'staff' && (
+            <p className="text-sm text-muted-foreground">
+              Student accounts that belong to NoteSwift staff, made to see the app as a student does. They are kept out of the Students list and its counts. Open one and choose Move back to students if it is a real student.
+            </p>
+          )}
           {/* Stat cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 ${activeTab === 'staff' ? 'hidden' : ''}`}>
             {[
               { label: 'Total Students', value: studentStats?.total, className: 'text-gray-900' },
               { label: 'Enrolled', value: studentStats?.enrolled, className: 'text-green-600' },
@@ -1215,6 +1251,22 @@ export default function UsersPage() {
                                         Manage School
                                       </Button>
                                     </div>
+
+                                    {/* Staff account: kept apart from real students */}
+                                    {can('users.manage') && (
+                                      <div className="flex items-center justify-between p-3 border rounded">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm font-medium">Account type</span>
+                                          <Badge variant={(selectedUser as any).isStaff ? 'secondary' : 'outline'}>
+                                            {(selectedUser as any).isStaff ? 'Staff' : 'Student'}
+                                          </Badge>
+                                        </div>
+                                        <Button variant="outline" size="sm" onClick={handleToggleStaff}>
+                                          <UserCog className="h-4 w-4 mr-2" />
+                                          {(selectedUser as any).isStaff ? 'Move back to students' : 'Add as staff'}
+                                        </Button>
+                                      </div>
+                                    )}
 
                                     {/* Account Status */}
                                     <div className="flex items-center justify-between p-3 border rounded">
