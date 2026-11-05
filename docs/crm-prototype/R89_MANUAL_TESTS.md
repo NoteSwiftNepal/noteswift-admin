@@ -20,4 +20,4 @@ npx ts-node -r tsconfig-paths/register src/scripts/crmArchiveStaffLeads.ts --liv
 2. They're in Leads again, at the same stage and with the same owner. Their old follow-up is not back (schedule a new one if needed).
 
 ## Already marked before this change
-1. With the script not run yet, a staff account marked earlier still shows in Leads. Open it in Users → Staff and press **Add as staff** again (or run the script). It leaves Leads.
+1. With the script not run yet, a staff account marked earlier still shows in Leads. Run the script (above): it leaves Leads. For a single account you can instead press **Move back to students** and then **Add as staff** again.
