@@ -71,6 +71,8 @@ export type LeadRow = {
   moreCourses: number;
   openTasks: number;
   nextTaskDueAt: string | null;
+  /** R88: the open follow-up, edited from the list. */
+  nextTask?: { _id: string; type: string; dueAt: string; notes: string } | null;
   overdue: boolean;
   source?: string;
   manualSource?: ManualSource | null;

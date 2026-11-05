@@ -14,6 +14,7 @@ import { CrmPageHeader, CrmPill } from "@/components/crm/ui";
 import { LeadDrawer } from "@/components/crm/leads/lead-drawer";
 import { AddLeadModal } from "@/components/crm/leads/add-lead-modal";
 import { StageMenu } from "@/components/crm/leads/stage-menu";
+import { FollowUpMenu } from "@/components/crm/leads/follow-up-menu";
 import { LeadOwnerAdmin, LeadRow, LeadView, Pagination, Rep, STAGE, Stage, crmApi, fetchCourseCatalog, relDateTime, sourceLabel } from "@/lib/crm/api";
 
 const BASE = "/dashboard/crm/leads";
@@ -333,7 +334,20 @@ export function LeadsSection() {
                           {r.frozen && <CrmPill tone="neutral">Frozen</CrmPill>}
                         </span>
                       </td>
-                      <td className={`whitespace-nowrap ${r.overdue ? "crm-late" : ""}`}>{r.nextTaskDueAt ? relDateTime(r.nextTaskDueAt) : <span className="crm-muted">{closed ? "—" : "None set"}</span>}</td>
+                      {/* R88: the follow-up is edited here, like the stage. */}
+                      {can("crm.manage_tasks") && r.stage !== "lost" ? (
+                        <td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                          <FollowUpMenu
+                            row={r}
+                            onSaved={(msg) => {
+                              toast({ title: msg });
+                              refresh();
+                            }}
+                          />
+                        </td>
+                      ) : (
+                        <td className={`whitespace-nowrap ${r.overdue ? "crm-late" : ""}`}>{r.nextTaskDueAt ? relDateTime(r.nextTaskDueAt) : <span className="crm-muted">{closed ? "—" : "None set"}</span>}</td>
+                      )}
                       {isAdmin && <td className="crm-muted">{sourceLabel(r)}</td>}
                     </tr>
                   );

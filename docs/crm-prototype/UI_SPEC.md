@@ -9,6 +9,8 @@ Scope (R33):
 - No dark mode for now. The prototype has dark tokens; they are listed for later and not implemented.
 - ~~The lead profile stays a full page.~~ Since S1b (R53, 2026-10-29) the lead opens in the prototype's side drawer over the Leads list; `/dashboard/crm/leads/[leadId]` is the list with the drawer open.
 
+**R88 (2026-11-05):** the Leads table's Next follow-up cell is a button (the time, or None set, with ✎) for anyone with `crm.manage_tasks`, on every lead but a Lost one. It opens a small form on the page (Type · Due · Note, the drawer's follow-up fields) that edits the lead's open follow-up or schedules one. Esc, a click outside or Cancel closes it; scrolling keeps it by its cell.
+
 **R86 (2026-11-03):** the Leads tabs are All · New lead · Contacted · Interested · Payment pending · Enrolled · Lost (· Unassigned for Admin), for Sales too. The Stage column's pill is the stage dropdown (the drawer's menu, same choices from the server) for anyone who can edit leads; Lost stays a plain pill. New lead and Contacted apply at once (from Interested they open the drawer, which warns that open courses close); Interested, Payment pending and Lost open the lead's drawer at that panel.
 
 **R83 (2026-11-03):** Sales & Bills tabs are Waiting · To record in Tigg · Confirmed · Rejected · All. The Admin's button is **Verify** (dialog "Verify sale"); a verified bill shows the accent "Verified · record in Tigg" pill. In To record in Tigg a Super Admin presses **Record in Tigg**, pastes Tigg's receipt number and gets Confirmed; Confirmed rows offer Undo (Super Admin). The bill shows "Verified by" and "Confirmed in Tigg by".
