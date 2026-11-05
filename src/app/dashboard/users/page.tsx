@@ -607,7 +607,7 @@ export default function UsersPage() {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
       const response = await fetch(API_ENDPOINTS.USERS.STAFF(selectedUser._id), createFetchOptions('POST', { isStaff: !isStaff }));
       if (!response.ok) throw new Error('Failed to update');
-      toast({ title: isStaff ? 'Moved back to Students' : 'Added as staff', description: isStaff ? `${selectedUser.full_name} is listed as a student again.` : `${selectedUser.full_name} is now listed under Staff.` });
+      toast({ title: isStaff ? 'Moved back to Students' : 'Added as staff', description: isStaff ? `${selectedUser.full_name} is listed as a student again, and their lead is back in Sales & CRM.` : `${selectedUser.full_name} is now listed under Staff and removed from Sales & CRM.` });
       await fetchUserDetails(selectedUser._id, 'student');
       refreshAfterStudentAction();
     } catch (error) {
@@ -824,7 +824,7 @@ export default function UsersPage() {
         <TabsContent value={activeTab === 'staff' ? 'staff' : 'students'} className="space-y-6">
           {activeTab === 'staff' && (
             <p className="text-sm text-muted-foreground">
-              Student accounts that belong to NoteSwift staff, made to see the app as a student does. They are kept out of the Students list and its counts. Open one and choose Move back to students if it is a real student.
+              Student accounts that belong to NoteSwift staff, made to see the app as a student does. They are kept out of the Students list and its counts, and out of Sales &amp; CRM (no lead, no follow-ups). Open one and choose Move back to students if it is a real student.
             </p>
           )}
           {/* Stat cards */}
