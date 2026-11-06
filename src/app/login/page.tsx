@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Eye, EyeOff, Loader2, Mail, Lock, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -189,7 +190,12 @@ export default function LoginPage() {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link href="/login/forgot-password" className="text-sm font-medium text-gray-600 hover:text-gray-900 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
