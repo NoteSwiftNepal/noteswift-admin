@@ -23,6 +23,9 @@ export const API_ENDPOINTS = {
     REFRESH: `${API_BASE_URL}/api/admin/auth/session/refresh`,
     LOGOUT: `${API_BASE_URL}/api/admin/auth/logout`,
     SETUP_PHONE: `${API_BASE_URL}/api/admin/auth/setup-phone`,
+    // Forgot password (not for system admins): an emailed code, then code + new password.
+    PASSWORD_RESET_REQUEST: `${API_BASE_URL}/api/admin/auth/password-reset/request`,
+    PASSWORD_RESET_CONFIRM: `${API_BASE_URL}/api/admin/auth/password-reset/confirm`,
     // Passwordless mobile-number + OTP login — unified across system_admin
     // and regular admins, so this single pair serves both login portals.
     OTP_LOGIN_REQUEST: `${API_BASE_URL}/api/admin/auth/otp-login/request`,
