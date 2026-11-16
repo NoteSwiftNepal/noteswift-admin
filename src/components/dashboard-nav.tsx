@@ -112,6 +112,7 @@ const links: NavLink[] = [
     icon: Bell,
     children: [
       { href: "/dashboard/notifications", label: "Notification History" },
+      { href: "/dashboard/notifications/analytics", label: "Analytics" },
     ],
   },
   { href: "/dashboard/revenue", label: "Revenue", icon: CreditCard },
