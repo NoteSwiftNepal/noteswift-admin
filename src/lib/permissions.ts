@@ -12,7 +12,7 @@ export type Permission =
   | 'enrollments.view' | 'enrollments.grant_direct' | 'enrollments.assign_pending' | 'enrollments.cancel_pending' | 'enrollments.remove'
   | 'courses.view_catalog' | 'courses.manage'
   | 'recommendations.view' | 'recommendations.manage'
-  | 'promo_banners.manage' | 'app_block.manage' | 'notifications.manage'
+  | 'promo_banners.manage' | 'app_block.manage' | 'notifications.manage' | 'notifications.analytics'
   | 'reports.view' | 'revenue.view' | 'orders.view' | 'orders.view_sensitive' | 'orders.manage' | 'transactions.invalidate'
   | 'discount_codes.manage' | 'archives.manage' | 'subject_groups.manage' | 'audit.view'
   | 'settings.platform' | 'live_classes.view' | 'leads.legacy'
@@ -38,6 +38,7 @@ const ROUTE_PERMISSIONS: [string, Permission][] = [
   ['/dashboard/app-block', 'app_block.manage'],
   ['/dashboard/promo-banners', 'promo_banners.manage'],
   ['/dashboard/reports', 'reports.view'],
+  ['/dashboard/notifications/analytics', 'notifications.analytics'], // Super Admin only
   ['/dashboard/notifications', 'notifications.manage'],
   ['/dashboard/revenue', 'revenue.view'],
   ['/dashboard/orders-payments', 'orders.view'],

@@ -83,6 +83,7 @@ export const API_ENDPOINTS = {
     CREATE: `${API_BASE_URL}/api/admin/notifications`,
     DELETE: (id: string) => `${API_BASE_URL}/api/admin/notifications/${id}`,
     ACTIVE_HOMEPAGE: `${API_BASE_URL}/api/admin/notifications/active/homepage`,
+    ANALYTICS: `${API_BASE_URL}/api/admin/notifications/analytics`,
   },
 
   // ==================== RECOMMENDATIONS ====================
