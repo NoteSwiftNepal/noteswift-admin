@@ -114,6 +114,8 @@ export const API_ENDPOINTS = {
     UNBAN: (id: string) => `${API_BASE_URL}/api/admin/users/${id}/unban`,
     // { isStaff }: a staff member's own student account (Users → Staff)
     STAFF: (id: string) => `${API_BASE_URL}/api/admin/users/${id}/staff`,
+    // { courseId }: give a staff account a course directly, no payment
+    STAFF_ENROLL: (id: string) => `${API_BASE_URL}/api/admin/users/${id}/staff/enroll`,
   },
   ENROLLMENTS: {
     LIST: `${API_BASE_URL}/api/admin/enrollments`,

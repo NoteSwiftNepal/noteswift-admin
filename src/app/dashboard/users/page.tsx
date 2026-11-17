@@ -5,6 +5,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Eye, Mail, Calendar, BookOpen, TrendingUp, Users, Ban, Trash2, GraduationCap, School, UserCog } from "lucide-react";
 import { AssignCourseDialog, AssignCourseFormData, AssignCourseMode } from "@/components/users/AssignCourseDialog";
+import { StaffCourseDialog } from "@/components/users/StaffCourseDialog";
 import { useAdmin } from "@/context/admin-context";
 import { ManageSchoolDialog } from "@/components/users/ManageSchoolDialog";
 import {
@@ -296,6 +297,9 @@ export default function UsersPage() {
   const [schools, setSchools] = useState<{ _id: string; name: string; shortCode: string }[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
   const [assignCourseDialogOpen, setAssignCourseDialogOpen] = useState(false);
+  // A staff account's own course: given directly, no payment (outside Sales and the CRM).
+  const [staffCourseDialogOpen, setStaffCourseDialogOpen] = useState(false);
+  const [staffCourseLoading, setStaffCourseLoading] = useState(false);
   const [assignCourseLoading, setAssignCourseLoading] = useState(false);
   const [manageSchoolDialogOpen, setManageSchoolDialogOpen] = useState(false);
   const [assignSchoolLoading, setAssignSchoolLoading] = useState(false);
@@ -613,6 +617,25 @@ export default function UsersPage() {
     } catch (error) {
       console.error('Error updating the staff mark:', error);
       toast({ title: 'Could not update the account', variant: 'destructive' });
+    }
+  };
+
+  const handleStaffCourseSubmit = async (courseId: string) => {
+    if (!selectedUser || selectedUser.type !== 'student') return;
+    setStaffCourseLoading(true);
+    try {
+      const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
+      const response = await fetch(API_ENDPOINTS.USERS.STAFF_ENROLL(selectedUser._id), createFetchOptions('POST', { courseId }));
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Could not give the course');
+      toast({ title: 'Course given', description: `${selectedUser.full_name} can use the course now.` });
+      setStaffCourseDialogOpen(false);
+      await fetchUserDetails(selectedUser._id, 'student');
+      refreshAfterStudentAction();
+    } catch (error: any) {
+      toast({ title: 'Course not given', description: error?.message, variant: 'destructive' });
+    } finally {
+      setStaffCourseLoading(false);
     }
   };
 
@@ -1073,7 +1096,13 @@ export default function UsersPage() {
                                         <GraduationCap className="h-4 w-4 text-muted-foreground" />
                                         <span className="text-sm font-medium">Course Access</span>
                                       </div>
-                                      {assignModes.length > 0 && (
+                                      {(selectedUser as any).isStaff ? (
+                                        can('users.manage') && (
+                                          <Button type="button" size="sm" onClick={() => setStaffCourseDialogOpen(true)}>
+                                            Give a course
+                                          </Button>
+                                        )
+                                      ) : assignModes.length > 0 && (
                                         <Button type="button" size="sm" onClick={() => setAssignCourseDialogOpen(true)}>
                                           {assignModes.includes('direct') ? 'Assign to Course' : 'Assign Course (payment pending)'}
                                         </Button>
@@ -1286,6 +1315,15 @@ export default function UsersPage() {
                                       </Button>
                                     </div>
 
+                                    <StaffCourseDialog
+                                      open={staffCourseDialogOpen}
+                                      onOpenChange={setStaffCourseDialogOpen}
+                                      staffName={selectedUser.full_name}
+                                      courses={courses.filter((c) => !((selectedUser as any).realEnrollments || []).some((en: any) => String(en.courseId?._id || en.courseId) === c._id && en.enrollmentType === 'regular' && en.status === 'active'))}
+                                      coursesLoading={coursesLoading}
+                                      onSubmit={handleStaffCourseSubmit}
+                                      loading={staffCourseLoading}
+                                    />
                                     <AssignCourseDialog
                                       modes={assignModes}
                                       open={assignCourseDialogOpen}
