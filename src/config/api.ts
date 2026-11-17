@@ -84,6 +84,7 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `${API_BASE_URL}/api/admin/notifications/${id}`,
     ACTIVE_HOMEPAGE: `${API_BASE_URL}/api/admin/notifications/active/homepage`,
     ANALYTICS: `${API_BASE_URL}/api/admin/notifications/analytics`,
+    UPLOAD_IMAGE: `${API_BASE_URL}/api/admin/notifications/upload-image`,
   },
 
   // ==================== RECOMMENDATIONS ====================
