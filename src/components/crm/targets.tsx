@@ -24,11 +24,26 @@ const barTone = (s: TargetRow["status"]) => (s === "ahead" || s === "target_met"
 
 export function useTargetMonths() {
   const [months, setMonths] = useState<MonthInfo[]>([]);
-  const reload = useCallback(() => crmApi.targetMonths().then(setMonths, () => setMonths([])), []);
+  // True once the first answer (or failure) is in, so a page can wait for its default month.
+  const [loaded, setLoaded] = useState(false);
+  const reload = useCallback(
+    () =>
+      crmApi.targetMonths().then(
+        (m) => {
+          setMonths(m);
+          setLoaded(true);
+        },
+        () => {
+          setMonths([]);
+          setLoaded(true);
+        }
+      ),
+    []
+  );
   useEffect(() => {
     reload();
   }, [reload]);
-  return { months, reload };
+  return { months, loaded, reload };
 }
 
 /** BS month picker (newest first). `anyLabel` adds an "any month" option with value "". */

@@ -4,7 +4,7 @@
 // scopes the list (Sales: payments they recorded or are credited with;
 // Admin / Super Admin: all), redacts it per role, counts the tabs, sums the
 // tiles and says which actions each row allows.
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,11 +44,13 @@ function SalesBillsInner() {
   const [repId, setRepId] = useState(ANY);
   // Nepali month (S5): default the current month (or ?bsMonth= from a dashboard link).
   const searchParams = useSearchParams();
-  const { months } = useTargetMonths();
+  const { months, loaded: monthsLoaded } = useTargetMonths();
   const [bsMonth, setBsMonth] = useState<string | null>(searchParams.get("bsMonth"));
   useEffect(() => {
     if (bsMonth === null && months.length) setBsMonth(months[0].key);
   }, [months, bsMonth]);
+  // Load once the default month is known, so the list isn't shown for all months and then replaced.
+  const monthReady = bsMonth !== null || (monthsLoaded && months.length === 0);
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<BillRow[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
@@ -78,21 +80,26 @@ function SalesBillsInner() {
   const filters = { repId: repId === ANY ? undefined : repId, bsMonth: q ? undefined : bsMonth || undefined, q: q || undefined };
   const filterKey = JSON.stringify(filters);
 
+  // Each load gets a number; an older response that arrives late is ignored.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    if (!monthReady) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
     try {
       const [list, c, s] = await Promise.all([crmApi.bills({ ...filters, tab, page, limit: 25 }), crmApi.billCounts(filters), crmApi.billSummary(filters)]);
+      if (seq !== loadSeq.current) return;
       setRows(list.items);
       setPagination(list.pagination);
       setCounts(c);
       setSummary(s.items);
     } catch (e: any) {
-      setError(e?.message || "Could not load sales");
+      if (seq === loadSeq.current) setError(e?.message || "Could not load sales");
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [tab, page, filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, page, filterKey, monthReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     load();
@@ -153,7 +160,10 @@ function SalesBillsInner() {
           {q ? (
             <span className="crm-muted crm-small">Searching all months</span>
           ) : (
-            <MonthSelect months={months} value={bsMonth ?? ""} anyLabel="Any month" onChange={(v) => setFilter(() => setBsMonth(v))} />
+            <>
+              <MonthSelect months={months} value={bsMonth ?? ""} anyLabel="Any month" onChange={(v) => setFilter(() => setBsMonth(v))} />
+              {(tab === "waiting" || tab === "tigg") && <span className="crm-muted crm-small">This tab shows every month</span>}
+            </>
           )}
         </div>
         <CrmTabs label="Status" value={tab} onChange={(v) => { setTab(v); setPage(1); }} tabs={(can("crm.confirm_payments") ? TABS : TABS.filter((t) => t.value !== "tigg")).map((t) => ({ ...t, count: counts[t.value] ?? null }))} />
