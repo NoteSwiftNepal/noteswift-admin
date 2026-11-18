@@ -47,6 +47,7 @@ const CATEGORIES: { key: string; label: string; group: string }[] = [
   { key: "temporary_access", label: "Temporary access given", group: "Account & enrollment" },
   { key: "temporary_ending", label: "Temporary access ending", group: "Account & enrollment" },
   { key: "now_permanent", label: "Now permanently enrolled", group: "Account & enrollment" },
+  { key: "trial_ended", label: "Free trial ended", group: "Account & enrollment" },
   { key: "admin_broadcast", label: "Admin broadcast", group: "Admin" },
 ];
 
