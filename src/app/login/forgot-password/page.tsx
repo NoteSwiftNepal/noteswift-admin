@@ -1,6 +1,6 @@
 "use client";
 
-// Forgot password: enter the account email, get a 6-digit code by email, then
+// Forgot password: enter the account email, get a 4-digit code by email, then
 // enter the code with a new password. The backend answers the first step the
 // same way for every email, so this screen never says whether an account
 // exists. System admins can't reset here (their password is set on the server).
@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
     try {
       const { API_ENDPOINTS } = await import("@/config/api");
-      const { ok, data } = await post(API_ENDPOINTS.AUTH.PASSWORD_RESET_REQUEST, { email: email.trim() });
+      const { ok, data } = await post(API_ENDPOINTS.AUTH.PASSWORD_RESET_REQUEST, { email: email.trim(), otp_digits: 4 });
       if (!ok) {
         setError(data.error || "Could not send the code. Please try again.");
         return;
@@ -66,7 +66,8 @@ export default function ForgotPasswordPage() {
   const reset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!/^\d{6}$/.test(code.trim())) return setError("Enter the 6-digit code from the email.");
+    // 4 digits; 6 from a backend from before 4-digit codes.
+    if (!/^(\d{4}|\d{6})$/.test(code.trim())) return setError("Enter the code from the email.");
     if (!PASSWORD_PATTERN.test(password)) return setError("Use at least 10 characters, with both letters and numbers.");
     if (password !== confirm) return setError("The two passwords don't match.");
     setIsLoading(true);
@@ -124,7 +125,7 @@ export default function ForgotPasswordPage() {
       title="Set a new password"
       description={
         <>
-          If <span className="font-medium text-gray-700">{email.trim()}</span> has an admin account, we've emailed it a 6-digit code. It expires in 10 minutes.
+          If <span className="font-medium text-gray-700">{email.trim()}</span> has an admin account, we've emailed it a code. It expires in 10 minutes.
         </>
       }
       footer={footer}
@@ -134,7 +135,7 @@ export default function ForgotPasswordPage() {
           <Label htmlFor="code">Code from the email</Label>
           <div className="relative">
             <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input id="code" inputMode="numeric" maxLength={6} placeholder="123456" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} required autoFocus autoComplete="one-time-code" className="h-11 rounded-lg pl-10 tracking-widest" />
+            <Input id="code" inputMode="numeric" maxLength={6} placeholder="1234" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} required autoFocus autoComplete="one-time-code" className="h-11 rounded-lg pl-10 tracking-widest" />
           </div>
         </div>
         <div className="space-y-1.5">

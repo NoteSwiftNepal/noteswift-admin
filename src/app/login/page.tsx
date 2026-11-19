@@ -52,7 +52,7 @@ export default function LoginPage() {
       // Try the regular admin endpoint first (super_admin, admin)
       let loginResponse = await fetch(
         API_ENDPOINTS.AUTH.LOGIN,
-        createFetchOptions('POST', { email: username, password })
+        createFetchOptions('POST', { email: username, password, otp_digits: 4 })
       );
       let loginData = await safeJson(loginResponse);
       let flow: 'regular' | 'system_admin' = 'regular';
@@ -62,7 +62,7 @@ export default function LoginPage() {
       if (!loginResponse.ok && loginData.error?.toLowerCase().includes('system admin')) {
         loginResponse = await fetch(
           API_ENDPOINTS.ADMIN_AUTH.LOGIN,
-          createFetchOptions('POST', { email: username, password })
+          createFetchOptions('POST', { email: username, password, otp_digits: 4 })
         );
         loginData = await safeJson(loginResponse);
         flow = 'system_admin';
@@ -123,7 +123,7 @@ export default function LoginPage() {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
       const response = await fetch(
         API_ENDPOINTS.AUTH.OTP_LOGIN_REQUEST,
-        createFetchOptions('POST', { phone_number: phoneNumber.trim() })
+        createFetchOptions('POST', { phone_number: phoneNumber.trim(), otp_digits: 4 })
       );
       const data = await response.json();
 

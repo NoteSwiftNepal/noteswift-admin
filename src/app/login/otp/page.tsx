@@ -124,10 +124,10 @@ export default function OtpPage() {
       const { API_ENDPOINTS, createFetchOptions } = await import('@/config/api');
 
       const response = isMobileOtp
-        ? await fetch(API_ENDPOINTS.AUTH.OTP_LOGIN_REQUEST, createFetchOptions('POST', { phone_number: phone }))
+        ? await fetch(API_ENDPOINTS.AUTH.OTP_LOGIN_REQUEST, createFetchOptions('POST', { phone_number: phone, otp_digits: 4 }))
         : await fetch(
             isSystemAdmin ? API_ENDPOINTS.ADMIN_AUTH.LOGIN : API_ENDPOINTS.AUTH.LOGIN,
-            createFetchOptions('POST', { email, password })
+            createFetchOptions('POST', { email, password, otp_digits: 4 })
           );
 
       const data = await response.json();
@@ -159,7 +159,7 @@ export default function OtpPage() {
   return (
     <AuthCard
       title="Enter Verification Code"
-      description={isMobileOtp ? "A 6-digit code has been sent to your phone." : "A 6-digit code has been sent to your registered email address."}
+      description={isMobileOtp ? "A verification code has been sent to your phone." : "A verification code has been sent to your registered email address."}
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">
@@ -170,7 +170,7 @@ export default function OtpPage() {
               id="otp"
               type="text"
               inputMode="numeric"
-              placeholder="123456"
+              placeholder="1234"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               required
