@@ -79,7 +79,7 @@ export type LeadRow = {
   createdAt?: string;
 };
 export type ManualSource = "school_visit" | "referral" | "facebook_ad" | "walk_in" | "phone_enquiry" | "other";
-export type LeadView = "all" | "mine" | "new" | "contacted" | "interested" | "temporary" | "payment_pending" | "enrolled" | "lost" | "unassigned";
+export type LeadView = "all" | "mine" | "new" | "contacted" | "interested" | "temporary" | "payment_pending" | "enrolled" | "lost" | "unassigned" | "pool";
 export type Pagination = { page: number; limit: number; total: number; pages: number };
 
 export type Interest = {
@@ -232,6 +232,8 @@ export const crmApi = {
   createProspect: (body: Record<string, unknown>) => request<{ lead: { _id: string } }>("POST", `/prospects`, body),
 
   assign: (leadId: string, ownerId: string | null, reason?: string) => request("POST", `/leads/${leadId}/assign`, { ownerId, reason }),
+  // R94: Sales take an unassigned new lead for themselves.
+  claim: (leadId: string) => request<{ leadId: string }>("POST", `/leads/${leadId}/claim`),
   bulkAssign: (leadIds: string[], ownerId: string | null | "auto", reason?: string) =>
     request<{ results: { leadId: string; ok: boolean; error?: string }[]; assigned: number; failed: number }>("POST", `/leads/bulk-assign`, { leadIds, ownerId, reason }),
 

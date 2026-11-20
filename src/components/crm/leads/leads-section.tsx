@@ -5,7 +5,7 @@
 // /dashboard/crm/leads/[leadId] share one list: opening and closing the
 // drawer only changes the URL. Filters live in the URL too. The backend
 // returns only leads the admin may see (Sales: leads they currently own).
-import { KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { KeyboardEvent, MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,8 @@ export function LeadsSection() {
   const { toast } = useToast();
   const { can } = useAdmin();
   const isAdmin = can("crm.view_all_leads");
+  // R94: Sales take new, unassigned leads from "Up for grabs".
+  const canClaim = !isAdmin && can("crm.claim_leads");
 
   const [counts, setCounts] = useState<Partial<Record<LeadView, number>>>({});
   // R74: All, then the stages that need attention (and Unassigned for Admin).
@@ -42,6 +44,7 @@ export function LeadsSection() {
     { value: "enrolled", label: "Enrolled" },
     { value: "lost", label: "Lost" },
     ...(isAdmin ? [{ value: "unassigned" as LeadView, label: "Unassigned" }] : []),
+    ...(canClaim ? [{ value: "pool" as LeadView, label: "Up for grabs" }] : []),
   ];
   const requested = params.get("view") as LeadView | null;
   const view: LeadView = requested && views.some((v) => v.value === requested) ? requested : views[0].value;
@@ -185,6 +188,23 @@ export function LeadsSection() {
     }
   };
 
+  const [claiming, setClaiming] = useState<string | null>(null);
+  const claim = async (r: LeadRow) => {
+    setClaiming(r._id);
+    try {
+      await crmApi.claim(r._id);
+      toast({ title: `${r.person?.name || "The lead"} is now yours` });
+      refresh();
+      openLead(r._id);
+    } catch (e: any) {
+      toast({ title: "Could not take the lead", description: e?.message, variant: "destructive" });
+      refresh(); // someone else may have taken it
+    } finally {
+      setClaiming(null);
+    }
+  };
+  const pool = view === "pool";
+
   const rowKey = (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
     if (e.target !== e.currentTarget) return;
     if (e.key === "Enter" || e.key === " ") {
@@ -247,6 +267,12 @@ export function LeadsSection() {
           ))}
         </div>
 
+        {pool && (
+          <p className="crm-muted crm-small" style={{ margin: "8px 0" }}>
+            New leads nobody owns yet. Take one to make it yours; its phone number and details show once it is yours.
+          </p>
+        )}
+
         {isAdmin && selected.length > 0 && (
           <div className="crm-selbar">
             <b>{selected.length} selected</b>
@@ -282,7 +308,7 @@ export function LeadsSection() {
             </button>
           </div>
         ) : rows.length === 0 ? (
-          <div className="crm-empty">No leads here. Try another tab or clear the search.</div>
+          <div className="crm-empty">{pool ? "No new leads are waiting. New sign-ups that nobody owns appear here." : "No leads here. Try another tab or clear the search."}</div>
         ) : (
           <div className="crm-tw">
             <table className="crm-table">
@@ -298,7 +324,7 @@ export function LeadsSection() {
                   <th>Course interest</th>
                   {isAdmin && <th>Owner</th>}
                   <th>Stage</th>
-                  <th>Next follow-up</th>
+                  <th>{pool ? "" : "Next follow-up"}</th>
                   {isAdmin && <th>Source</th>}
                 </tr>
               </thead>
@@ -308,7 +334,12 @@ export function LeadsSection() {
                   const closed = r.stage === "lost" || r.stage === "enrolled";
                   const sub = [r.person?.grade ? `Grade ${r.person.grade}` : null, r.person?.district].filter(Boolean).join(" · ");
                   return (
-                    <tr key={r._id} className="crm-click" tabIndex={0} aria-label={`Open ${r.person?.name || "lead"}`} onClick={(e) => openLead(r._id, e.currentTarget)} onKeyDown={(e) => rowKey(e, r._id)}>
+                    <tr
+                      key={r._id}
+                      {...(pool
+                        ? {}
+                        : { className: "crm-click", tabIndex: 0, "aria-label": `Open ${r.person?.name || "lead"}`, onClick: (e: MouseEvent<HTMLTableRowElement>) => openLead(r._id, e.currentTarget), onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => rowKey(e, r._id) })}
+                    >
                       {isAdmin && (
                         <td onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox" aria-label={`Select ${r.person?.name || "lead"}`} checked={selected.includes(r._id)} onChange={() => toggle(r._id)} />
@@ -326,7 +357,7 @@ export function LeadsSection() {
                       {isAdmin && <td>{r.ownerName || <CrmPill tone="warn">Unassigned</CrmPill>}</td>}
                       <td>
                         <span className="crm-actions" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                          {can("crm.edit_leads") && r.stage !== "lost" && r.stageOptions ? (
+                          {!pool && can("crm.edit_leads") && r.stage !== "lost" && r.stageOptions ? (
                             <StageMenu floating stage={r.stage} options={r.stageOptions} onPick={(to) => void pickStage(r, to, document.activeElement as HTMLElement | null)} />
                           ) : (
                             <CrmPill tone={st.tone}>{st.label}</CrmPill>
@@ -335,7 +366,13 @@ export function LeadsSection() {
                         </span>
                       </td>
                       {/* R88: the follow-up is edited here, like the stage. */}
-                      {can("crm.manage_tasks") && r.stage !== "lost" ? (
+                      {pool ? (
+                        <td className="whitespace-nowrap">
+                          <button type="button" className="crm-btn primary sm" disabled={claiming !== null} onClick={() => void claim(r)}>
+                            {claiming === r._id ? "Taking…" : "Take lead"}
+                          </button>
+                        </td>
+                      ) : can("crm.manage_tasks") && r.stage !== "lost" ? (
                         <td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                           <FollowUpMenu
                             row={r}
