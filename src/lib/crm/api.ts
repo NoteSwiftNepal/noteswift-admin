@@ -63,6 +63,8 @@ export type LeadRow = {
   ownerName: string | null;
   /** R95: in Up for grabs, left by a Sales member who was removed. */
   released?: boolean;
+  /** R96: the Online payment tab: the student's latest eSewa / Fonepay gateway payment. */
+  onlinePayment?: { status: string; gatewayStatus: string | null; method: string; amount: number | null; courseId: string | null; at: string; invalid: boolean } | null;
   status: LeadStatus;
   stage: Stage;
   /** R86: the list's stage dropdown. */
@@ -81,7 +83,7 @@ export type LeadRow = {
   createdAt?: string;
 };
 export type ManualSource = "school_visit" | "referral" | "facebook_ad" | "walk_in" | "phone_enquiry" | "other";
-export type LeadView = "all" | "mine" | "new" | "contacted" | "interested" | "temporary" | "payment_pending" | "enrolled" | "lost" | "unassigned" | "pool";
+export type LeadView = "all" | "mine" | "new" | "contacted" | "interested" | "temporary" | "payment_pending" | "enrolled" | "lost" | "unassigned" | "pool" | "online";
 export type Pagination = { page: number; limit: number; total: number; pages: number };
 
 export type Interest = {

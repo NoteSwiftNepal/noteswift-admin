@@ -18,6 +18,9 @@ import { FollowUpMenu } from "@/components/crm/leads/follow-up-menu";
 import { LeadOwnerAdmin, LeadRow, LeadView, Pagination, Rep, STAGE, Stage, crmApi, fetchCourseCatalog, relDateTime, sourceLabel } from "@/lib/crm/api";
 
 const BASE = "/dashboard/crm/leads";
+// R96: the same colours as Orders & Payments → Online Payments.
+const paymentTone = (status: string) => (status === "completed" ? "good" : status === "failed" || status === "cancelled" ? "bad" : "warn");
+const gatewayTone = (g: string) => (g === "COMPLETE" || g === "success" ? "good" : ["PENDING", "AMBIGUOUS", "pending", "timeout"].includes(g) ? "warn" : "bad");
 const PAGE_SIZE = 25;
 
 export function LeadsSection() {
@@ -43,6 +46,8 @@ export function LeadsSection() {
     { value: "payment_pending", label: "Payment pending" },
     { value: "enrolled", label: "Enrolled" },
     { value: "lost", label: "Lost" },
+    // R96: students in Orders & Payments → Online Payments (eSewa / Fonepay).
+    { value: "online", label: "Online payment" },
     ...(isAdmin ? [{ value: "unassigned" as LeadView, label: "Unassigned" }] : []),
     ...(canClaim ? [{ value: "pool" as LeadView, label: "Up for grabs" }] : []),
   ];
@@ -204,6 +209,7 @@ export function LeadsSection() {
     }
   };
   const pool = view === "pool";
+  const online = view === "online";
 
   const rowKey = (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
     if (e.target !== e.currentTarget) return;
@@ -323,6 +329,8 @@ export function LeadsSection() {
                   <th>Phone</th>
                   <th>Course interest</th>
                   {isAdmin && <th>Owner</th>}
+                  {online && <th>Status</th>}
+                  {online && <th>Gateway status</th>}
                   <th>Stage</th>
                   <th>{pool ? "" : "Next follow-up"}</th>
                   {isAdmin && <th>Source</th>}
@@ -356,6 +364,27 @@ export function LeadsSection() {
                         {r.moreCourses > 0 && <span className="crm-sub">+{r.moreCourses} more</span>}
                       </td>
                       {isAdmin && <td>{r.ownerName || <CrmPill tone="warn">Unassigned</CrmPill>}</td>}
+                      {online && (
+                        <td className="whitespace-nowrap">
+                          {r.onlinePayment ? (
+                            <>
+                              <CrmPill tone={paymentTone(r.onlinePayment.status)}>{r.onlinePayment.status}</CrmPill>
+                              {r.onlinePayment.invalid && <CrmPill tone="bad">Invalid</CrmPill>}
+                              <span className="crm-sub">
+                                {r.onlinePayment.method === "fonepay" ? "Fonepay" : "eSewa"}
+                                {r.onlinePayment.amount != null ? ` · Rs. ${r.onlinePayment.amount}` : ""} · {new Date(r.onlinePayment.at).toLocaleDateString()}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="crm-muted">—</span>
+                          )}
+                        </td>
+                      )}
+                      {online && (
+                        <td className="whitespace-nowrap">
+                          {r.onlinePayment?.gatewayStatus ? <CrmPill tone={gatewayTone(r.onlinePayment.gatewayStatus)}>{r.onlinePayment.gatewayStatus}</CrmPill> : <span className="crm-muted">—</span>}
+                        </td>
+                      )}
                       <td>
                         <span className="crm-actions" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                           {!pool && can("crm.edit_leads") && r.stage !== "lost" && r.stageOptions ? (
