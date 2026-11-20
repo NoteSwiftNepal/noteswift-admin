@@ -61,6 +61,8 @@ export type LeadRow = {
   person: Person;
   ownerId: string | null;
   ownerName: string | null;
+  /** R95: in Up for grabs, left by a Sales member who was removed. */
+  released?: boolean;
   status: LeadStatus;
   stage: Stage;
   /** R86: the list's stage dropdown. */

@@ -168,7 +168,7 @@ function TeamAllocation() {
                               <Settings2 className="mr-1 h-4 w-4" /> Allocation
                             </Button>
                             <Button type="button" size="sm" variant="ghost" onClick={() => setDeactivateRep(r)}>
-                              <UserMinus className="mr-1 h-4 w-4" /> Deactivate
+                              <UserMinus className="mr-1 h-4 w-4" /> Remove
                             </Button>
                           </div>
                         )}
@@ -185,7 +185,7 @@ function TeamAllocation() {
 
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} onDone={(msg) => { toast({ title: msg }); load(); }} />
       <ProfileDialog rep={editRep} courses={courses} onClose={() => setEditRep(null)} onDone={() => { toast({ title: "Allocation updated" }); load(); }} />
-      <DeactivateDialog rep={deactivateRep} others={active.filter((r) => r._id !== deactivateRep?._id)} onClose={() => setDeactivateRep(null)} onDone={(n) => { toast({ title: `Deactivated; ${n} lead(s) moved` }); load(); }} />
+      <DeactivateDialog rep={deactivateRep} others={active.filter((r) => r._id !== deactivateRep?._id)} onClose={() => setDeactivateRep(null)} onDone={(n) => { toast({ title: `Removed; ${n} lead(s) moved` }); load(); }} />
     </div>
   );
 }
@@ -381,8 +381,8 @@ function DeactivateDialog({ rep, others, onClose, onDone }: { rep: Rep | null; o
     <Dialog open={!!rep} onOpenChange={(v) => !v && !busy && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Deactivate {rep?.name}</DialogTitle>
-          <DialogDescription>They are signed out at once and lose access. The account and its history are kept.</DialogDescription>
+          <DialogTitle>Remove {rep?.name}</DialogTitle>
+          <DialogDescription>For someone who has left. They are signed out at once, lose access and disappear from the team and every owner list. Their past work (activities, bills, targets) keeps their name.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -392,7 +392,7 @@ function DeactivateDialog({ rep, others, onClose, onDone }: { rep: Rep | null; o
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">The unassigned queue</SelectItem>
+                <SelectItem value="none">Up for grabs (any Sales member can take them)</SelectItem>
                 {others.map((r) => (
                   <SelectItem key={r._id} value={r._id}>
                     {r.name}
@@ -423,14 +423,14 @@ function DeactivateDialog({ rep, others, onClose, onDone }: { rep: Rep | null; o
                 onDone(r.leadsMoved);
                 onClose();
               } catch (e: any) {
-                setError(e?.message || "Could not deactivate");
+                setError(e?.message || "Could not remove");
               } finally {
                 setBusy(false);
               }
             }}
           >
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Deactivate
+            Remove
           </Button>
         </DialogFooter>
       </DialogContent>

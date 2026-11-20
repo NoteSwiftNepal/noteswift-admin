@@ -269,7 +269,7 @@ export function LeadsSection() {
 
         {pool && (
           <p className="crm-muted crm-small" style={{ margin: "8px 0" }}>
-            New leads nobody owns yet. Take one to make it yours; its phone number and details show once it is yours.
+            New leads nobody owns yet, and leads left by Sales members who have left. Take one to make it yours; its phone number and details show once it is yours.
           </p>
         )}
 
@@ -348,6 +348,7 @@ export function LeadsSection() {
                       <td>
                         <b>{r.person?.name || "Unnamed"}</b>
                         {sub && <span className="crm-sub">{sub}</span>}
+                        {pool && r.released && <span className="crm-sub">From a former team member</span>}
                       </td>
                       <td className="whitespace-nowrap">{r.person?.phone || <span className="crm-muted">—</span>}</td>
                       <td>
