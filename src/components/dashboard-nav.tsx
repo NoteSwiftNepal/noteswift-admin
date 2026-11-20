@@ -124,7 +124,6 @@ const links: NavLink[] = [
       { href: "/dashboard/orders-payments?tab=transactions", label: "Transactions" },
       { href: "/dashboard/orders-payments?tab=codes", label: "Unlock Codes" },
       { href: "/dashboard/orders-payments?tab=bulk-codes", label: "Bulk Codes" },
-      { href: "/dashboard/orders-payments?tab=esewa", label: "Online Payments" },
     ],
   },
   { href: "/dashboard/discount-codes", label: "Promo Codes", icon: TicketPercent },
@@ -138,6 +137,8 @@ const links: NavLink[] = [
       { href: "/dashboard/crm/tasks", label: "Follow-ups" },
       { href: "/dashboard/crm/sales", label: "Sales & Bills" },
       { href: "/dashboard/crm/team", label: "Team & Targets" },
+      { href: "/dashboard/orders-payments?tab=esewa", label: "Online Payments" },
+      { href: "/dashboard/audit-log", label: "Audit Log" },
     ],
   },
   {
@@ -150,7 +151,6 @@ const links: NavLink[] = [
     ],
   },
   { href: "/dashboard/subject-groups", label: "Subject Groups", icon: Link2 },
-  { href: "/dashboard/audit-log", label: "Audit Log", icon: ShieldCheck },
   {
     href: "/dashboard/settings",
     label: "Settings",
@@ -205,7 +205,6 @@ const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
     hrefs: [
       "/dashboard/archives",
       "/dashboard/subject-groups",
-      "/dashboard/audit-log",
       "/dashboard/settings",
       "/dashboard/about",
     ],
@@ -325,6 +324,10 @@ export function DashboardNav() {
     return !currentTab;
   };
 
+  // A page listed under another group (Online Payments is a tab of Orders &
+  // Payments but sits under Sales & CRM) highlights only the group it's listed in.
+  const claimedByOtherGroup = (linkHref: string) =>
+    links.some((other) => other.href !== linkHref && other.children?.some((c) => isLinkActive(c.href, other.href)));
   const roleBadge = admin?.productRole ? ROLE_BADGES[admin.productRole] : null;
 
   // Every link and child is shown only if the admin's permissions cover it
@@ -365,7 +368,7 @@ export function DashboardNav() {
                   const filteredChildren = link.children?.filter((child) => canOpenHref(child.href, can));
 
                   const hasChildren = !!filteredChildren && filteredChildren.length > 0;
-                  const active = isParentActive(link.href, filteredChildren, pathname);
+                  const active = isParentActive(link.href, filteredChildren, pathname) && !claimedByOtherGroup(link.href);
                   const isOpen = hasChildren && !!expanded[link.href];
                   const crm = link.href === CRM_GROUP;
 
