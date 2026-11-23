@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { MoreHorizontal, Loader2, Bell, Smartphone, RefreshCw } from "lucide-react";
+import { MoreHorizontal, Loader2, Bell, Smartphone, RefreshCw, ImagePlus, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,7 +30,77 @@ interface Notification {
   scheduledFor?: string;
   inactivityDays?: number | null;
   recipientIds?: string[];
+  thumbnail?: string;
   createdAt: string;
+}
+
+// Phones fetch the photo when the notification arrives; Android drops
+// pictures that are too large, so keep them small.
+const MAX_PHOTO_BYTES = 1024 * 1024;
+
+function PhotoField({ id, value, onChange, hint }: { id: string; value: string; onChange: (url: string) => void; hint: string }) {
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
+
+  const upload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Not a photo", description: "Choose a JPG, PNG or WebP image.", variant: "destructive" });
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      toast({ title: "Photo too large", description: "Use a photo smaller than 1 MB so it shows on phones.", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      const { API_ENDPOINTS } = await import('@/config/api');
+      const form = new FormData();
+      form.append('image', file);
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem('adminToken');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const response = await fetch(API_ENDPOINTS.NOTIFICATIONS.UPLOAD_IMAGE, { method: 'POST', credentials: 'include', headers, body: form });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.error || 'Upload failed');
+      onChange(data.result.image);
+    } catch (error) {
+      toast({ title: "Upload failed", description: error instanceof Error ? error.message : "Could not upload the photo.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>Photo (optional)</Label>
+      {value ? (
+        <div className="relative w-full overflow-hidden rounded-md border">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={value} alt="Notification photo" className="max-h-48 w-full object-cover" />
+          <Button type="button" variant="secondary" size="sm" className="absolute right-2 top-2" onClick={() => onChange('')}>
+            <X className="mr-1 h-4 w-4" /> Remove
+          </Button>
+        </div>
+      ) : (
+        <label htmlFor={id} className={`flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed p-4 text-sm text-muted-foreground hover:bg-muted ${uploading ? 'pointer-events-none opacity-60' : ''}`}>
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+          {uploading ? 'Uploading…' : 'Choose a photo (max 1 MB)'}
+        </label>
+      )}
+      <input
+        id={id}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) void upload(file);
+        }}
+      />
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
 }
 
 const INACTIVITY_PRESETS = [3, 7, 15] as const;
@@ -62,6 +132,7 @@ export default function NotificationsPage() {
     scheduledFor: '', // datetime-local string
     inactivityDays: '' as string, // '' = no filter (everyone)
   });
+  const [pushImage, setPushImage] = useState('');
 
   // Fetch notifications from backend
   const fetchNotifications = async () => {
@@ -199,6 +270,7 @@ export default function NotificationsPage() {
         title: formData.get('pushTitle'),
         subject: formData.get('pushSubject'),
         message: formData.get('pushMessage'),
+        ...(pushImage ? { thumbnail: pushImage } : {}),
         adminId: 'admin-system' // In real app, get from auth
       };
 
@@ -228,6 +300,7 @@ export default function NotificationsPage() {
             : `The notification has been sent to all students with registered devices.`,
         });
         setPushSchedule({ mode: 'now', scheduledFor: '', inactivityDays: '' });
+        setPushImage('');
         (e.target as HTMLFormElement).reset();
         fetchNotifications(); // Refresh the list
       } else {
@@ -309,15 +382,12 @@ export default function NotificationsPage() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="thumbnail">Thumbnail URL (optional)</Label>
-                <Input
-                  id="thumbnail"
-                  placeholder="https://example.com/image.jpg"
-                  value={homepageNotification.thumbnail}
-                  onChange={(e) => setHomepageNotification(prev => ({ ...prev, thumbnail: e.target.value }))}
-                />
-              </div>
+              <PhotoField
+                id="thumbnail"
+                value={homepageNotification.thumbnail}
+                onChange={(url) => setHomepageNotification(prev => ({ ...prev, thumbnail: url }))}
+                hint="Shown at the top of the pop-up on the student's Home page."
+              />
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="showDontShowAgain"
@@ -354,6 +424,13 @@ export default function NotificationsPage() {
                 <Label htmlFor="pushMessage">Message</Label>
                 <Textarea id="pushMessage" name="pushMessage" placeholder="Notification message..." className="min-h-[80px]" required />
               </div>
+
+              <PhotoField
+                id="pushImage"
+                value={pushImage}
+                onChange={setPushImage}
+                hint="Android phones show the photo with the notification, and it shows in the app's Notifications list. iPhones show the text only for now. A wide photo (2:1) looks best."
+              />
 
               <div className="space-y-2">
                 <Label>When to send</Label>
@@ -593,6 +670,14 @@ export default function NotificationsPage() {
                   <div className="mt-1 p-3 bg-muted rounded-md">
                     {selectedNotification.subject}
                   </div>
+                </div>
+              )}
+
+              {selectedNotification.thumbnail && (
+                <div>
+                  <Label className="text-sm font-medium">Photo</Label>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={selectedNotification.thumbnail} alt="Notification photo" className="mt-1 max-h-48 rounded-md border object-cover" />
                 </div>
               )}
 
