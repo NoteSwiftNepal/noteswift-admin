@@ -271,7 +271,7 @@ export function ConfirmPaymentDialog({ row, onOpenChange, onDone }: { row: BillR
               ...(cur.discount && cur.discount.amount > 0
                 ? [{ label: "Discount", value: <span style={cur.discount.needsApproval ? { color: "var(--crm-warn)", fontWeight: 600 } : undefined}>{rs(cur.discount.amount)} ({cur.discount.percent}%)</span> }]
                 : []),
-              ...(row.billType ? [{ label: "Bill type", value: row.billType === "prepaid" ? "Prepaid (temporary access until verified)" : "Postpaid (temporary access until verified)" }] : []),
+              ...(row.billType ? [{ label: "Bill type", value: row.billType === "prepaid" ? "Prepaid (enrolled when recorded)" : "Postpaid (temporary access until verified)" }] : []),
               { label: "Paid by", value: `${row.methodLabel}${bill?.payment.reference ? ` · ${bill.payment.reference}` : ""}` },
               { label: "Student", value: row.studentName },
               { label: "Course", value: cur.courseUnconfirmed ? <span className="crm-late">Course not confirmed</span> : cur.courseTitle },
@@ -499,7 +499,7 @@ export function RecordSalePanel({
       if (note.trim()) form.set("note", note.trim());
       form.set("idempotencyKey", idempotencyKey);
       await crmApi.recordPayment(leadId, form);
-      toast(postpaid ? { title: "Postpaid bill created", description: "The student has access. Use Record sale when they pay." } : { title: "Prepaid bill created", description: unconfirmed ? "The student is enrolled once the course is set." : "The student is enrolled. An Admin verifies the payment." });
+      toast(postpaid ? { title: "Postpaid bill created", description: "The student has access. Use Record sale when they pay." } : { title: "Prepaid bill created", description: unconfirmed ? "The student is enrolled for good once the course is set." : "The student is enrolled for good. An Admin verifies the payment; a rejection takes the course back." });
       onDone();
     } catch (e: any) {
       const msg = e?.status === 503 ? "Screenshot upload isn't set up yet. Enter the transaction ID instead." : e?.message || "Could not record the sale";

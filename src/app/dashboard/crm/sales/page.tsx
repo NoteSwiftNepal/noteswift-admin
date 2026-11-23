@@ -61,7 +61,7 @@ function SalesBillsInner() {
   const [error, setError] = useState<string | null>(null);
   const [billId, setBillId] = useState<string | null>(null);
   const [confirmRow, setConfirmRow] = useState<BillRow | null>(null);
-  const [reasonFor, setReasonFor] = useState<{ row: BillRow; kind: "reject" | "cancel" } | null>(null);
+  const [reasonFor, setReasonFor] = useState<{ row: BillRow; kind: "reject" | "cancel" | "unverify" } | null>(null);
 
   // S8: Salesperson and Month only, as the prototype.
   // R87: search by bill, receipt or credit note number, student, buyer, course (and phone for Sales and Super Admin).
@@ -240,6 +240,11 @@ function SalesBillsInner() {
                           Undo
                         </Button>
                       )}
+                      {r.canUndoVerify && (
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setReasonFor({ row: r, kind: "unverify" })}>
+                          Undo verify
+                        </Button>
+                      )}
                       {r.canConfirm && (
                         <Button type="button" size="sm" className={GOOD_BUTTON} onClick={() => setConfirmRow(r)}>
                           Verify
@@ -301,20 +306,28 @@ function SalesBillsInner() {
       <ReasonDialog
         open={!!reasonFor}
         onOpenChange={(v) => !v && setReasonFor(null)}
-        title={reasonFor?.kind === "reject" ? "Reject payment" : "Cancel payment"}
-        description={reasonFor?.kind === "reject" ? "The student doesn't get the course and nothing counts. The salesperson sees your reason." : "Withdraw a payment you recorded by mistake. It never counts."}
-        confirmLabel={reasonFor?.kind === "reject" ? "Reject payment" : "Cancel payment"}
+        title={reasonFor?.kind === "unverify" ? "Undo the verification" : reasonFor?.kind === "reject" ? "Reject payment" : "Cancel payment"}
+        description={
+          reasonFor?.kind === "unverify"
+            ? "The bill goes back to Waiting confirmation and stops counting (revenue, salesperson credit) until it is verified again. The student keeps the course; rejecting it afterwards takes the course back. Say what was wrong."
+            : reasonFor?.kind === "reject"
+              ? "The student doesn't get the course and nothing counts. The salesperson sees your reason."
+              : "Withdraw a payment you recorded by mistake. It never counts."
+        }
+        confirmLabel={reasonFor?.kind === "unverify" ? "Undo verification" : reasonFor?.kind === "reject" ? "Reject payment" : "Cancel payment"}
         destructive
         onConfirm={async (reason) => {
           const r = reasonFor!;
+          const failed = r.kind === "unverify" ? "Not undone" : r.kind === "reject" ? "Not rejected" : "Not cancelled";
           try {
-            if (r.kind === "reject") await crmApi.rejectPayment(r.row._id, reason);
+            if (r.kind === "unverify") await crmApi.undoVerification(r.row._id, reason);
+            else if (r.kind === "reject") await crmApi.rejectPayment(r.row._id, reason);
             else await crmApi.cancelPayment(r.row._id, reason);
           } catch (e: any) {
-            toast({ title: r.kind === "reject" ? "Not rejected" : "Not cancelled", description: e?.message, variant: "destructive" });
+            toast({ title: failed, description: e?.message, variant: "destructive" });
             throw e;
           }
-          toast({ title: r.kind === "reject" ? "Payment rejected" : "Payment cancelled" });
+          toast({ title: r.kind === "unverify" ? "Verification undone: the bill waits for confirmation again" : r.kind === "reject" ? "Payment rejected" : "Payment cancelled" });
           load();
         }}
       />

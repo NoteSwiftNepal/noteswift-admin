@@ -296,6 +296,7 @@ export const crmApi = {
   recordPostpaidPayment: (paymentId: string, form: FormData) => requestForm<SalesPayment>("POST", `/payments/${paymentId}/record-payment`, form),
   confirmPayment: (id: string, expectedAmount: number) => request<SalesPayment>("POST", `/payments/${id}/confirm`, { checked: true, expectedAmount }),
   rejectPayment: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/reject`, { reason }),
+  undoVerification: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/undo-verification`, { reason }), // R98
   cancelPayment: (id: string, reason: string) => request<SalesPayment>("POST", `/payments/${id}/cancel`, { reason }),
   screenshotLink: (id: string) => request<{ url: string; expiresInSeconds: number; contentType: string }>("GET", `/payments/${id}/screenshot`),
   bills: (params: Record<string, string | number | undefined>) => request<{ items: BillRow[]; pagination: Pagination; tab: BillTab }>("GET", `/payments${qs(params)}`),
@@ -378,6 +379,8 @@ export type BillRow = {
   billDetailsMissing: boolean;
   proforma: boolean;
   canRecordTigg: boolean;
+  /** R98: the verifier or a Super Admin can undo a verification until it is recorded in Tigg. */
+  canUndoVerify?: boolean;
   /** Why an approver sees no Confirm on an open bill. */
   confirmNote?: string | null;
   studentName: string;
