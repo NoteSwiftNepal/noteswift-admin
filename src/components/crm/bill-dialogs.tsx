@@ -143,6 +143,25 @@ export function BillDialog({ paymentId, onOpenChange }: { paymentId: string | nu
                 ...(bill.reason ? [{ label: bill.status === "rejected" ? "Rejected because" : "Cancelled because", value: bill.reason }] : []),
               ]}
             />
+            {!!bill.verificationUndos?.length && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Verification undone</p>
+                <ul className="space-y-2">
+                  {bill.verificationUndos.map((u, i) => (
+                    <li key={`${u.at}-${i}`} className="rounded-md border px-3 py-2 text-sm">
+                      <p>
+                        <span className="font-medium">{u.by}</span> undid the verification · {fmtDateTime(u.at)}
+                      </p>
+                      <p className="crm-muted text-xs">
+                        Verified by {u.verifiedBy}
+                        {u.verifiedAt ? ` · ${fmtDateTime(u.verifiedAt)}` : ""}
+                      </p>
+                      <p className="mt-1">Reason: {u.reason}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {bill.invalidated && <CrmNote tone="bad">Marked invalid by a Super Admin: this payment no longer counts as a sale.</CrmNote>}
             <p className="crm-muted text-center text-xs">{bill.footer}</p>
           </div>

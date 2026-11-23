@@ -439,6 +439,8 @@ export type Bill = {
   courseId: string | null;
   reason: string | null;
   invalidated: boolean;
+  /** R98: verifications undone on this bill, oldest first. */
+  verificationUndos?: { at: string; by: string; reason: string; verifiedAt: string | null; verifiedBy: string }[];
   canDownloadPdf: boolean;
   canViewScreenshot: boolean;
   footer: string;
