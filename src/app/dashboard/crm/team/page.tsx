@@ -19,7 +19,7 @@ import { DataState } from "@/components/crm/crm-ui";
 import { CrmCard, CrmKpi, CrmKpis, CrmPageHeader, CrmPill, CrmTabs, Tone } from "@/components/crm/ui";
 import { MyTargetView, TargetsTab } from "@/components/crm/targets";
 import { useAdmin } from "@/context/admin-context";
-import { Rep, crmApi, fetchCourseCatalog, fmtDateTime } from "@/lib/crm/api";
+import { AllocationMode, Rep, crmApi, fetchCourseCatalog, fmtDateTime } from "@/lib/crm/api";
 
 // Sales & CRM → Team & Targets (Phase S5). Admin and Super Admin: tabs
 // Targets and Team & allocation (the earlier Sales Team page, unchanged and
@@ -122,6 +122,8 @@ function TeamAllocation() {
         />
       </CrmKpis>
 
+      <AutoAssignCard availableCount={loading ? null : active.filter((r) => r.profile.isAvailable).length} />
+
       <CrmCard title="Salespeople" aside={<span className="crm-muted crm-small">{reps.length} account{reps.length === 1 ? "" : "s"}</span>} flush>
           <DataState loading={loading} error={error} onRetry={load} empty={reps.length === 0} emptyText="No Sales accounts yet. Invite your first salesperson.">
             <div className="overflow-x-auto">
@@ -187,6 +189,100 @@ function TeamAllocation() {
       <ProfileDialog rep={editRep} courses={courses} onClose={() => setEditRep(null)} onDone={() => { toast({ title: "Allocation updated" }); load(); }} />
       <DeactivateDialog rep={deactivateRep} others={active.filter((r) => r._id !== deactivateRep?._id)} onClose={() => setDeactivateRep(null)} onDone={(n) => { toast({ title: `Removed; ${n} lead(s) moved` }); load(); }} />
     </div>
+  );
+}
+
+// The CRM allocation mode (crm_settings.allocationMode). Round-robin gives
+// each new lead (registration, first course activity, trial start) to the
+// next available salesperson; leads already waiting are not touched — use
+// Round-robin in the leads list's bulk assign for those. Super Admin only
+// (crm.manage_settings); the backend enforces it.
+function AutoAssignCard({ availableCount }: { availableCount: number | null }) {
+  const { can } = useAdmin();
+  const { toast } = useToast();
+  const editable = can("crm.manage_settings");
+  const [mode, setMode] = useState<AllocationMode | null>(null);
+  const [error, setError] = useState(false);
+  const [confirm, setConfirm] = useState<AllocationMode | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!editable) return;
+    crmApi.settings().then((st) => setMode(st.allocationMode === "round_robin" ? "round_robin" : "manual"), () => setError(true));
+  }, [editable]);
+
+  if (!editable) return null;
+
+  const on = mode === "round_robin";
+  const save = async (next: AllocationMode) => {
+    setBusy(true);
+    try {
+      const st = await crmApi.updateAllocationMode(next);
+      setMode(st.allocationMode);
+      toast({ title: st.allocationMode === "round_robin" ? "Automatic assignment is on" : "Automatic assignment is off" });
+      setConfirm(null);
+    } catch (e: any) {
+      toast({ title: "Not changed", description: e?.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <CrmCard
+      title="Automatic assignment"
+      aside={mode === null ? null : <CrmPill tone={on ? "good" : "neutral"}>{on ? "On · round-robin" : "Off · manual"}</CrmPill>}
+    >
+      {error ? (
+        <p className="crm-muted crm-small !m-0">Could not load the setting. Reload the page to try again.</p>
+      ) : (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="!m-0">
+              {on
+                ? "Every new lead goes straight to the next available salesperson, in turn."
+                : "New leads wait unassigned until someone assigns them or a salesperson takes one."}
+            </p>
+            <p className="crm-muted crm-small !mb-0 !mt-1">
+              Only salespeople marked &quot;Taking new leads&quot; who match the lead&apos;s grade, district and course get one
+              {availableCount === null ? "" : ` (${availableCount} available now)`}. Leads already waiting are not touched: select them in Leads and assign with Round-robin.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {mode === null ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-label="Loading" />
+            ) : (
+              <>
+                <Switch id="auto-assign" checked={on} disabled={busy} onCheckedChange={(v) => setConfirm(v ? "round_robin" : "manual")} />
+                <Label htmlFor="auto-assign">Round-robin</Label>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <Dialog open={confirm !== null} onOpenChange={(o) => !o && !busy && setConfirm(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirm === "round_robin" ? "Turn on automatic assignment?" : "Turn off automatic assignment?"}</DialogTitle>
+            <DialogDescription>
+              {confirm === "round_robin"
+                ? "From now on every new lead is given to the next available salesperson. New leads will no longer wait in the unassigned list for salespeople to take."
+                : "New leads will wait unassigned until someone assigns them or a salesperson takes one. Leads already assigned keep their owner."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => setConfirm(null)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={busy} onClick={() => confirm && save(confirm)}>
+              {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+              {confirm === "round_robin" ? "Turn on" : "Turn off"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </CrmCard>
   );
 }
 

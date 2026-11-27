@@ -197,6 +197,8 @@ export type LeadDetail = {
 };
 
 
+export type AllocationMode = "manual" | "round_robin";
+
 export type Rep = {
   _id: string;
   name: string;
@@ -313,7 +315,9 @@ export const crmApi = {
   mySalaryHistory: () => request<SalaryHistory>("GET", `/me/salary-history`),
   setSalary: (adminId: string, body: { amount: number; reason: string; expectedCurrentAmount: number | null }) => request<unknown>("PUT", `/reps/${adminId}/salary`, body),
   /** CRM settings (Super Admin); the endpoint answers { settings }. */
-  settings: async () => ((await request<any>("GET", `/settings`)).settings as { targets: TargetSchedule; maxDiscountPercent: number }),
+  settings: async () => ((await request<any>("GET", `/settings`)).settings as { targets: TargetSchedule; maxDiscountPercent: number; allocationMode: AllocationMode }),
+  /** Round-robin on: every new lead goes to the next available salesperson. Manual: new leads wait unassigned. */
+  updateAllocationMode: async (allocationMode: AllocationMode) => ((await request<any>("PUT", `/settings`, { allocationMode })).settings as { allocationMode: AllocationMode }),
   /** R57 / R62: recorded-sale discounts above this are flagged for approval (applies at once). */
   updateMaxDiscount: async (maxDiscountPercent: number) => ((await request<any>("PUT", `/settings`, { maxDiscountPercent })).settings as { maxDiscountPercent: number }),
   updateTargetRules: async (targets: Partial<TargetRules>) => ((await request<any>("PUT", `/settings`, { targets })).settings as { targets: TargetSchedule }),
