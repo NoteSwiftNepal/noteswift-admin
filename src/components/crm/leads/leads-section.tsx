@@ -17,6 +17,8 @@ import { StageMenu } from "@/components/crm/leads/stage-menu";
 import { FollowUpMenu } from "@/components/crm/leads/follow-up-menu";
 import { LeadOwnerAdmin, LeadRow, LeadView, Pagination, Rep, STAGE, Stage, crmApi, fetchCourseCatalog, relDateTime, sourceLabel } from "@/lib/crm/api";
 
+// Classes students pick at signup (Student.grade); 12 down to 1, the busiest first.
+const CLASSES = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 const BASE = "/dashboard/crm/leads";
 // R96: the same colours as Orders & Payments → Online Payments.
 const paymentTone = (status: string) => (status === "completed" ? "good" : status === "failed" || status === "cancelled" ? "bad" : "warn");
@@ -54,7 +56,8 @@ export function LeadsSection() {
   const requested = params.get("view") as LeadView | null;
   const view: LeadView = requested && views.some((v) => v.value === requested) ? requested : views[0].value;
   const page = parseInt(params.get("page") || "1", 10) || 1;
-  const filters = { ownerId: params.get("ownerId") || "", q: params.get("q") || "", from: params.get("from") || "", to: params.get("to") || "" };
+  // Class (grade) and Course (any connection: opportunity, enrollment or trial), for Sales and Admins (2026-11-27).
+  const filters = { ownerId: params.get("ownerId") || "", q: params.get("q") || "", from: params.get("from") || "", to: params.get("to") || "", grade: params.get("grade") || "", courseId: params.get("courseId") || "" };
   const filterKey = JSON.stringify(filters);
   const query = params.toString();
 
@@ -247,6 +250,29 @@ export function LeadsSection() {
                 </option>
               ))}
             </select>
+          )}
+          <select className="crm-input" style={{ flex: "0 1 140px" }} aria-label="Class" value={filters.grade || "any"} onChange={(e) => setParam({ grade: e.target.value })}>
+            <option value="any">All classes</option>
+            {CLASSES.map((g) => (
+              <option key={g} value={String(g)}>
+                Class {g}
+              </option>
+            ))}
+          </select>
+          <select className="crm-input" style={{ flex: "0 1 260px" }} aria-label="Course" value={filters.courseId || "any"} onChange={(e) => setParam({ courseId: e.target.value })}>
+            <option value="any">All courses</option>
+            {/* A course in the link that the catalog no longer lists still shows, so the filter stays visible. */}
+            {filters.courseId && !courses.some((c) => c._id === filters.courseId) && <option value={filters.courseId}>Selected course</option>}
+            {courses.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.title}
+              </option>
+            ))}
+          </select>
+          {(filters.grade || filters.courseId) && (
+            <button type="button" className="crm-link crm-small" onClick={() => setParam({ grade: null, courseId: null })}>
+              Clear class &amp; course
+            </button>
           )}
           {/* R74: the day the lead came in. */}
           <label className="crm-f crm-row" style={{ fontWeight: 400 }}>
